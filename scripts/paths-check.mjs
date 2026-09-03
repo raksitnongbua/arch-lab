@@ -397,74 +397,75 @@ check("the player exists only while a walk is on", () => {
   );
 });
 
-check(
-  "the beat's elements are lit from behind, without repainting them",
-  () => {
-    const aura = canvas.match(/const LIT_AURA =([\s\S]*?);\n/)?.[1] ?? "";
-    assert.ok(aura !== "", "LIT_AURA is no longer a constant this can read");
-    assert.match(
-      aura,
-      /var\(--primary\)/,
-      "the aura no longer takes its colour from the theme's own token",
-    );
-    assert.doesNotMatch(
-      aura,
-      /#[0-9a-fA-F]{3,8}\b|rgba?\(/,
-      "the aura carries a colour literal — nine themes, and a literal is " +
-        "outside all of them",
-    );
-    /* Two shadows: a tight bright bloom over a wide faint one. One blur reads
-       as a smudge at the edge; two read as light, which is the difference
-       between an element that is lit and one that is outlined. */
-    assert.equal(
-      (aura.match(/color-mix\(/g) ?? []).length,
-      2,
-      "the aura is no longer layered — a single blur reads as a smudge at the " +
-        "node's edge rather than as light behind it",
-    );
-    /* And no hard ring inside it: the span it hangs on already draws one, and
-       a third edge inside the node's own border made a lit element look
-       re-bordered rather than lit. */
-    assert.doesNotMatch(
-      aura,
-      /0 0 0 \d/,
-      "the aura carries a hard ring again — that is a third edge inside the " +
-        "node's own border, and it reads as a repaint rather than as light",
-    );
-    const body = memoBody(canvas, "pathFocusCss");
-    assert.ok(
-      body.includes("litNodeCss("),
-      "the beat's elements are no longer lit from behind — dimming alone tells " +
-        "a reader which elements are NOT being shown, and never makes the ones " +
-        "that are reach forward",
-    );
-    /* An SVG filter near this canvas is forbidden outright: a percentage filter
-     region on a flat path painted bands across a whole diagram, and three
-     commits went into chasing them. A box-shadow has no region to collapse. */
-    assert.doesNotMatch(
-      body,
-      /filter:/,
-      "the overlay reached for a filter — this canvas draws its soft edges with " +
-        "shadows for a reason that cost three commits to learn",
-    );
-    /* Focus dims and lights; it does not repaint the notation. */
-    assert.doesNotMatch(
-      body,
-      /\b(stroke|fill|border-width|stroke-width):/,
-      "the overlay repaints a node — focus may dim and light, but a focused " +
-        "element that restyles is a new border appearing where one already was",
-    );
-  },
+const node = stripComments(
+  read("src/features/viewer/components/viewer-node.tsx"),
 );
 
-/**
- * The aura arrived for a path, and would have been a fourth visual language if
- * it had stayed there. "This is the element I am showing you" is a claim
- * selection and multi-select already make, so all three light one thing.
- */
+check("the aura follows the node's own silhouette", () => {
+  const aura = node.match(/viewer-node-aura[\s\S]*?<\/svg>/)?.[0] ?? "";
+  assert.ok(aura !== "", "the aura is no longer an element this can find");
+  /* As a box-shadow it was a rounded rectangle, which is right for a container
+     and wrong for a database — a cylinder wearing a rectangular halo. It has
+     to trace the same perimeter the selection comet does. */
+  assert.match(
+    aura,
+    /d=\{outline\}/,
+    "the aura stopped tracing the node's own outline — every silhouette type " +
+      "then wears a halo the wrong shape",
+  );
+  /* Stacked strokes, never a filter: a filter region is in bounding-box units,
+     and the one time one was used on a flat path here it collapsed and painted
+     bands across a whole diagram. */
+  assert.doesNotMatch(
+    aura,
+    /filter|box-shadow|drop-shadow/,
+    "the aura reached for a filter or a shadow again — this canvas draws a " +
+      "soft edge as a wider path, and the reason cost three commits",
+  );
+  assert.match(
+    aura,
+    /stroke="var\(--primary\)"/,
+    "the aura no longer takes its colour from the theme's own token",
+  );
+  assert.doesNotMatch(
+    aura,
+    /#[0-9a-fA-F]{3,8}\b|rgba?\(/,
+    "the aura carries a colour literal — nine themes, and a literal is " +
+      "outside all of them",
+  );
+  assert.match(
+    aura,
+    /non-scaling-stroke/,
+    "the bands scale with the node again — a large element then wears a " +
+      "thicker halo than a small one for no reason a reader chose",
+  );
+  const bands = node.match(/const AURA_BANDS[\s\S]*?\];/)?.[0] ?? "";
+  assert.ok(
+    (bands.match(/\{\s*width:\s*[\d.]+/g) ?? []).length >= 3,
+    "the aura lost its layers — one band reads as an outline at the node's " +
+      "edge rather than as light behind it",
+  );
+});
+
+check("focus lights and dims; it never repaints the notation", () => {
+  const body = memoBody(canvas, "pathFocusCss");
+  assert.doesNotMatch(
+    body,
+    /filter:/,
+    "the overlay reached for a filter — this canvas draws its soft edges " +
+      "with wider paths for a reason that cost three commits to learn",
+  );
+  assert.doesNotMatch(
+    body,
+    /\b(stroke|fill|border-width|stroke-width):/,
+    "the overlay repaints a node — focus may dim and light, but a focused " +
+      "element that restyles is a new border appearing where one already was",
+  );
+});
+
 check("every state that marks an element lights the same aura", () => {
   assert.equal(
-    (canvas.match(/const LIT_AURA =/g) ?? []).length,
+    (node.match(/const AURA_BANDS/g) ?? []).length,
     1,
     "the aura has more than one definition — two spellings of one light is " +
       "how the canvas ends up with a fourth visual language for an idea it " +

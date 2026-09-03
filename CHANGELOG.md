@@ -19,8 +19,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   document parse — so the button never leaves you with a second failure.
 - **A focused element is lit from behind, however you focused it.** Selecting
   an element, grouping several, and stepping through a path's beats all light
-  the same soft halo in the theme's own accent — so "this is the one I am
-  showing you" looks the same whichever way you said it. The mark at the edge
+  the same soft halo in the theme's own accent, traced on the element's own
+  silhouette — so a database glows like a cylinder, not like a box, and "this
+  is the one I am showing you" looks the same whichever way you said it. The mark at the edge
   still differs (a selection marches, a group and a beat wear the ring), and
   hover deliberately stays a preview that changes nothing but opacity.
 - **A C4 diagram can carry an authored walk through itself.** Write

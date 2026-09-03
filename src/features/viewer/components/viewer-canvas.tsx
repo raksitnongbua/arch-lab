@@ -388,41 +388,25 @@ const HOVER_DIM_EDGE_OPACITY = 0.35;
 const DIM_EDGE_OPACITY = 0.2;
 
 /**
- * The light behind an element that is THE ONE BEING SHOWN — whichever
- * behaviour is showing it.
+ * Lights the aura on one node — the single spelling every state that marks an
+ * element uses.
  *
- * ONE STATE, NOT ONE PER FEATURE. It arrived for a path's current beat, where
- * dimming alone told a reader which elements were not being shown and never
- * made the ones that were reach forward. But "this is the element I am
+ * ONE STATE, NOT ONE PER FEATURE. The light arrived for a path's current beat,
+ * where dimming alone told a reader which elements were not being shown and
+ * never made the ones that were reach forward. But "this is the element I am
  * showing you" is a claim selection and multi-select already make, and giving
  * the newest of the three its own glow would have left the canvas with a
- * fourth visual language for an idea it already had. So every state that
- * marks an element lights this, and the mark each one draws — a marching
- * outline for a selection, the static ring for a multi-select or a beat —
- * stays its own.
+ * fourth visual language for an idea it already had. So all three light this,
+ * and the MARK each one draws — a marching outline for a selection, the static
+ * ring for a multi-select or a beat — stays its own.
  *
- * Hover is deliberately NOT one of them. It has its own softer ring and its
- * own rule: a preview you get for free by moving the mouse changes opacity
- * and nothing else, or the canvas lights up under a wandering cursor.
+ * Hover is deliberately not one of them. It has its own softer ring and its
+ * own rule: a preview you get for free by moving the mouse changes opacity and
+ * nothing else, or the canvas lights up under a wandering cursor.
  *
- * TWO SHADOWS, not one. A single blur reads as a smudge at the edge; a tight
- * bright bloom over a wide faint one reads as light, which is the whole point
- * — the element is lit, not outlined. No hard ring in here either: the marks
- * draw their own, and a third edge inside the node's own border made a lit
- * element look re-bordered rather than lit.
- *
- * Not an SVG `filter`, which this codebase forbids near the canvas after a
- * percentage filter region on a flat path painted bands across a whole
- * diagram — and not a change of the node's stroke, fill or width, which the
- * focus rules forbid outright: focus dims and lights, it does not repaint the
- * notation. Colour is `--primary` mixed with transparency, so every theme
- * carries its own halo and no tenth palette is introduced.
+ * The glow itself is drawn by the node (`viewer-node.tsx`), on its own
+ * silhouette, because only the node knows what shape it is.
  */
-const LIT_AURA =
-  "0 0 14px 2px color-mix(in oklch, var(--primary) 55%, transparent), " +
-  "0 0 40px 12px color-mix(in oklch, var(--primary) 24%, transparent)";
-
-/** Lights the aura on one node — the single spelling all three states use. */
 function litNodeCss(id: string): string {
   return `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-aura { opacity: 1; }`;
 }
@@ -685,7 +669,6 @@ const EDGE_INTERACTION_CSS = `
  * until the selection stylesheet lights ONE node's overlay and attaches the
  * animations — unselected nodes carry zero running animations.
  */
-.viewer-canvas .viewer-node-aura { box-shadow: ${LIT_AURA}; }
 .viewer-canvas .viewer-node-outline {
   opacity: 0;
   visibility: hidden;
