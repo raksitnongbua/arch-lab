@@ -205,10 +205,18 @@ export class LineCursor {
       i += 1;
     }
     if (i >= this.text.length) {
-      /* The closing quote goes at the END OF THE LINE, not at the cursor —
-         which is where the error is reported. Everything between the two is
-         text the author typed inside the string they meant to open, and an
-         insertion at the caret would close the string before it. */
+      /* WHERE THE QUOTE GOES IS THE WHOLE QUESTION, and the caret is the one
+         place it must not go: everything after the opening quote is text the
+         author typed inside the string, so closing at the caret closes it
+         before it starts. End of line is the obvious answer and is wrong
+         mid-line — `api:system "Payments API [Go 1.22] (400,320 320x120)`
+         would become a node NAMED `Payments API [Go 1.22] (400,320 320x120)`,
+         which parses, renders, and has eaten two fields. So the string closes
+         at the first following attribute token, by the same `bareTail`
+         boundary the missing-quote fix uses. Truncating a value that
+         genuinely contained a bracket fails LOUDLY one column later, which is
+         the direction to err in. */
+      const body = bareTail(this.text.slice(this.pos + 1));
       this.fail(
         `the string for ${what} opened here is never closed — expected a closing '"'`,
         this.foundHere(),
@@ -220,8 +228,8 @@ export class LineCursor {
               edits: [
                 replaceOnLine(
                   this.line,
-                  this.text.trimEnd().length + 1,
-                  this.text.trimEnd().length + 1,
+                  this.pos + body.length + 2,
+                  this.pos + body.length + 2,
                   '"',
                 ),
               ],

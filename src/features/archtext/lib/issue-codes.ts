@@ -68,51 +68,34 @@ export const ISSUE_CODES = {
     fixability: "safe",
     summary: "A leading tab where the format only accepts spaces.",
   },
-  "alab.indent-unexpected": {
-    fixability: "safe",
-    summary:
-      "An indent that is not a rung of the ladder, where exactly one legal rung is adjacent.",
-  },
+  /*
+   * There is deliberately NO safe code for a wrong indent at the top-level
+   * gate, and the reasoning is worth keeping because the obvious rule looks
+   * right and is not. "Exactly one legal rung within ±1 is safe" admits a
+   * 7-space line snapping to 6 — legal, provable as text, and semantically
+   * wrong whenever the author meant 2. The mutation corpus catches it: the
+   * document parses and serialises to a DIFFERENT model, which is the silent
+   * deformation `check:quickfix` exists to refuse. Safe indent fixes belong
+   * only where the expected width is in hand, which is the contextual gate —
+   * `flow.indent-expected` and `seq.indent-expected` below.
+   */
   "alab.indent-ambiguous": {
     fixability: "choice",
     summary:
-      "An odd indent reached before any context exists, so the rung below and the rung above are equally plausible.",
+      "An indent that is not a rung of the ladder, reached before the parser knows which block the line belongs to. Candidates are the nearest rung below and the nearest above.",
   },
-  "alab.header-missing": {
-    fixability: "none",
-    summary: "The document does not begin with an `archlab` line.",
-  },
-  "alab.header-kind-missing": {
-    fixability: "safe",
-    summary:
-      "An `archlab 1.0` line in a document whose body needs the kind word appended.",
-  },
-  "alab.header-kind-mismatch": {
-    fixability: "none",
-    summary:
-      "The header names a different notation than the parser being run. The fix is to route to the other parser, never to rewrite the header — `detect.ts` already refuses to guess, and the message says why.",
-  },
-  "alab.header-version": {
-    fixability: "none",
-    summary: "An unsupported format version.",
-  },
-  "alab.header-unknown-keyword": {
-    fixability: "choice",
-    summary: "A header keyword outside the closed header set.",
-  },
-  "alab.header-duplicate": {
-    fixability: "safe",
-    summary: "A second `archlab` line. Deleting the later one is the only fix.",
-  },
-  "alab.header-late": {
-    fixability: "safe",
-    summary: "A header keyword written below the first block that opened.",
-  },
-  "alab.escape-duplicate": {
-    fixability: "none",
-    summary:
-      "A repeated `!` line. Which of the two the author meant to keep is semantic.",
-  },
+  /*
+   * THE HEADER LINE AND THE `!` ESCAPE ARE UNCODED, and the ratchet is where
+   * they live rather than here. Both are raised from three places each (one
+   * per main grammar) with prose that differs per grammar, so coding them is
+   * a sweep of its own — and a header-kind mismatch is `none` anyway: the fix
+   * is to route the text to the other parser, which is a decision for the
+   * pane and not a rewrite of the line. Registering keys no parser raises
+   * would fail `check:quickfix`, which closes the registry both ways, so they
+   * are counted as uncoded sites in the baseline instead. Same for the
+   * sequence grammar's fragment-branch, note-arity and empty-block refusals,
+   * which are all `none` and therefore buy the reader nothing on this pass.
+   */
 
   /* ---------------------------------------------------------------------- */
   /* LineCursor — raised on behalf of all nine grammars                     */
@@ -215,8 +198,9 @@ export const ISSUE_CODES = {
       "The id is declared, in another diagram. The right fix is a `^D/X` cross-diagram reference, which is authorial.",
   },
   "c4.attribute-unknown": {
-    fixability: "choice",
-    summary: "A node or edge attribute key outside the closed set.",
+    fixability: "none",
+    summary:
+      "A node or edge attribute key outside the closed set. NOT ranked, and the reason is a property of the parser rather than of the failure: the attribute vocabulary lives in a chain of `word === …` branches, not in a table, so ranking against it would mean hand-typing the list here — a second half that can drift from the branches while both stay self-consistent. When that chain becomes a table this earns near-match candidates and becomes a choice.",
   },
   "c4.attribute-not-boolean": {
     fixability: "choice",
@@ -250,20 +234,18 @@ export const ISSUE_CODES = {
     fixability: "none",
     summary: "An attribute given twice on one line.",
   },
-  "c4.tint-unknown": {
-    fixability: "choice",
-    summary: "A tint name outside `NAMED_TINTS`.",
-  },
+  /*
+   * A bad tint name has no code yet. `NAMED_TINTS` is private to
+   * `src/lib/tint.ts` and the attribute is read by one shared function that
+   * four grammars call, so coding it means touching that reader — which is
+   * the ratchet's job on a later pass, not this branch's. The registry stays
+   * closed both ways: an unregistered site is uncoded, never miscoded.
+   */
 
   /* ---------------------------------------------------------------------- */
   /* Sequence                                                               */
   /* ---------------------------------------------------------------------- */
 
-  "seq.block-missing": {
-    fixability: "safe",
-    summary:
-      "An indented line, or a body, with no `@sequence` block above it. Inserting the block is the one rewrite.",
-  },
   "seq.indent-expected": {
     fixability: "safe",
     summary:
@@ -275,9 +257,9 @@ export const ISSUE_CODES = {
       "A participant id colliding with a keyword. The message already names the exact rewrite (quote it), which is what makes this safe rather than a guess.",
   },
   "seq.participant-late": {
-    fixability: "safe",
+    fixability: "choice",
     summary:
-      "A participant declared after the first message, or inside a fragment. Relocating it above the body is the one rewrite.",
+      "A participant declared after the first message, or inside a fragment. One candidate — lift it under the opener — and it is a CHOICE rather than safe because participant order is lifeline order left to right on the canvas: the rewrite makes the document parse, and whether it draws what the author meant is theirs to say.",
   },
   "seq.participant-unresolved": {
     fixability: "choice",
@@ -298,43 +280,21 @@ export const ISSUE_CODES = {
     summary: "A repeated `+` or `-` activation suffix.",
   },
   "seq.box-late": {
-    fixability: "safe",
-    summary: "A `box` opened after the first message.",
-  },
-  "seq.box-body": {
-    fixability: "safe",
+    fixability: "none",
     summary:
-      "A message, note or fragment written inside a `box`, which groups participants only. Dedent and relocate.",
+      "A `box` opened inside another block, or after the first message. NO fix, unlike the participant relocation it sits beside, because a box OWNS a body: lifting the opener alone strands its members at a depth nothing explains. Moving the block means finding where it ends, which is a dedent the line pass has not reached when the error is raised.",
   },
   "seq.desc-indent": {
     fixability: "safe",
     summary: "A `desc` line that is not indented under its owner.",
   },
-  "seq.fragment-branch-keyword": {
-    fixability: "safe",
-    summary:
-      "The wrong branch keyword for the open fragment. The message names the one right token, so the rewrite is not a guess.",
-  },
-  "seq.fragment-branch-unopened": {
-    fixability: "none",
-    summary: "A branch keyword with no fragment open, or one `loop` rejects.",
-  },
   "seq.note-placement-unknown": {
     fixability: "choice",
     summary: "A note placement outside the three-word set.",
   },
-  "seq.note-arity": {
-    fixability: "none",
-    summary:
-      "`note over` given the wrong number of participants. Which to add or drop is authorial.",
-  },
   "seq.autonumber-invalid": {
     fixability: "choice",
     summary: "`autonumber` given something outside its word set.",
-  },
-  "seq.empty-block": {
-    fixability: "none",
-    summary: "An empty box, fragment or label.",
   },
   "seq.duplicate-id": {
     fixability: "none",
@@ -360,10 +320,14 @@ export const ISSUE_CODES = {
     summary:
       "An edge naming an undeclared node: rename candidates, plus a declare candidate with `step` ranked first.",
   },
-  "flow.shape-unknown": {
-    fixability: "choice",
-    summary: "A node shape keyword outside the closed set.",
-  },
+  /*
+   * There is no `flow.shape-unknown`. A misspelled shape keyword does not
+   * reach a shape production at all: the grammar reads the first word, finds
+   * it is not a shape, and treats the line as an edge — so the failure
+   * arrives as `flow.arrow-unknown` with a token that is not arrow-shaped,
+   * and therefore with no fix. Registering a code no parser can raise would
+   * fail `check:quickfix`, which closes the registry both ways.
+   */
   "flow.duplicate-id": {
     fixability: "none",
     summary: "A second declaration of a node id.",

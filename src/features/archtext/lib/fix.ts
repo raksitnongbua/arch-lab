@@ -256,23 +256,106 @@ export function insertAt(line: number, column: number, text: string): TextEdit {
   return { start: { line, column }, end: { line, column }, text };
 }
 
+/** Spaces per level of indentation. One value across all nine grammars. */
+export const INDENT_WIDTH = 2;
+
 /**
- * An edit setting the leading indent of `line` in `text` to `spaces`.
+ * An edit setting the leading indent of line `line`, whose text is `body`, to
+ * `spaces`.
  *
- * Replaces the WHOLE run of leading whitespace rather than adding or removing
- * from it, which is what makes this correct for the tab case and the wrong-rung
- * case at once: a line indented with a tab has one character standing for a
- * depth the format cannot read, and an edit that inserted two spaces before it
- * would leave the tab behind and fail again at the same column.
+ * Replaces the WHOLE run of leading whitespace rather than adding to or
+ * removing from it, which is what makes one function correct for the tab case
+ * and the wrong-rung case at once: a tab-indented line has one character
+ * standing for a depth the format cannot read, and an edit that inserted two
+ * spaces before it would leave the tab behind and fail again at the same
+ * column.
+ *
+ * Takes the LINE rather than the document because the parsers do: a grammar
+ * raising an indent error is holding the line it is looking at, not the source
+ * it came from. `reindentLine` is the same edit for a caller that has the
+ * document instead.
  */
+export function setIndent(
+  line: number,
+  body: string,
+  spaces: number,
+): TextEdit {
+  const run = /^[ \t]*/.exec(body)?.[0].length ?? 0;
+  return replaceOnLine(line, 1, run + 1, " ".repeat(spaces));
+}
+
+/** `setIndent` for a caller holding the whole document rather than one line. */
 export function reindentLine(
   text: string,
   line: number,
   spaces: number,
 ): TextEdit {
-  const body = sourceLines(text)[line - 1] ?? "";
-  const indent = /^[ \t]*/.exec(body)?.[0].length ?? 0;
-  return replaceOnLine(line, 1, indent + 1, " ".repeat(spaces));
+  return setIndent(line, sourceLines(text)[line - 1] ?? "", spaces);
+}
+
+/**
+ * The depth, in spaces, that `body`'s leading whitespace was reaching for.
+ *
+ * Each tab counts as one level, because that is what the author's editor drew
+ * — a tab-indented document is not wrongly indented, it is indented in a
+ * character this format does not read, and the repair that keeps its SHAPE is
+ * the one that keeps its levels. Rounding a tab down to a single space instead
+ * would fix the tab error by creating an odd-indent error one line later.
+ */
+export function expandedIndent(body: string): number {
+  const run = /^[ \t]*/.exec(body)?.[0] ?? "";
+  let spaces = 0;
+  for (const ch of run) spaces += ch === "\t" ? INDENT_WIDTH : 1;
+  return spaces;
+}
+
+/**
+ * Fix candidates moving line `line` to the legal indent nearest below `indent`
+ * and the one nearest above it — at most two, nearest first, always `choice`.
+ *
+ * NEVER SAFE, however few candidates come back, and that is the whole reason
+ * this is one function rather than a rule per grammar. A line indented 7 in a
+ * ladder of {0,2,4,6} has exactly one rung within a space of it, and snapping
+ * it to 6 is provable as TEXT and wrong as MEANING whenever the author meant
+ * 2 — the document then parses and serialises to a different model, which is
+ * the silent deformation the mutation corpus refuses. Where the grammar
+ * genuinely knows the width (a body inside an open block) the parser offers a
+ * safe fix directly and does not come here.
+ */
+export function indentChoices(
+  line: number,
+  body: string,
+  indent: number,
+  rungs: readonly number[],
+): FixCandidate[] {
+  const below = rungs.filter((rung) => rung < indent).at(-1);
+  const above = rungs.find((rung) => rung > indent);
+  return [below, above]
+    .filter((rung): rung is number => rung !== undefined)
+    .map((rung, rank) => ({
+      title: `Indent ${rung} space${rung === 1 ? "" : "s"}`,
+      edits: [setIndent(line, body, rung)],
+      kind: "choice" as const,
+      rank,
+    }));
+}
+
+/**
+ * The arrow-shaped token at the start of `rest`, or "".
+ *
+ * Deliberately generous — every ASCII run of `-`, `=`, `.` or `~` followed by
+ * any of `>`, `x`, `)`, `o`, plus the Unicode arrows — because the point is to
+ * recognise a token the author MEANT as an arrow, not to enumerate the
+ * dialects. `-->`, `->>`, `=>`, `..>`, `-x`, `-)` and `→` are all Mermaid or
+ * PlantUML spellings that arrive in pasted text; a run this matches is one the
+ * grammar has already refused, so a false positive costs nothing but a fix
+ * offer the reader declines.
+ *
+ * Returns "" for anything else, which is what keeps a bare label or an id from
+ * being handed an arrow fix.
+ */
+export function arrowShapeAt(rest: string): string {
+  return /^(?:[-=.~]+[>x)o]*|[→⇒⟶↦⇢])/.exec(rest)?.[0] ?? "";
 }
 
 /**
@@ -339,9 +422,15 @@ export function commentStart(body: string): number {
 /**
  * Where the next token after a bare value begins in `rest`, or `rest.length`.
  *
- * `rest` is the line from the cursor onward. It ends at the first `//`, ` [`,
- * ` (`, ` #` or ` key=` — the five things that follow a value on a `.alab`
- * line — because those are what a "quote the tail" fix must NOT swallow.
+ * `rest` is the line from the cursor onward. It ends at the first token that
+ * can FOLLOW a value on a `.alab` line — `//`, `[technology]`, `(geometry)`,
+ * `#tag`, `@icon`, `>child`, `^diagram/node`, `~realizes` or `key=` — because
+ * those are what a "quote the tail" fix must not swallow. The `@icon` and the
+ * three sigils were added after `check:quickfix`'s corpus caught a real
+ * deformation: `"Cache Adapter" @redis [Go / go-redis] (168,528 176x88)` with
+ * its closing quote dropped came back as a node named `Cache Adapter @redis`,
+ * which parses and draws a wrong label. Any sigil added to the grammar needs
+ * a line here.
  *
  * THE BOUNDARY IS THE WHOLE POINT and it is worth being explicit about the
  * trade. `api:system Payments API [Go 1.22]` is missing its quotes; wrapping
@@ -354,7 +443,7 @@ export function commentStart(body: string): number {
  * toward another visible error rather than toward silent damage is the whole
  * of the rule; do not "improve" this by extending to end of line.
  */
-const TAIL_BOUNDARY_RE = /\/\/| \[| \(| #| [A-Za-z][A-Za-z0-9_-]*=/;
+const TAIL_BOUNDARY_RE = /\/\/| \[| \(| [#@>^~]| [A-Za-z][A-Za-z0-9_-]*=/;
 
 /** The bare value at the start of `rest`, cut at the first following token. */
 export function bareTail(rest: string): string {
