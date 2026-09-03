@@ -46,6 +46,7 @@ import type {
 } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { joinList } from "@/lib/prose";
 import { normalizeTint } from "@/lib/tint";
 
 import { LineCursor } from "../cursor";
@@ -55,12 +56,14 @@ import type { IssueDetail } from "../errors";
 import {
   arrowShapeAt,
   closestMatches,
+  dedentProof,
   deleteLine,
   expandedIndent,
   indentChoices,
   INDENT_WIDTH,
   insertLineBefore,
   replaceOnLine,
+  retypeChoices,
   setIndent,
 } from "../fix";
 import type { FixCandidate } from "../fix";
@@ -88,6 +91,7 @@ import {
   SEQUENCE_ARROW_MATCH_ORDER,
   SEQUENCE_ARROW_MENU,
   SEQUENCE_BLOCK,
+  SEQUENCE_HEADER_KEYWORDS,
   SEQUENCE_HEADER_WORD,
   TINT_ATTRIBUTE,
 } from "./keywords";
@@ -493,6 +497,10 @@ export function parseSequenceTextWithSpans(source: string): {
         indent + 1,
         `this line is indented, but no "${SEQUENCE_BLOCK}" block is open above it`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.body-indent-orphan",
+          fixes: dedentProof(source, lineNo, text, parseSequenceTextWithSpans),
+        },
       );
     }
 
@@ -661,9 +669,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a sequence header keyword — expected archlab, schema, title, ` +
-          'description, owner, tags, created, updated or reviewed (other metadata rides "! meta.<key> : <json>")',
+        `"${keyword}" is not a sequence header keyword — expected ${joinList(SEQUENCE_HEADER_KEYWORDS, "or")} (other metadata rides "! meta.<key> : <json>")`,
         keyword,
+        {
+          code: "alab.header-keyword-unknown",
+          fixes: retypeChoices(loc, keyword, SEQUENCE_HEADER_KEYWORDS),
+        },
       );
   }
   cursor.expectEnd(`the "${keyword}" line`);

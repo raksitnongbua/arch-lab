@@ -1109,6 +1109,23 @@ seqError(
   `${SEQ_HEAD}    a -> b : "x"\n`,
   "expected 2 here",
 );
+/* THE WHOLE SENTENCE, not a fragment. The keyword list is joined from
+   `SEQUENCE_HEADER_KEYWORDS`, which the near-match quick fix also ranks
+   against, so a reordered array would silently reword a message readers have
+   had since 1.0. Same assertion, same reasoning, in `archtext-check.mjs` and
+   `flowchart-check.mjs` — three sets, three sentences, three pins. */
+seqError(
+  "an unknown header keyword is refused, naming the whole closed set",
+  'archlab 1.0 sequence\ntitle "T"\ndescriptoin "d"\n\n@sequence\n  a "A"\n',
+  '"descriptoin" is not a sequence header keyword — expected archlab, schema, ' +
+    "title, description, owner, tags, created, updated or reviewed " +
+    '(other metadata rides "! meta.<key> : <json>")',
+);
+seqError(
+  "a header line indented before the block is refused",
+  'archlab 1.0 sequence\ntitle "T"\n  owner "O"\n\n@sequence\n  a "A"\n',
+  'this line is indented, but no "@sequence" block is open above it',
+);
 seqError(
   "an unknown arrow is refused",
   `${SEQ_HEAD}  a => b : "x"\n`,

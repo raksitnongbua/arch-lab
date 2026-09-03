@@ -60,6 +60,18 @@
  *      And its converse, asserted separately: A CODE THE CORPUS CANNOT SEED A
  *      MUTATION FOR IS NOT ALLOWED TO BE `safe`. An unexercised one-click
  *      rewrite is the same risk with none of the evidence.
+ *   6. EVERY SURFACE RENDERS WHAT THE PARSER SENT — `/validate` for real,
+ *      through `checkSource`, and the two `.tsx` panels by source assertion.
+ *   7. A CLOSED SET IS ONE SET. Each header grammar's keyword array is read
+ *      twice — the refusal's sentence is joined from it and the near-match
+ *      candidates are ranked against it — so the two cannot drift. The third
+ *      half is the `switch (keyword)` that accepts the words, which no array
+ *      can derive, so its `case "…":` labels are read off the parser source
+ *      and must equal the array in order.
+ *   8. THE REPORT THIS SURFACE OWES. The three errors one reader hit on one
+ *      document — a `tagcodlor` typo, a stray `s`, an indented line — each
+ *      report their code AND carry at least one candidate. Assertion 3 proves
+ *      a `choice` carries nothing SAFE; only this proves it carries anything.
  *
  * WHAT IT DELIBERATELY DOES NOT ASSERT: that any message still reads the way
  * it did. Adding a code to a throw site must not touch its sentence, and the
@@ -216,7 +228,7 @@ function attempt(parse, text) {
  * direct sites here would put a number in the way that no work on this
  * surface can move.
  */
-const UNCODED_BASELINE = 217;
+const UNCODED_BASELINE = 211;
 
 const CODED_SOURCES = [
   "src/features/archtext/lib/cursor.ts",
@@ -515,6 +527,16 @@ const MUTATIONS = {
     if (at === -1) return null;
     return withLine(lines, at, `  ${lines[at].trim()}`);
   },
+  "alab.body-indent-orphan": ({ lines }) => {
+    /* A HEADER line indented, not a body line dedented, and the choice is
+       what makes the round trip mean something: the dedent has to be exactly
+       invertible, and a header line belongs at column 1 whatever else the
+       document holds. Indenting a `@` diagram instead would trip the
+       indent-ambiguous gate first and prove nothing about this code. */
+    const at = findLine(lines, (line) => /^title "/.test(line));
+    if (at === -1) return null;
+    return withLine(lines, at, `  ${lines[at]}`);
+  },
 };
 
 /* ======================================================================= */
@@ -584,6 +606,34 @@ const NEGATIVE_FIXTURES = [
     'archlab 1.0\ntitle "T"\n\n@context d "C"\n  api:system "A" in=zone\n',
   ],
   ["c4 trailing text", "c4", "archlab 1.0 wobble\n"],
+  /* THE THREE FROM THE REPORT that bought the header sweep — one reader, one
+     document, three errors and no fix candidate between them. Their real text
+     is kept verbatim so a regression names the report rather than a code. */
+  [
+    "report: tagcolor keyword typo",
+    "c4",
+    'archlab 1.0\ntitle "T"\ntagcodlor regional "#8b5cf6"\n\n@context d "C"\n  api:system "A"\n',
+  ],
+  [
+    "report: stray s after a tagcolor",
+    "c4",
+    'archlab 1.0\ntitle "T"\ntagcolor write-side "#e0524d"s\n\n@context d "C"\n  api:system "A"\n',
+  ],
+  [
+    "report: an indented tagcolor line",
+    "c4",
+    'archlab 1.0\ntitle "T"\n  tagcolor write-side "#e0524d"\n\n@context d "C"\n  api:system "A"\n',
+  ],
+  [
+    "seq header keyword typo",
+    "sequence",
+    'archlab 1.0 sequence\ntitle "T"\ndescriptoin "d"\n\n@sequence\n  a "A"\n',
+  ],
+  [
+    "flow header keyword typo",
+    "flowchart",
+    'archlab 1.0 flowchart\ntitle "T"\ndescriptoin "d"\n\n@flowchart\n  step a "A"\n',
+  ],
   [
     "c4 odd indent",
     "c4",
@@ -896,6 +946,110 @@ for (const [label, file] of SURFACES) {
     source.includes("<FixOffer") && source.includes("applyFixToTextarea"),
     `${label} renders FixOffer and applies through the textarea`,
     `${file} must render <FixOffer> and apply its candidates with applyFixToTextarea — assigning a new value instead loses the caret and the native undo entry, which is what makes clicking a fix low-stakes.`,
+  );
+}
+
+/* ======================================================================= */
+/* 7. The keyword set the message prints is the set the switch enforces     */
+/* ======================================================================= */
+
+console.log("\n7. Header keyword sets agree with their switches");
+
+/* WHY THIS IS SOURCE-SCANNED rather than reasoned about. Each header grammar
+   now holds its keywords in an array, read twice — `joinList` builds the
+   sentence from it and `closestMatches` ranks the near misses against it — so
+   those two can no longer disagree. What the array CANNOT derive is the
+   `switch (keyword)` that actually accepts the words, because a switch is not
+   a value. That leaves exactly the two-halves pair `codebase.md` §4 names: add
+   `case "colour":` to the switch and the refusal goes on printing a list
+   without it, offering a rewrite to a word the parser now takes and never
+   naming it. So the labels are read off the parser's own source — from the
+   FILESYSTEM, not from a list typed here, which is the difference between a
+   check that notices a keyword it has never heard of and one that cannot. */
+const HEADER_SETS = [
+  [
+    "C4",
+    "src/features/archtext/lib/parse.ts",
+    "src/features/archtext/lib/keywords.ts",
+    "C4_HEADER_KEYWORDS",
+  ],
+  [
+    "sequence",
+    "src/features/archtext/lib/sequence/parse.ts",
+    "src/features/archtext/lib/sequence/keywords.ts",
+    "SEQUENCE_HEADER_KEYWORDS",
+  ],
+  [
+    "flowchart",
+    "src/features/archtext/lib/flowchart/parse.ts",
+    "src/features/archtext/lib/flowchart/keywords.ts",
+    "FLOWCHART_HEADER_KEYWORDS",
+  ],
+];
+
+/** The body of `function parseHeaderLine(…)` in `source`, brace-counted. */
+function headerLineBody(source) {
+  const start = source.indexOf("function parseHeaderLine(");
+  if (start === -1) return "";
+  const open = source.indexOf("{", source.indexOf(")", start));
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    const ch = source.charAt(i);
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  return "";
+}
+
+for (const [label, parseFile, keywordFile, name] of HEADER_SETS) {
+  const body = headerLineBody(readFileSync(path.join(ROOT, parseFile), "utf8"));
+  const cases = [...body.matchAll(/\bcase "([a-z]+)":/g)].map(
+    (match) => match[1],
+  );
+  const table = await import(pathToFileURL(path.join(ROOT, keywordFile)).href);
+  const declared = table[name];
+  expect(
+    declared !== undefined && cases.length > 0,
+    `the ${label} header's switch and ${name} were both found`,
+    `Looked for "function parseHeaderLine(" in ${parseFile} and ${name} in ${keywordFile}. If either moved, follow it — this assertion silently proves nothing when it cannot find them.`,
+  );
+  if (declared === undefined || cases.length === 0) continue;
+  expect(
+    cases.join("|") === declared.join("|"),
+    `the ${label} header's ${cases.length} switch cases are ${name}, in order`,
+    `switch: ${cases.join(", ")}\n      ${name}: ${declared.join(", ")}\n      The refusal's sentence and its near-match candidates are both built from ${name}, so a word in one half only is a message that lies or a fix that fails on the same line.`,
+  );
+}
+
+/* ======================================================================= */
+/* 8. The report that bought this — three errors, three offers             */
+/* ======================================================================= */
+
+console.log("\n8. The report that bought the header sweep now gets offers");
+
+/* ONE READER, ONE DOCUMENT, THREE ERRORS AND NOTHING OFFERED. Named by the
+   fixture rather than by the code, because a code can go on existing while
+   the candidates it promised stop arriving — the registry's fixability says a
+   `choice` may not carry a SAFE candidate and says nothing about it carrying
+   any. These three are the population that proves the offer is really there,
+   and their text is the reader's own. */
+const REPORTED = [
+  ["report: tagcolor keyword typo", "alab.header-keyword-unknown"],
+  ["report: stray s after a tagcolor", "cursor.trailing-text"],
+  ["report: an indented tagcolor line", "alab.body-indent-orphan"],
+  ["seq header keyword typo", "alab.header-keyword-unknown"],
+  ["flow header keyword typo", "alab.header-keyword-unknown"],
+];
+for (const [label, code] of REPORTED) {
+  const found = observations.find((entry) => entry.label === label);
+  const fixes = found?.issue.fixes ?? [];
+  expect(
+    found?.issue.code === code && fixes.length > 0,
+    `"${label}" reports ${code} and offers ${fixes.length} fix(es): ${fixes.map((fix) => fix.title).join(" / ") || "none"}`,
+    `Expected ${code} with at least one candidate, got ${found?.issue.code ?? "no issue"} with ${fixes.length}.`,
   );
 }
 

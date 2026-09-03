@@ -48,6 +48,34 @@ export const SEQUENCE_HEADER_WORD = "sequence";
 export const SEQUENCE_BLOCK = "@sequence";
 
 /**
+ * Every word a sequence header line may open with — the C4 subset that means
+ * the same thing here, in the order `parseHeaderLine`'s switch reads them.
+ *
+ * Its own array rather than a slice of `C4_HEADER_KEYWORDS`, and the reason is
+ * the same one that keeps this whole module separate: the C4 header's
+ * `tagcolor` / `customicon` / `generator` / `root` lines DO NOT EXIST here —
+ * those fields ride the `! meta.<key>` escape (`SEQ_META_RAW` in
+ * `./schema.ts`). Deriving this from the C4 list would mean an exclusion list
+ * that has to be edited every time a C4-only header line is added, which is
+ * the same drift with an extra step in it.
+ *
+ * Read twice: the refusal joins it into the sentence that names the set, and
+ * `closestMatches` ranks a misspelling against it. `check:quickfix` pins it to
+ * the switch's own `case "…":` labels.
+ */
+export const SEQUENCE_HEADER_KEYWORDS: readonly string[] = [
+  "archlab",
+  "schema",
+  "title",
+  "description",
+  "owner",
+  "tags",
+  "created",
+  "updated",
+  "reviewed",
+];
+
+/**
  * THE ARROW GRID: line style → head style → the one token that spells it.
  * A total `Record<Record<>>` rather than a flat list of ten pairs, so the
  * table cannot be written with a hole in it — see `SequenceLineStyle` for why

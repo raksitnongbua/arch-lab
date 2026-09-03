@@ -12,6 +12,43 @@ import type { C4NodeType, EdgeDirection, EdgeStyle } from "@/types";
 /** The file extension of the arch-lab text format. */
 export const ARCHTEXT_EXTENSION = ".alab";
 
+/**
+ * Every word a C4 header line may open with, in the order the format
+ * documents them — which is the order `parseHeaderLine`'s switch reads them
+ * and the order its refusal names them.
+ *
+ * ONE ARRAY FOR THE SENTENCE AND FOR THE FIX. The refusal used to hand-type
+ * this list inside its own message, a screen below the switch that enforces
+ * it: two halves of one closed set, each self-consistent, free to disagree —
+ * `codebase.md` §4, and the failure mode is a message naming a keyword the
+ * parser stopped accepting. The message is now joined from here and
+ * `closestMatches` ranks the near misses against the same array, so a
+ * fourteenth keyword cannot arrive in one half only. `check:quickfix` reads
+ * the `case "…":` labels straight off the parser source and fails if they
+ * drift from this array.
+ *
+ * NOT SHARED with the sequence and flowchart header sets, which are shorter
+ * and are their own arrays for the reason their parsers give: `tagcolor`,
+ * `customicon`, `generator` and `root` do not exist there, and the two
+ * shorter sets are only COINCIDENTALLY equal to each other today.
+ */
+export const C4_HEADER_KEYWORDS: readonly string[] = [
+  "archlab",
+  "schema",
+  "title",
+  "description",
+  "owner",
+  "direction",
+  "tags",
+  "created",
+  "updated",
+  "reviewed",
+  "tagcolor",
+  "customicon",
+  "generator",
+  "root",
+];
+
 /** `.alab` node-type keyword → model node type (bijective). */
 export const NODE_TYPE_BY_KEYWORD: Readonly<Record<string, C4NodeType>> = {
   person: "person",

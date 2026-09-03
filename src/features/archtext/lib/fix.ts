@@ -341,6 +341,85 @@ export function indentChoices(
 }
 
 /**
+ * One `choice` candidate per near match of `word` in `candidates`, each
+ * replacing `word` where it sits, nearest first.
+ *
+ * Shared because the three header grammars build the same offer over three
+ * different closed sets, and the candidate differs only in the set — the
+ * "same body, one definition" case in `dry.md`. The SETS stay separate on
+ * purpose (a sequence header has no `tagcolor`; the flowchart set's equality
+ * with it is coincidental), and only the shape of the offer is shared, so a
+ * grammar can never rank a keyword another grammar owns.
+ *
+ * NEVER SAFE, however few come back, for the reason `retypeTo` in the C4
+ * node-type production spells out at length: a closed-set near match is a
+ * guess even at edit distance 1, and `tagcodlor` → `tagcolor` must be offered
+ * rather than taken.
+ */
+export function retypeChoices(
+  at: SourcePos,
+  word: string,
+  candidates: readonly string[],
+): FixCandidate[] {
+  return closestMatches(word, candidates).map((match, rank) => ({
+    title: `Change "${word}" to "${match}"`.slice(0, 40),
+    edits: [replaceOnLine(at.line, at.column, at.column + word.length, match)],
+    kind: "choice" as const,
+    rank,
+  }));
+}
+
+/**
+ * Whether a `dedentProof` reparse is already in flight.
+ *
+ * The proof re-enters the parser it was called from, and the nested parse can
+ * reach the same gate on a LATER orphan line and start a proof of its own.
+ * Nothing about that recurses forever — each nesting dedents a line strictly
+ * further down — but the nested proof's answer is thrown away either way,
+ * since the outer caller only reads whether the reparse threw. So the flag
+ * makes the cost exactly one extra parse instead of one per orphan line.
+ * Sound because parsing is synchronous: there is no second parse in flight to
+ * see this half-set.
+ */
+let proving = false;
+
+/**
+ * A `safe` candidate dedenting line `line` to column 1 — offered ONLY if
+ * `reparse` then accepts the whole document, and otherwise nothing at all.
+ *
+ * THE PROOF IS THE OFFER, which is `indentRepairFor`'s standard in
+ * `playground/input/parse.ts` moved inside the parser: dedent, re-read, and
+ * hand the reader the result only if the real reader accepts it. That is what
+ * earns `safe` on a rewrite that would be a guess otherwise. An indented
+ * header line is USUALLY a stray indent and sometimes a line the author meant
+ * to put inside a diagram they have not opened yet; the parser cannot tell
+ * those apart by looking, and does not have to — if the dedent does not make
+ * the document parse, no candidate is built and the reader keeps the plain
+ * error.
+ *
+ * Costs one extra parse, on a keystroke where the parse has already failed —
+ * the same trade `indentRepairFor` documents.
+ */
+export function dedentProof(
+  source: string,
+  line: number,
+  body: string,
+  reparse: (text: string) => unknown,
+): FixCandidate[] {
+  if (proving) return [];
+  const edits = [setIndent(line, body, 0)];
+  proving = true;
+  try {
+    reparse(applyTextEdit(source, edits));
+  } catch {
+    return [];
+  } finally {
+    proving = false;
+  }
+  return [{ title: "Remove the indent", edits, kind: "safe" }];
+}
+
+/**
  * The arrow-shaped token at the start of `rest`, or "".
  *
  * Deliberately generous — every ASCII run of `-`, `=`, `.` or `~` followed by

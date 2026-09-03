@@ -42,6 +42,7 @@
 import type { FlowchartLabFile, FlowchartNodeShape } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { joinList } from "@/lib/prose";
 
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
@@ -49,10 +50,12 @@ import { failAt } from "../errors";
 import {
   arrowShapeAt,
   closestMatches,
+  dedentProof,
   expandedIndent,
   indentChoices,
   insertLineBefore,
   replaceOnLine,
+  retypeChoices,
   setIndent,
 } from "../fix";
 import type { FixCandidate } from "../fix";
@@ -74,6 +77,7 @@ import { USECASE_HEADER_WORD } from "../usecase/keywords";
 import {
   FLOWCHART_ARROW,
   FLOWCHART_BLOCK,
+  FLOWCHART_HEADER_KEYWORDS,
   FLOWCHART_HEADER_WORD,
   GROUP_KEYWORD,
   NODE_SHAPE_BY_KEYWORD,
@@ -383,6 +387,10 @@ export function parseFlowchartTextWithSpans(source: string): {
         indent + 1,
         `this line is indented, but no "${FLOWCHART_BLOCK}" block is open above it`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.body-indent-orphan",
+          fixes: dedentProof(source, lineNo, text, parseFlowchartTextWithSpans),
+        },
       );
     }
 
@@ -532,9 +540,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a flowchart header keyword — expected archlab, schema, title, ` +
-          'description, owner, tags, created, updated or reviewed (other metadata rides "! meta.<key> : <json>")',
+        `"${keyword}" is not a flowchart header keyword — expected ${joinList(FLOWCHART_HEADER_KEYWORDS, "or")} (other metadata rides "! meta.<key> : <json>")`,
         keyword,
+        {
+          code: "alab.header-keyword-unknown",
+          fixes: retypeChoices(loc, keyword, FLOWCHART_HEADER_KEYWORDS),
+        },
       );
   }
   cursor.expectEnd(`the "${keyword}" line`);
