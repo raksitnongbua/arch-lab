@@ -41,7 +41,7 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -49,22 +49,6 @@ import {
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                     */
 /* -------------------------------------------------------------------------- */
-
-function renderReadError(error: UseCaseInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${USECASE_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      // `lineText: null` means the location is past the last line (an
-      // unexpected end of input) — there is nothing to quote and the message
-      // already says where.
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
 
 export type ReadUseCaseResult =
   | { status: "ok"; file: UseCaseLabFile; format: UseCaseSourceFormat }
@@ -80,10 +64,14 @@ export function readUseCase(source: string): ReadUseCaseResult {
 
   const result = parseUseCaseInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(USECASE_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };

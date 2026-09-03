@@ -20,8 +20,17 @@ import {
   type CheckOk,
 } from "@/features/validate/lib/check";
 
+import { notationFork } from "./ask";
 import { guardSourceSize } from "./limits";
-import { formatNote, joinSections, renderIssues } from "./render";
+import {
+  askHumanResult,
+  errorResult,
+  formatNote,
+  joinSections,
+  renderIssues,
+  type AskHuman,
+  type McpTextResult,
+} from "./render";
 
 /**
  * Is the text a SEQUENCE document, by its first meaningful line? Mirrors the
@@ -43,7 +52,31 @@ function isSequenceDocument(source: string): boolean {
 }
 
 export type ReadResult =
-  { status: "ok"; value: CheckOk } | { status: "error"; message: string };
+  | { status: "ok"; value: CheckOk }
+  | { status: "error"; message: string }
+  /**
+   * The text is a document of another kind. NOT an error: the read did all the
+   * work it could and stopped at a fork only a person can settle — see
+   * `notationFork` and the `isError` note on `askHumanResult`.
+   */
+  | { status: "ask"; ask: AskHuman };
+
+/**
+ * The result a tool must return for any non-ok read.
+ *
+ * ONE FUNCTION FOR ALL FOUR C4 TOOLS. Each of them used to end its read with
+ * `if (read.status === "error") return errorResult(read.message)`, and adding a
+ * third arm to `ReadResult` would have meant four copies of the same two-arm
+ * choice — and one of them forgotten, which is a tool that reports a question
+ * as a failure.
+ */
+export function readFailureResult(
+  read: Exclude<ReadResult, { status: "ok" }>,
+): McpTextResult {
+  return read.status === "ask"
+    ? askHumanResult(read.ask)
+    : errorResult(read.message);
+}
 
 /**
  * Reads `source` under the caller's format choice. On success the result
@@ -56,45 +89,29 @@ export function readSource(source: string, choice: CheckChoice): ReadResult {
 
   const alabKind = detectAlabKind(source);
 
-  // Named here for the same reason as the sequence guard below: without it the
-  // caller gets a C4 line-1 parse error that reads as "your syntax is wrong"
-  // when only the tool choice was.
-  if (alabKind === "flowchart") {
-    return {
-      status: "error",
-      message:
-        "This is a flowchart, not a C4 model — the C4 tools cannot read it. " +
-        "Use `validate_flowchart` and `format_flowchart` for flowchart " +
-        "documents, or `create_share_link`, which accepts every kind.",
-    };
+  /*
+   * ALL EIGHT OTHER KINDS, not the three that used to be named here.
+   *
+   * A `flowchart`, `usecase` or sequence document was redirected in prose; the
+   * other five (`er`, `dict`, `gantt`, `timeline`, `lifecycle`) fell through to
+   * `checkSource` and came back as "INVALID … line 1, column 13", which reads
+   * as "your syntax is wrong" when only the tool choice was. The detection was
+   * always there — `detectAlabKind` is total over the kinds — so the five were
+   * a gap rather than a limit.
+   *
+   * It is a QUESTION and not a redirect because the text and the tool call
+   * disagree and the server cannot know which was the mistake. Checked
+   * whatever `choice` says: no other kind's header can ever parse as C4, so a
+   * forced reading would only fail more confusingly.
+   */
+  if (alabKind !== null && alabKind !== "c4") {
+    return { status: "ask", ask: notationFork(alabKind) };
   }
 
-  // Named here for the same reason as the guards around it: without it the
-  // caller gets a C4 line-1 parse error that reads as "your syntax is wrong"
-  // when only the tool choice was.
-  if (alabKind === "usecase") {
-    return {
-      status: "error",
-      message:
-        "This is a use-case diagram, not a C4 model — the C4 tools cannot " +
-        "read it. Use `validate_usecase` and `format_usecase` for use-case " +
-        "documents, or `create_share_link`, which accepts every kind.",
-    };
-  }
-
-  // The misdirection guard `tools/sequence.ts` documents, in reverse: a
-  // sequence document fed to a C4 tool used to come back as "INVALID … line 1,
-  // column 13", which reads as "your syntax is wrong" when only the tool
-  // choice was. Checked whatever `choice` says, because neither header can
-  // ever parse as C4 — a forced reading would just fail more confusingly.
+  // Mermaid `sequenceDiagram` carries no `archlab` header, so `detectAlabKind`
+  // cannot see it and this second sniff is not redundant.
   if (isSequenceDocument(source)) {
-    return {
-      status: "error",
-      message:
-        "This is a sequence diagram, not a C4 model — the C4 tools cannot " +
-        "read it. Use `validate_sequence` and `format_sequence` for sequence " +
-        "documents, or `create_share_link`, which accepts every kind.",
-    };
+    return { status: "ask", ask: notationFork("sequence") };
   }
 
   const result = checkSource(source, choice);

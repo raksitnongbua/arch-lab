@@ -77,7 +77,7 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -85,19 +85,6 @@ import {
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                     */
 /* -------------------------------------------------------------------------- */
-
-function renderReadError(error: LifecycleInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${LIFECYCLE_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
 
 export type ReadLifecycleResult =
   | { status: "ok"; file: LifecycleLabFile; format: LifecycleSourceFormat }
@@ -113,10 +100,14 @@ export function readLifecycle(source: string): ReadLifecycleResult {
 
   const result = parseLifecycleInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(LIFECYCLE_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };

@@ -57,13 +57,24 @@ Facts worth knowing before writing any:
   still round-trip exactly.
 
 Validate anything you write with the `validate_model` tool — it runs the
-real parser and reports the line, column and offending source line.
+real parser and reports the line, column and offending source line. Hand
+it a document of another kind and it does not fail: it names the tool
+that reads that kind and asks which picture was wanted. **Do not "fix"
+line 1 of a document whose header names another kind** — the header names
+the notation the rest of the document is written in, and changing it
+converts nothing.
 
-**There is a second document kind.** Everything in the sections below,
-unless a section says otherwise, describes the C4 model grammar opened by
-`archlab 1.0`. A SEQUENCE diagram — participants and messages over time —
-is opened by `archlab 1.0 sequence`, has its own grammar and its own
-tools (`validate_sequence`, `format_sequence`). See the sequence section.
+**This is the C4 and sequence grammar, not the whole format.** Everything
+in the sections below, unless a section says otherwise, describes the C4
+model grammar opened by `archlab 1.0`. A SEQUENCE diagram — participants
+and messages over time — is opened by `archlab 1.0 sequence`, has its own
+grammar and its own tools (`validate_sequence`, `format_sequence`); see
+the sequence section. arch-lab draws seven more notations that this
+reference does NOT cover — flowcharts, use-case diagrams, ER schemas,
+data dictionaries, gantt charts, milestone timelines and lifecycles. For
+those, fetch a bundled document with `list_example_models` and
+`get_example_model`: every one is parser-verified, which makes it the
+real reference for its grammar.
 
 ## A complete example
 
@@ -616,7 +627,7 @@ title "Broken"
   api:blob "API"
 ```
 
-→ `line 5, column 7: line 5, column 7: "blob" is not a node type — expected person, system, external, container, database, queue, component or code`
+→ `line 5, column 7: "blob" is not a node type — expected person, system, external, container, database, queue, component or code`
 
 **A node type that is real, but illegal at this level**
 
@@ -628,7 +639,7 @@ title "Broken"
   db:database "Orders DB"
 ```
 
-→ `line 5, column 6: line 5, column 6: "database" is not valid at level "context" — valid types here: person, system, external`
+→ `line 5, column 6: "database" is not valid at level "context" — valid types here: person, system, external`
 
 **Indentation that is not 0, 2 or 4 spaces**
 
@@ -640,7 +651,7 @@ title "Broken"
    api:person "API"
 ```
 
-→ `line 5, column 4: line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat's chain line)`
+→ `line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat's chain line)`
 
 **An edge whose endpoint is not a node in this diagram**
 
@@ -654,7 +665,7 @@ title "Broken"
   cust -> ghost : "Uses"
 ```
 
-→ `line 7, column 11: line 7, column 11: the target "ghost" does not resolve to a node in this diagram`
+→ `line 7, column 11: the target "ghost" does not resolve to a node in this diagram`
 
 **A trailing comment — comments must be full lines**
 
@@ -663,7 +674,7 @@ archlab 1.0
 title "Broken" // not allowed here
 ```
 
-→ `line 2, column 16: line 2, column 16: unexpected text after the "title" line`
+→ `line 2, column 16: unexpected text after the "title" line`
 
 **A string that is never closed**
 
@@ -674,7 +685,7 @@ title "Broken"
 @context ctx-root "Broken
 ```
 
-→ `line 4, column 19: line 4, column 19: the string for the diagram title opened here is never closed — expected a closing '"'`
+→ `line 4, column 19: the string for the diagram title opened here is never closed — expected a closing '"'`
 
 **A file without a title**
 
@@ -684,7 +695,7 @@ archlab 1.0
 @context ctx-root "Untitled"
 ```
 
-→ `line 1, column 1: line 1, column 1: the file has no title — add a line like: title "My System"`
+→ `line 1, column 1: the file has no title — add a line like: title "My System"`
 
 ---
 

@@ -21,9 +21,10 @@
 
 import type { CheckChoice } from "@/features/validate/lib/check";
 import { MERMAID_CAVEAT } from "@/features/validate/lib/check";
-import { readSource } from "../lib/read";
+import { stepLikeFork, stepLikeReading } from "../lib/ask";
+import { readFailureResult, readSource } from "../lib/read";
 import {
-  errorResult,
+  askHumanResult,
   formatNote,
   joinSections,
   renderAdvisories,
@@ -37,27 +38,49 @@ export function validateModel(
   format: CheckChoice,
 ): McpTextResult {
   const read = readSource(source, format);
-  if (read.status === "error") return errorResult(read.message);
+  if (read.status !== "ok") return readFailureResult(read);
 
-  const { summary, format: actual, autoDetected, advisories } = read.value;
+  const {
+    file,
+    summary,
+    format: actual,
+    autoDetected,
+    advisories,
+  } = read.value;
 
-  return textResult(
-    joinSections(
-      `VALID as ${formatNote(actual, autoDetected)}.`,
-      [
-        `Title:    ${summary.title}`,
-        `Version:  ${summary.version}`,
-        summary.description === null
-          ? null
-          : `Summary:  ${summary.description}`,
-        `Totals:   ${summary.diagrams.length} diagram(s), ` +
-          `${summary.nodeCount} node(s), ${summary.edgeCount} edge(s)`,
-      ]
-        .filter((line): line is string => line !== null)
-        .join("\n"),
-      renderDiagramTable(summary.diagrams),
-      renderAdvisories(advisories, "model"),
-      actual === "mermaid" ? `Note: ${MERMAID_CAVEAT}` : null,
-    ),
+  const verdict = joinSections(
+    `VALID as ${formatNote(actual, autoDetected)}.`,
+    [
+      `Title:    ${summary.title}`,
+      `Version:  ${summary.version}`,
+      summary.description === null ? null : `Summary:  ${summary.description}`,
+      `Totals:   ${summary.diagrams.length} diagram(s), ` +
+        `${summary.nodeCount} node(s), ${summary.edgeCount} edge(s)`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
+    renderDiagramTable(summary.diagrams),
+    renderAdvisories(advisories, "model"),
+    actual === "mermaid" ? `Note: ${MERMAID_CAVEAT}` : null,
   );
+
+  /*
+   * A VALID MODEL CAN STILL CARRY A QUESTION, and the verdict travels as the
+   * ask's `doneSoFar` rather than being replaced: nothing about this document
+   * is wrong, and a caller that wanted the counts still gets them.
+   *
+   * ONLY ON `auto`. An explicit `format` is the caller saying which C4 dialect
+   * this is, which is not quite the same as saying "and it is C4 rather than a
+   * sequence" — but it is close enough to be a deliberate choice, and a tool
+   * that second-guesses an explicit argument is one an agent cannot use in a
+   * loop. The notation REDIRECT in `lib/read.ts` is unconditional by contrast,
+   * because there the alternative is a misleading line-1 parse error rather
+   * than a correct answer with a question attached.
+   */
+  const stepLike = format === "auto" ? stepLikeReading(file) : null;
+  if (stepLike !== null) {
+    return askHumanResult(stepLikeFork(stepLike), verdict);
+  }
+
+  return textResult(verdict);
 }

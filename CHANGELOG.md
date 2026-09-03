@@ -105,8 +105,46 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   browser that had dismissed the old tour is not treated differently from one
   that never saw it.
 
+### Changed
+
+- **An agent working over MCP now asks you instead of guessing.** When a call
+  reaches a fork the server can prove but cannot settle — text whose header
+  names a different notation than the tool that got it, a valid C4 model whose
+  relationships read as numbered steps, a link that has to open at one of
+  several diagrams, an `@icon` query matching several marks and none called
+  that, a model too big for a link — the result now opens
+  `ASK YOUR HUMAN BEFORE CONTINUING`, states why it stopped, and lists two to
+  five numbered choices with what each one costs and a free-text escape. The
+  server's own handshake tells connecting agents to stop on that line and put
+  the question to you. It is deliberately rare: every document arch-lab ships
+  as an example passes through its own validator with no question at all, an
+  explicit `diagram_id` or `format` is never second-guessed, and the review
+  notes stay review notes.
+- **Handing a gantt, ER schema, dictionary, timeline or lifecycle to the C4
+  tools is no longer an error.** All five used to come back as
+  "INVALID … line 1, column 13", which reads as a syntax problem when the
+  syntax was fine and only the tool choice was; flowcharts, use-case and
+  sequence documents were redirected in prose. All eight are now the same
+  question, naming the tool that reads the document — and saying not to "fix"
+  line 1, which was the repair an agent reached for and which destroys the
+  rest of the file. **For MCP clients this changes a result's `isError` flag
+  from true to unset on those calls** — a break on a beta surface, and the
+  reason it is worth it is that an error result teaches a model to retry with
+  a guess, which is the behaviour being removed.
+- **`get_syntax_reference` no longer implies it covers the whole format.** It
+  documents C4 and sequence grammar and says so, names the seven notations it
+  does not cover, and points at the bundled examples, which are
+  parser-verified and are the real reference for those. An agent told to "read
+  the grammar first" before writing a gantt used to get 22 KB of C4 with the
+  word `gantt` nowhere in it.
+
 ### Fixed
 
+- **A parse error no longer says where twice.** Every `validate_<kind>` and
+  `format_<kind>` tool over MCP, and every error example in the syntax
+  reference and the bundled `alab` skill, opened with
+  `line 5, column 7: line 5, column 7: …` — the location was printed, then
+  printed again by the parser's own message. One location, once.
 - **A boundary no longer draws one huge rectangle around half the diagram.** A
   boundary's box came from the bounding box of everything in it, which is right
   only while its members sit together — so a boundary holding an inbound

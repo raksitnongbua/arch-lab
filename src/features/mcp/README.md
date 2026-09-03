@@ -44,6 +44,7 @@ catalog.ts                  # tool names + prose — ONE source of truth
 index.ts                    # server surface (SDK)
 server.ts                   # the only SDK-aware module: catalogue -> registration
 content/syntax-sections.ts  # the grammar, generated from syntax-docs snippets
+lib/ask.ts                  # the forks the server proves but must not settle
 lib/limits.ts               # MAX_SOURCE_CHARS — the whole abuse story
 lib/origin.ts               # which origin share links point at
 lib/read.ts                 # the single door: text -> model, via checkSource
@@ -67,6 +68,18 @@ them without booting a server.
 **Stateless.** No sessions, no Redis, SSE disabled. Every call is a pure
 function of its arguments, which is what makes serverless deployment correct
 rather than merely convenient.
+
+**A question travels as a RESULT, never over the protocol.** MCP has
+`elicitation/create` and the SDK ships `Server.elicitInput()`, and neither can
+be used here: `mcp-handler` builds a fresh `McpServer` per POST, `elicitInput`
+throws `Client does not support elicitation` unless `initialize` populated
+`_clientCapabilities`, and the human's answer would arrive on a different
+instance anyway. Sampling fails identically. Both need a session, which the
+line above rules out. So the ask-human envelope (`lib/render.ts`) is text: the
+tool DESCRIPTION the client model reads before it acts, and the tool RESULT it
+reads after. The server cannot ask the human; it makes the client model ask.
+Which forks earn a question, and which are deliberately left unasked, is
+`lib/ask.ts`.
 
 **Unauthenticated.** The endpoint stores nothing and holds no secrets. The one
 real abuse surface is a pathological payload reaching the recursive `.alab`
@@ -115,7 +128,12 @@ precedent as `syntax-docs/components/code-block.tsx` importing
 - the reference actually teaches frames (C4 boundaries), and `describe_model`
   reports them along with the nodes that sit inside them — a boundary is
   neither a diagram nor a node, so nothing else in the output would reveal it,
-  and an agent rewriting a model it could not see would silently drop it.
+  and an agent rewriting a model it could not see would silently drop it;
+- every ask-human result has the shape an agent can rely on without parsing
+  prose, its triggers fire, and — the assertion that matters most — they do
+  **not** fire on ordinary work: every bundled example through its own
+  `validate_*` comes back silent, because a question that appears often is one
+  an agent learns to answer without reading.
 
 ## Adding a tool
 
