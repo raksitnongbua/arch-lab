@@ -179,6 +179,7 @@ import {
   sourceFileStem,
   ViewerShell,
   type PaneErrorDetail,
+  type SharePathRequest,
 } from "@/features/viewer";
 import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -491,6 +492,9 @@ export function ViewPlayground({
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
+  /** The walk a `p=` link asked to open on, cleared once it has been taken. */
+  const [sharedInitialPath, setSharedInitialPath] =
+    useState<SharePathRequest | null>(null);
   /** A link that would not open; non-null takes over the whole page. */
   const [shareFailure, setShareFailure] = useState<ShareOpenFailure | null>(
     null,
@@ -805,9 +809,11 @@ export function ViewPlayground({
                 : model.rootDiagramId;
             currentDiagramRef.current = target;
             setSharedInitialDiagram(target);
+            setSharedInitialPath(decoded.path);
             setShellEpoch((epoch) => epoch + 1);
           } else {
             setSharedInitialDiagram(null);
+            setSharedInitialPath(null);
             /* The link's immersive request, re-applied now the KIND is known.
                The C4 branch above needs nothing: the shell it remounts takes
                `defaultImmersive` and owns the mode itself. This branch does,
@@ -1143,6 +1149,7 @@ export function ViewPlayground({
     currentDiagramRef.current = diagramId;
     setActiveDiagramId(diagramId);
     setSharedInitialDiagram((current) => (current === null ? current : null));
+    setSharedInitialPath((current) => (current === null ? current : null));
   }, []);
 
   /* ---- Tab handling — indent, with a documented escape ------------------ */
@@ -1901,6 +1908,7 @@ export function ViewPlayground({
                   titleAs="h2"
                   model={doc.synced.model}
                   initialDiagramId={sharedInitialDiagram ?? undefined}
+                  initialPath={sharedInitialPath}
                   /* The link's `?i=1`, handed to the canvas that owns
                      immersive for a C4 document. Passed on every mount of
                      this shell rather than consumed once: the URL still says

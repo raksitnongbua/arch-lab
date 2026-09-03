@@ -1,0 +1,107 @@
+archlab 1.0
+title "Notification Email Platform"
+
+@context ctx-root "Notification Email Platform"
+  admin:person "Admin / Dev"
+    desc "Authors and maintains the email templates."
+  bitkub1:external "Bitkub 1.0"
+    desc "Legacy caller. Requests email through the same gateway as 2.0."
+  other-svc:external "Other Service"
+    desc "Any caller inside Bitkub 2.0."
+  notify:system "Notification Email Platform" >cnt-notify
+    desc "Accepts an email request, renders it from a template and delivers it through SendGrid."
+  sendgrid:external "SendGrid"
+    desc "Email provider. Delivers the message and reports what happened to it."
+  slack:external "Slack"
+    desc "Level-1 alert channel for a failed delivery."
+  customer:person "Customer"
+    desc "The email recipient."
+
+  admin -> notify : "Manages email templates" [HTTPS]
+  bitkub1 -> notify : "Requests an email" [HTTPS]
+  other-svc -> notify : "Requests an email" [HTTP]
+  notify -> sendgrid : "Submits the message" [HTTPS/JSON]
+  sendgrid -> customer : "Delivers the email" [SMTP]
+  sendgrid -> notify : "Reports delivery events" [HTTPS webhook]
+  notify -> slack : "Alerts on a failed event" [HTTPS]
+
+@container cnt-notify "Notification Email Platform — Containers" owner=notify
+  desc "The send path, template state and the webhook return path."
+
+  frame edge "Edge and ingress"
+  frame notif "Kubernetes namespace: notification"
+  frame state "State"
+
+  admin-ref:person ^ctx-root/admin
+  bitkub1-ref:external ^ctx-root/bitkub1
+  other-svc-ref:external ^ctx-root/other-svc
+
+  cf-edge:container "Cloudflare" @cloudflare [Cloudflare edge] in=edge
+    desc "Webhook edge. Fronts the webhook route before Kong sees it."
+  kong-in:container "Kong Gateway" @kong [Kong] in=edge
+    desc "Inbound API. The only way a caller reaches the Email Service."
+  kong-wh:container "Kong Gateway — webhook" @kong [Kong] in=edge
+    desc "Webhook ingress. A separate route from the inbound API."
+
+  email-svc:container "Email Service" [RESTful API] in=notif
+    desc "Validates the request and publishes it to the queue. Owns email_logs."
+  template-svc:container "Template Engine" [Template API] in=notif
+    desc "Template CRUD. Publishes each template to the bucket for consumers."
+  email-consumer:container "Email Consumer" @rabbitmq [AMQP consumer] in=notif
+    desc "Consumes send_email and calls SendGrid. Downloads a template on cache miss."
+  email-webhook:container "Email Webhook" [RESTful API] in=notif
+    desc "Receives SendGrid delivery events and raises the level-1 alert."
+
+  mongodb:database "MongoDB" @mongodb [MongoDB] in=state
+    desc "Collections: templates, email_logs."
+  rabbitmq:queue "RabbitMQ" @rabbitmq [AMQP] in=state
+    desc "Queue: send_email_queue."
+  r2:database "Template Bucket" @cloudflare [Cloudflare storage] in=state
+    desc "Rendered template objects, read by the consumer on a cache miss."
+
+  sendgrid-ref:external ^ctx-root/sendgrid
+  slack-ref:external ^ctx-root/slack
+  customer-ref:person ^ctx-root/customer
+
+  admin-ref -> kong-in : "Manages templates" [HTTPS] ~e-admin-notify
+  bitkub1-ref -> kong-in : "Requests an email" [HTTPS] ~e-bitkub1-notify
+  other-svc-ref -> kong-in : "Requests an email" [HTTP] ~e-other-svc-notify
+  kong-in -> email-svc : "Routes the send request" [HTTPS]
+  kong-in -> template-svc : "Routes template CRUD" [HTTPS]
+  email-svc -> mongodb : "Reads and writes email_logs" [MongoDB wire]
+  email-svc -> rabbitmq : "Publishes send_email" [AMQP]
+  rabbitmq -> email-consumer : "Delivers send_email" [AMQP]
+  template-svc -> mongodb : "Reads and writes templates" [MongoDB wire]
+  template-svc -> r2 : "Puts the template object" [HTTPS]
+  r2 -> email-consumer : "Serves a template on cache miss" [HTTPS]
+  email-consumer -> sendgrid-ref : "POST /v3/mail/send" [HTTPS/JSON] ~e-notify-sendgrid
+  email-consumer -> email-svc : "Updates activities" [HTTP]
+  sendgrid-ref -> customer-ref : "Delivers the email" [SMTP] ~e-sendgrid-customer
+  sendgrid-ref -> cf-edge : "Posts a delivery event" [HTTPS webhook] ~e-sendgrid-notify
+  cf-edge -> kong-wh : "Verifies ASN and agent, forwards" [HTTPS]
+  kong-wh -> email-webhook : "Forwards the webhook" [HTTPS]
+  email-webhook -> email-svc : "Updates activities" [HTTP]
+  email-webhook -> slack-ref : "Alerts on a failed event" [HTTPS] ~e-notify-slack
+
+  path send "Send email path"
+    beat "A caller reaches the Email Service only through Kong"
+      bitkub1-ref -> kong-in -> email-svc
+    beat "The request is validated, then published to the queue and consumed"
+      email-svc -> rabbitmq -> email-consumer
+    beat "The consumer hands the message to SendGrid, which delivers it"
+      email-consumer -> sendgrid-ref -> customer-ref
+
+  path templates "Template management"
+    beat "Templates are authored through the same gateway"
+      admin-ref -> kong-in -> template-svc
+    beat "The Template Engine owns the templates collection"
+      template-svc -> mongodb
+    beat "Each template is published to the bucket the consumer reads on a miss"
+      template-svc -> r2 -> email-consumer
+
+  path webhook "SendGrid webhook"
+    beat "Delivery events come back through the Cloudflare edge and a webhook route"
+      sendgrid-ref -> cf-edge -> kong-wh -> email-webhook
+    beat "A failed event raises the level-1 alert and updates the activity log"
+      email-webhook -> slack-ref
+      email-webhook -> email-svc

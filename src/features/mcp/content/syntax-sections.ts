@@ -78,6 +78,7 @@ export const SYNTAX_SECTION_IDS = [
   "frames",
   "nodes",
   "edges",
+  "paths",
   "unknown-fields",
   "sequence",
   "errors",
@@ -251,6 +252,54 @@ const SECTION_BUILDERS: Record<SyntaxSectionId, () => SyntaxSection> = {
       "rejected.",
       "",
       code(FRAME_EXAMPLE.code),
+    ].join("\n"),
+  }),
+
+  paths: () => ({
+    id: "paths",
+    title: "Paths (authored walks)",
+    body: [
+      "A path is an ordered walk through ONE diagram that a reader steps",
+      "through beat by beat. It is a pure overlay: the viewer dims everything",
+      "off the walk and lights the current beat, and nothing about the model",
+      "changes. Paths are written last in a diagram, after the edges:",
+      "",
+      code(
+        'path send "Send email path"\n' +
+          '  beat "Callers reach the service only through the gateway"\n' +
+          "    caller -> gateway -> service\n" +
+          '  beat "Requests are queued and consumed"\n' +
+          "    service -> queue -> consumer\n" +
+          "    consumer -> provider ~e-consumer-provider",
+      ),
+      "",
+      "The shape, exactly:",
+      "",
+      '- `path <id> "Title"` at diagram body depth (indent 2). Ids are',
+      "  unique within their diagram.",
+      '- `beat "One sentence"` at indent 4. At least one per path. The',
+      "  sentence is the caption the reader is shown; there is no second",
+      "  prose slot, because a beat with words and no elements would be a",
+      "  caption card floating over the drawing.",
+      "- Chain lines at indent 6, at least one per beat: `a -> b -> c`. A",
+      "  beat may carry several, and its elements are the union of them, so a",
+      "  branching step is one beat, not two.",
+      "",
+      "**The arrow orders the telling, not the traffic.** Only `->` is legal",
+      "in a chain, and a hop matches every relationship joining its pair in",
+      "EITHER direction — a request and its response point opposite ways, and",
+      "a walk has to be able to go against an arrow. Where two relationships",
+      "join one pair the hop lights both; append `~<edge-id>` to the line to",
+      "pin its last hop to one of them.",
+      "",
+      "Every id a beat names must exist on the same diagram, and every hop",
+      "must be joined by a relationship that is actually written down. Both",
+      "are parse errors rather than silent omissions: a walk that lights the",
+      "wrong thing is worse than one that refuses to load.",
+      "",
+      "Paths keep the order they were written in — it is the order the reader",
+      "walks and the order the menu offers — so they are never sorted by id",
+      "the way frames, nodes and edges are.",
     ].join("\n"),
   }),
 

@@ -18,7 +18,11 @@
 import { ChevronLeft, ChevronRight, Pause, Play, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { PATH_PLAY_MAX_MS, PATH_PLAY_MS_PER_BEAT, PATH_PLAY_BASE_MS } from "../lib/motion";
+import {
+  PATH_PLAY_MAX_MS,
+  PATH_PLAY_MS_PER_BEAT,
+  PATH_PLAY_BASE_MS,
+} from "../lib/motion";
 
 interface ViewerPathPlayerProps {
   title: string;

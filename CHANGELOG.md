@@ -9,6 +9,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A C4 diagram can carry an authored walk through itself.** Write
+  `path send "Send email path"` at the end of a diagram, with
+  `beat "One sentence"` lines under it and the chain of elements each beat is
+  about (`caller -> gateway -> service`), and a reader can step through it —
+  with `→`/`←`, or with a presenter's clicker, which sends PageDown and
+  PageUp. Everything off the walk recedes, the rest of the walk stays legible
+  behind the current step, and the beat's connectors carry the moving light.
+  A diagram with no paths looks exactly as it did; one with paths gains a
+  single `Paths` control beside the breadcrumb, and the beat's sentence appears
+  only while somebody is reading it. Escape leaves the walk before it climbs a
+  level, so a story is never interrupted by a jump out of the diagram. A share
+  link can name the walk and the beat it opens on (`p=send.2`), so a link can
+  arrive on the story rather than on the whole picture. The arrow in a beat
+  orders the telling, not the traffic: a hop lights whatever joins those two
+  elements in either direction, and `~edge-id` picks one where several do.
+  Additive grammar on a beta surface — no existing document, link or route
+  changes, and an older arch-lab refuses a `path` line with a parse error
+  rather than misreading it. `validate_model` flags a beat that doubles back
+  and a walk that jumps with nothing joining it, as review notes rather than
+  errors.
 - **The layout direction can be set from the canvas, not only in the text.**
   With the padlock open, a small button beside it carries the shape the diagram
   is laid out in — bars stacked for top-down, bars in a row for left-right —

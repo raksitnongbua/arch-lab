@@ -92,6 +92,7 @@ import {
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
 import { beatBounds, findPath, pathsOf, resolvePath } from "../lib/paths";
+import type { SharePathRequest } from "../share/codec";
 import { ViewerPathPlayer } from "./viewer-path-player";
 import { ViewerPathsPill } from "./viewer-paths-pill";
 import {
@@ -899,12 +900,15 @@ function cancelTransition(active: ActiveTransition | null): void {
 function ViewerCanvasInner({
   model,
   initialDiagramId,
+  initialPath,
   onDiagramChange,
   edit,
   lockSlot,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
+  /** A walk the link asked to open on. Honoured once, on mount. */
+  initialPath?: SharePathRequest | null;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
   lockSlot?: React.ReactNode;
@@ -995,7 +999,20 @@ function ViewerCanvasInner({
     diagramId: string;
     pathId: string;
     beat: number;
-  } | null>(null);
+  } | null>(() => {
+    // A link that names a walk opens on it. Not the auto-show the tour was
+    // cured of: the person who minted the link asked for this, and it is the
+    // whole point of a link that says "look at this". Resolved against the
+    // diagram the link also chose, so a path id from another canvas simply
+    // does not take.
+    if (initialPath == null) return null;
+    const startId =
+      initialDiagramId !== undefined &&
+      model.diagrams[initialDiagramId] !== undefined
+        ? initialDiagramId
+        : model.rootDiagramId;
+    return { diagramId: startId, ...initialPath };
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
@@ -3275,6 +3292,7 @@ function ViewerCanvasInner({
 export function ViewerCanvas({
   model,
   initialDiagramId,
+  initialPath,
   onDiagramChange,
   edit,
   lockSlot,
@@ -3282,6 +3300,8 @@ export function ViewerCanvas({
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
   initialDiagramId?: string;
+  /** Open inside this walk (share deep links); an unknown path opens none. */
+  initialPath?: SharePathRequest | null;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
   /**
@@ -3304,6 +3324,7 @@ export function ViewerCanvas({
       <ViewerCanvasInner
         model={model}
         initialDiagramId={initialDiagramId}
+        initialPath={initialPath}
         onDiagramChange={onDiagramChange}
         edit={edit}
         lockSlot={lockSlot}

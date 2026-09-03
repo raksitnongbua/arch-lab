@@ -54,6 +54,7 @@ export {
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
   SHARE_FORWARD_ATTRIBUTE,
+  type SharePathRequest,
 } from "./share/codec";
 
 /* The one QUERY parameter a share link carries. Exported because the ROUTE

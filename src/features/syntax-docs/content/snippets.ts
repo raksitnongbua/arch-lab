@@ -134,6 +134,34 @@ title "ShopFlow Platform"
 `,
 };
 
+/** Two authored walks over one container diagram. */
+export const PATH_EXAMPLE: DocSnippet = {
+  id: "paths",
+  code: `archlab 1.0
+title "ShopFlow Platform"
+
+@context ctx-root "ShopFlow Platform"
+  shop:system "ShopFlow Platform" >cnt-shop
+
+@container cnt-shop "ShopFlow — Containers" owner=shop
+  web:container "Web App" [Next.js 15]
+  orders:container "Orders Service" [Go 1.22]
+  orders-db:database "Orders DB" [PostgreSQL 16]
+  ext-pay:external "Payment Provider"
+
+  web -> orders : "Submits the order"
+  orders -> orders-db : "Reads and writes orders"
+  orders -> ext-pay : "Authorises payment"
+
+  path checkout "Checkout path"
+    beat "The storefront hands the order to the service"
+      web -> orders
+    beat "The service records it, then authorises the payment"
+      orders -> orders-db
+      orders -> ext-pay
+`,
+};
+
 /** A node line carrying every attribute, with a desc continuation. */
 export const NODE_EXAMPLE: DocSnippet = {
   id: "node-anatomy",

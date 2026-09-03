@@ -9,6 +9,8 @@
     { "include": "#diagram-line" },
     { "include": "#desc-line" },
     { "include": "#view-line" },
+    { "include": "#path-line" },
+    { "include": "#beat-line" },
     { "include": "#gantt-line" },
     { "include": "#timeline-line" },
     { "include": "#lifecycle-line" },
@@ -94,6 +96,26 @@
       },
       "end": "$",
       "patterns": [{ "include": "#comment" }, { "include": "#number" }]
+    },
+
+    "path-line": {
+      "comment": "`path <id> \"Title\"` — an authored walk, at diagram body depth.",
+      "begin": "^\\s+(path)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.path.alab" }
+      },
+      "end": "$",
+      "patterns": [{ "include": "#comment" }, { "include": "#string" }]
+    },
+
+    "beat-line": {
+      "comment": "`beat \"One sentence\"` — one step of a path. Its chain lines sit one indent deeper and are ordinary id/arrow tokens.",
+      "begin": "^\\s+(beat)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.beat.alab" }
+      },
+      "end": "$",
+      "patterns": [{ "include": "#comment" }, { "include": "#string" }]
     },
 
     "escape-line": {

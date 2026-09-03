@@ -52,7 +52,9 @@ export type AdvisoryRule =
   | "missing-protocol"
   | "missing-diagram-title"
   | "long-title"
-  | "column-layout";
+  | "column-layout"
+  | "path-revisits-element"
+  | "path-teleports";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
 export const ADVISORY_RULES: Record<
@@ -118,6 +120,25 @@ export const ADVISORY_RULES: Record<
       "becomes the export filename, the card in the demo gallery, and the name " +
       "a screen reader reads before the diagram. Past that length it is a " +
       "description — and there is a `description` line for that.",
+  },
+  "path-revisits-element": {
+    title: "A beat doubles back",
+    because:
+      "A beat that names the same element twice in one chain draws a walk " +
+      "that goes out and comes home inside a single step, which is two " +
+      "sentences told as one. The `.alab` parser cannot refuse it — a round " +
+      "trip is a legitimate thing to say — but it almost always wanted to be " +
+      "two beats.",
+  },
+  "path-teleports": {
+    title: "A path jumps with nothing joining it",
+    because:
+      "Consecutive beats that share no element leave a reader with no thread " +
+      "between one step and the next: the light moves somewhere else on the " +
+      "diagram and nothing on screen says why. Legal, and occasionally " +
+      "deliberate — a path may follow a theme rather than a route — but worth " +
+      "a look, because the usual cause is a beat left out. Advice rather than " +
+      "an `.alab` error for that reason: only the author knows which it is.",
   },
 };
 
@@ -293,8 +314,50 @@ function adviseColumnLayout(diagram: C4Diagram, out: Advisory[]): void {
   });
 }
 
+/**
+ * The two defects a PARSE cannot see. Every id resolves and every hop is
+ * joined — the grammar guarantees that — so what is left is whether the walk
+ * reads as one story, which is a judgement and therefore advice.
+ */
+function advisePaths(diagram: C4Diagram, out: Advisory[]): void {
+  for (const path of diagram.paths ?? []) {
+    for (const beat of path.beats) {
+      for (const chain of beat.chains) {
+        const seen = new Set<string>();
+        for (const id of chain.nodes) {
+          if (seen.has(id)) {
+            out.push({
+              rule: "path-revisits-element",
+              where: `${diagram.id} / ${path.id}`,
+              message: `A beat of "${path.title}" passes through \`${id}\` twice in one chain.`,
+            });
+            break;
+          }
+          seen.add(id);
+        }
+      }
+    }
+    for (let i = 1; i < path.beats.length; i += 1) {
+      const previous = new Set(
+        path.beats[i - 1].chains.flatMap((chain) => chain.nodes),
+      );
+      const shares = path.beats[i].chains.some((chain) =>
+        chain.nodes.some((id) => previous.has(id)),
+      );
+      if (!shares) {
+        out.push({
+          rule: "path-teleports",
+          where: `${diagram.id} / ${path.id}`,
+          message: `Beat ${(i + 1).toString()} of "${path.title}" shares no element with the beat before it.`,
+        });
+      }
+    }
+  }
+}
+
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
   adviseColumnLayout(diagram, out);
+  advisePaths(diagram, out);
   if (isBlank(diagram.title)) {
     out.push({
       rule: "missing-diagram-title",

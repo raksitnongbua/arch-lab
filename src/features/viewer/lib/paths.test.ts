@@ -72,18 +72,18 @@ describe("resolvePath", () => {
   });
 
   it("narrows a hop to one relationship when anchored", () => {
-    expect([...resolve([{ nodes: ["a", "b"], edgeId: "e-ba" }]).edgeIds]).toEqual(
-      ["e-ba"],
-    );
+    expect([
+      ...resolve([{ nodes: ["a", "b"], edgeId: "e-ba" }]).edgeIds,
+    ]).toEqual(["e-ba"]);
   });
 
   /* A model the parser never saw can carry an anchor the hop does not have.
      Lighting the hop whole is what an unanchored hop does, so the overlay is
      merely less precise — never empty, never thrown. */
   it("falls back to the whole hop when the anchor is not on it", () => {
-    expect([...resolve([{ nodes: ["a", "b"], edgeId: "e-bc" }]).edgeIds].sort()).toEqual(
-      ["e-ab", "e-ba"],
-    );
+    expect(
+      [...resolve([{ nodes: ["a", "b"], edgeId: "e-bc" }]).edgeIds].sort(),
+    ).toEqual(["e-ab", "e-ba"]);
   });
 
   it("walks every hop of a chain longer than two", () => {

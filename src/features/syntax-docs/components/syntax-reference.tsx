@@ -19,6 +19,7 @@ import {
   EDGE_ARROW_ROWS,
   EDGE_ATTR_ROWS,
   EDGE_EXAMPLE,
+  PATH_EXAMPLE,
   HEADER_EXAMPLE,
   HEADER_ROWS,
   INVALID_SNIPPETS,
@@ -52,6 +53,7 @@ const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "diagrams", label: "Diagrams" },
   { id: "nodes", label: "Nodes" },
   { id: "edges", label: "Edges" },
+  { id: "paths", label: "Paths" },
   { id: "unknown-fields", label: "Unknown fields (! lines)" },
   { id: "sequence", label: "Sequence diagrams" },
   { id: "gantt", label: "Gantt charts" },
@@ -367,7 +369,44 @@ export function SyntaxReference(): React.JSX.Element {
         <CodeBlock code={EDGE_EXAMPLE.code} label="edge anatomy" tryIt />
       </Section>
 
-      {/* ---- 7. unknown fields ------------------------------------------------------ */}
+      {/* ---- 7. paths --------------------------------------------------------------- */}
+      <Section id="paths" title="Paths — authored walks">
+        <P>
+          A path is an ordered walk through <em>one</em> diagram that a reader
+          steps through beat by beat. It is a pure overlay: the viewer dims
+          everything off the walk and lights the current beat, and nothing about
+          the model changes. Paths are written last in a diagram, after the
+          edges.
+        </P>
+        <P>
+          <Code>path &lt;id&gt; &quot;Title&quot;</Code> sits at indent 2 and
+          its ids are unique within the diagram;{" "}
+          <Code>beat &quot;One sentence&quot;</Code> at indent 4, at least one
+          per path; and each beat&rsquo;s chain lines at indent 6, at least one
+          per beat. A beat may carry several chain lines, and its elements are
+          the union of them — so a branching step is one beat, not two.
+        </P>
+        <P>
+          <strong>The arrow orders the telling, not the traffic.</strong> Only{" "}
+          <Code>-&gt;</Code> is legal in a chain, and a hop matches every
+          relationship joining its pair in <em>either</em> direction — a request
+          and its response point opposite ways, and a walk has to be able to go
+          against an arrow. Where two relationships join one pair the hop lights
+          both; append <Code>~&lt;edge-id&gt;</Code> to pin the line&rsquo;s
+          last hop to one of them.
+        </P>
+        <P>
+          Every id a beat names must exist on the same diagram, and every hop
+          must be joined by a relationship that is actually written down. Both
+          are parse errors rather than silent omissions: a walk that lights the
+          wrong thing is worse than one that refuses to load. Paths keep the
+          order they were written in — it is the order the reader walks — so
+          they are never sorted by id the way frames, nodes and edges are.
+        </P>
+        <CodeBlock code={PATH_EXAMPLE.code} label="paths" tryIt />
+      </Section>
+
+      {/* ---- 8. unknown fields ------------------------------------------------------ */}
       <Section id="unknown-fields" title="Unknown fields — ! lines">
         <P>
           Any model field the grammar has no sugar for — unknown keys from newer

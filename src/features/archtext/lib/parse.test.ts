@@ -189,9 +189,7 @@ describe("paths", () => {
     expect(diagram.paths?.map((p) => p.id)).toEqual(["send", "other"]);
     expect(diagram.paths?.[0].title).toBe("The send path");
     expect(diagram.paths?.[0].beats).toHaveLength(2);
-    expect(diagram.paths?.[0].beats[0].caption).toBe(
-      "A asks B, and B answers",
-    );
+    expect(diagram.paths?.[0].beats[0].caption).toBe("A asks B, and B answers");
   });
 
   it("keeps several chain lines in one beat", () => {

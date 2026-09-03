@@ -76,6 +76,7 @@ import {
 
 import { ViewerExportButton } from "../export/export-button";
 import { EditModeLink } from "./edit-mode-link";
+import type { SharePathRequest } from "../share/codec";
 import { ShareButton, type ShareSource } from "../share/share-button";
 import {
   deepFreeze,
@@ -192,6 +193,7 @@ function useC4TourSteps(mod: string, editable: boolean): readonly TourStep[] {
 export function ViewerShell({
   model,
   initialDiagramId,
+  initialPath,
   share,
   onDiagramChange,
   edit,
@@ -204,6 +206,8 @@ export function ViewerShell({
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
   initialDiagramId?: string;
+  /** Open inside this walk (share deep links); an unknown path opens none. */
+  initialPath?: SharePathRequest | null;
   /** Where the model came from — enables the Share control when provided. */
   share?: ShareSource;
   /** Reports which diagram is on screen (initial diagram included). */
@@ -439,6 +443,7 @@ export function ViewerShell({
         <ViewerCanvas
           model={frozenModel}
           initialDiagramId={initialDiagramId}
+          initialPath={initialPath}
           onDiagramChange={handleDiagramChange}
           edit={edit}
           lockSlot={lockSlot}

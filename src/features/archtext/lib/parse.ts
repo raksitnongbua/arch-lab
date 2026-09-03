@@ -2433,7 +2433,7 @@ function resolve(
             failAt(
               beat.line,
               beat.column,
-              "a beat must name at least one relationship — add a chain line like \"a -> b\" below it",
+              'a beat must name at least one relationship — add a chain line like "a -> b" below it',
             );
           }
           const chains: Record<string, unknown>[] = [];
@@ -2461,7 +2461,10 @@ function resolve(
               }
             }
             if (chain.edgeId !== undefined) {
-              const at = chain.edgeIdLoc ?? { line: chain.line, column: chain.column };
+              const at = chain.edgeIdLoc ?? {
+                line: chain.line,
+                column: chain.column,
+              };
               const anchored = edgeById.get(chain.edgeId);
               const last = chain.nodes[chain.nodes.length - 2];
               const end = chain.nodes[chain.nodes.length - 1];

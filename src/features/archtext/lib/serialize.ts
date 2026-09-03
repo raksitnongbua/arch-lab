@@ -794,7 +794,8 @@ function emitDiagram(
   // argument, so sorting here would rewrite what somebody wrote.
   const pathsValue = diagram.paths;
   if (pathsValue !== undefined) {
-    if (!Array.isArray(pathsValue)) invalid(`diagram "${id}".paths`, pathsValue);
+    if (!Array.isArray(pathsValue))
+      invalid(`diagram "${id}".paths`, pathsValue);
     pathsValue.forEach((path, i) => {
       if (!isRecord(path)) invalid(`diagram "${id}".paths[${i}]`, path);
       // Blank-separated the way nodes and edges are, and guarded the same way:
@@ -814,9 +815,11 @@ function emitPath(
 ): void {
   const where = `diagram "${diagramId}".paths[${index}]`;
   const pathId = path.id;
-  if (typeof pathId !== "string" || pathId === "") invalid(`${where}.id`, pathId);
+  if (typeof pathId !== "string" || pathId === "")
+    invalid(`${where}.id`, pathId);
   const title = path.title;
-  if (typeof title !== "string" || title === "") invalid(`${where}.title`, title);
+  if (typeof title !== "string" || title === "")
+    invalid(`${where}.title`, title);
   const beats = path.beats;
   // Not a silent drop: the parser cannot produce a beatless path, so a model
   // that has one was hand-built and the bug is worth naming here.
