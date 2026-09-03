@@ -186,14 +186,15 @@ export const ISSUE_CODES = {
     fixability: "safe",
     summary: "A `[…]` technology bracket that never closes.",
   },
-  "c4.tag-expected": {
-    fixability: "safe",
-    summary: "A tag written without its leading `#`.",
-  },
-  "c4.json-colon-missing": {
-    fixability: "safe",
-    summary: "A `:` missing before a JSON value.",
-  },
+  /*
+   * A missing `#` before a tag and a missing `:` before a JSON value had
+   * codes of their own here and lost them: both raise through
+   * `cursor.expect`, which already offers the insertion, and a second code
+   * for the same throw would have been a key no parser mentions —
+   * `check:quickfix` closes the registry both ways and would have said so.
+   * The generic code is not a loss of precision: `expect` is passed the
+   * literal it wanted, so the fix names the character either way.
+   */
   "c4.level-unknown": {
     fixability: "choice",
     summary: "An `@…` word outside the four C4 levels.",
@@ -291,10 +292,6 @@ export const ISSUE_CODES = {
     fixability: "choice",
     summary:
       "An arrow token outside `SEQUENCE_ARROW_TOKENS`. The highest-value near-match in the format: `->>`, `-->`, `-x`, `--x` and `-)` are all Mermaid spellings of arrows arch-lab spells differently.",
-  },
-  "seq.label-colon-missing": {
-    fixability: "safe",
-    summary: "A message with a label but no `:` before it.",
   },
   "seq.activation-duplicate": {
     fixability: "safe",

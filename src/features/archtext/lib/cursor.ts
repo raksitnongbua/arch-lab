@@ -4,11 +4,23 @@
  * tokenizer works one line at a time and every token knows its 1-based
  * line and column for error reporting.
  *
+ * THE CURSOR IS WHERE QUICK FIXES PAY BEST. Nine grammars reach it, so the
+ * codes and the fix candidates attached here cover dozens of throw sites in
+ * one place — and they are attached GENERICALLY, from what the method already
+ * knows: `expect` holds the token it wanted, `readQuoted` holds the tail it
+ * could not read. Nothing here inspects a message or a grammar. A production
+ * that needs a fix the cursor cannot derive raises it through `fail` with its
+ * own code instead, which is how the C4, sequence and flowchart parsers carry
+ * the ones only they have the data for.
+ *
  * Imported by `scripts/archtext-check.mjs` through Node's type stripping:
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
 import { failAt } from "./errors";
+import type { IssueDetail } from "./errors";
+import { bareTail, commentStart, quoteTail, replaceOnLine } from "./fix";
+import type { FixCandidate } from "./fix";
 import { NUMBER_RE } from "./text";
 import { describeError } from "@/lib/errors";
 
@@ -51,9 +63,29 @@ export class LineCursor {
     return false;
   }
 
+  /**
+   * Consumes `token` or fails, offering its insertion as the fix.
+   *
+   * SAFE FOR A STRUCTURAL REASON rather than a statistical one, which is what
+   * lets one generic candidate stand in for every `expect` in the feature:
+   * every call site passes a single punctuation character the grammar demands
+   * at exactly this position — `:`, `=`, `]`, `)`, `,`, `#`, `x`, `/` — so
+   * there is nothing to guess about what belongs there, and inserting it moves
+   * the cursor strictly past the column that failed. A later error is still
+   * possible; a repeat of THIS error at THIS column is not.
+   */
   expect(token: string, what: string): void {
     if (!this.eat(token)) {
-      this.fail(`expected ${what}`, this.foundHere());
+      this.fail(`expected ${what}`, this.foundHere(), {
+        code: "cursor.expected-token",
+        fixes: [
+          {
+            title: `Insert "${token}"`,
+            edits: [replaceOnLine(this.line, this.column, this.column, token)],
+            kind: "safe",
+          },
+        ],
+      });
     }
   }
 
@@ -63,15 +95,87 @@ export class LineCursor {
     return rest === "" ? undefined : rest.slice(0, 40);
   }
 
-  fail(message: string, found?: string): never {
-    return failAt(this.line, this.column, message, found);
+  fail(message: string, found?: string, detail?: IssueDetail): never {
+    return failAt(this.line, this.column, message, found, detail);
   }
 
-  /** Reads a run matched by `re` (anchored via ^) or fails. */
+  /**
+   * The candidates for a value the grammar wanted quoted and found bare.
+   *
+   * Two codes come out of one situation and the `//` is what separates them.
+   * With no comment on the line there is one rewrite and it is provable, so
+   * the fix is one click. With a comment there are two readings — the author
+   * meant the value to stop at the comment, or they meant the whole line
+   * including a `//` inside a name — and neither is provable, so BOTH are
+   * offered and neither is applied without a person choosing. Guessing here
+   * would rewrite a comment, which is the one place in a `.alab` file where
+   * the author's text is none of the parser's business.
+   */
+  private quoteTailFixes(what: string): IssueDetail {
+    const rest = this.text.slice(this.pos);
+    const untilNextToken = bareTail(rest);
+    const wholeTail = rest.trimEnd();
+    const quoteUpTo = (value: string): FixCandidate => ({
+      title: `Quote ${what}`.slice(0, 40),
+      edits: [
+        replaceOnLine(
+          this.line,
+          this.column,
+          this.column + value.length,
+          quoteTail(value),
+        ),
+      ],
+      kind: commentStart(rest) === -1 ? "safe" : "choice",
+    });
+
+    if (untilNextToken === "") {
+      // Nothing to wrap — the value is simply absent, and inventing an empty
+      // string here would replace a legible error with an illegible model.
+      return { code: "cursor.expected-value" };
+    }
+    if (commentStart(rest) === -1) {
+      return {
+        code: "cursor.quote-missing",
+        fixes: [quoteUpTo(untilNextToken)],
+      };
+    }
+    return {
+      code: "cursor.quote-ambiguous",
+      fixes: [
+        { ...quoteUpTo(untilNextToken), rank: 0 },
+        {
+          title: "Quote the rest of the line",
+          edits: [
+            replaceOnLine(
+              this.line,
+              this.column,
+              this.column + wholeTail.length,
+              quoteTail(wholeTail),
+            ),
+          ],
+          kind: "choice",
+          rank: 1,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Reads a run matched by `re` (anchored via ^) or fails.
+   *
+   * NO FIX, on purpose. The regex says what shape was wanted and not which
+   * word — a bare id, a number, a keyword prefix all arrive here — so the
+   * parser has no candidate to offer and pretending otherwise would put a
+   * guess one click from the author's text. The productions that DO know the
+   * candidate set (a node type, an arrow, a participant id) rank it themselves
+   * before reaching the cursor.
+   */
   readBare(re: RegExp, what: string): string {
     const match = re.exec(this.text.slice(this.pos));
     if (match === null || match.index !== 0 || match[0] === "") {
-      this.fail(`expected ${what}`, this.foundHere());
+      this.fail(`expected ${what}`, this.foundHere(), {
+        code: "cursor.expected-value",
+      });
     }
     this.pos += match[0].length;
     return match[0];
@@ -84,7 +188,11 @@ export class LineCursor {
    */
   readQuoted(what: string): string {
     if (this.peek() !== '"') {
-      this.fail(`expected ${what} — a JSON string like "…"`, this.foundHere());
+      this.fail(
+        `expected ${what} — a JSON string like "…"`,
+        this.foundHere(),
+        this.quoteTailFixes(what),
+      );
     }
     let i = this.pos + 1;
     while (i < this.text.length) {
@@ -97,9 +205,30 @@ export class LineCursor {
       i += 1;
     }
     if (i >= this.text.length) {
+      /* The closing quote goes at the END OF THE LINE, not at the cursor —
+         which is where the error is reported. Everything between the two is
+         text the author typed inside the string they meant to open, and an
+         insertion at the caret would close the string before it. */
       this.fail(
         `the string for ${what} opened here is never closed — expected a closing '"'`,
         this.foundHere(),
+        {
+          code: "cursor.quote-unclosed",
+          fixes: [
+            {
+              title: "Close the string",
+              edits: [
+                replaceOnLine(
+                  this.line,
+                  this.text.trimEnd().length + 1,
+                  this.text.trimEnd().length + 1,
+                  '"',
+                ),
+              ],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
     const raw = this.text.slice(this.pos, i + 1);
@@ -110,10 +239,17 @@ export class LineCursor {
       this.fail(
         `the ${what} string contains an invalid escape sequence`,
         raw.slice(0, 40),
+        { code: "cursor.quote-escape" },
       );
     }
+    /* The SAME SENTENCE as the bare-tail branch above and a different code —
+       which is the case that makes the code the contract rather than the
+       message. Here a `"…"` was read and parsed to something that is not a
+       string, so there is no tail to wrap and no fix to offer. */
     if (typeof value !== "string") {
-      this.fail(`expected ${what} — a JSON string like "…"`, raw.slice(0, 40));
+      this.fail(`expected ${what} — a JSON string like "…"`, raw.slice(0, 40), {
+        code: "cursor.expected-value",
+      });
     }
     this.pos = i + 1;
     return value;
@@ -123,7 +259,10 @@ export class LineCursor {
   readIdToken(what: string): string {
     if (this.peek() === '"') {
       const value = this.readQuoted(what);
-      if (value === "") this.fail(`the ${what} must not be empty`);
+      if (value === "")
+        this.fail(`the ${what} must not be empty`, undefined, {
+          code: "cursor.expected-value",
+        });
       return value;
     }
     return this.readBare(/^[A-Za-z0-9_][A-Za-z0-9_.-]*/, what);
@@ -134,7 +273,9 @@ export class LineCursor {
     const raw = this.readBare(NUMBER_RE, `${what} — a number`);
     const value = Number(raw);
     if (!Number.isFinite(value)) {
-      this.fail(`"${raw}" is not a finite number for ${what}`, raw);
+      this.fail(`"${raw}" is not a finite number for ${what}`, raw, {
+        code: "cursor.number-invalid",
+      });
     }
     return value;
   }
@@ -145,7 +286,9 @@ export class LineCursor {
     const column = this.column;
     const raw = this.text.slice(this.pos).trimEnd();
     if (raw === "") {
-      failAt(this.line, column, `expected ${what} — a JSON value`);
+      failAt(this.line, column, `expected ${what} — a JSON value`, undefined, {
+        code: "cursor.expected-value",
+      });
     }
     try {
       const value: unknown = JSON.parse(raw);
@@ -158,15 +301,26 @@ export class LineCursor {
         column,
         `expected ${what} — a JSON value (${detail})`,
         raw.slice(0, 40),
+        { code: "cursor.json-invalid" },
       );
     }
   }
 
-  /** Fails if anything but whitespace remains on the line. */
+  /**
+   * Fails if anything but whitespace remains on the line.
+   *
+   * NO FIX, and this one is a refusal rather than an absence: the only rewrite
+   * that makes this line parse DELETES text the author typed. A quick fix that
+   * throws away input is not a quick fix, it is a data-loss button one click
+   * from a caret quote, so the reader is told where the statement ended and
+   * left to decide.
+   */
   expectEnd(context: string): void {
     this.skipSpaces();
     if (!this.atEnd()) {
-      this.fail(`unexpected text after ${context}`, this.foundHere());
+      this.fail(`unexpected text after ${context}`, this.foundHere(), {
+        code: "cursor.trailing-text",
+      });
     }
   }
 }

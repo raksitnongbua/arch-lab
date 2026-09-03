@@ -335,3 +335,29 @@ export function quoteTail(raw: string): string {
 export function commentStart(body: string): number {
   return body.indexOf("//");
 }
+
+/**
+ * Where the next token after a bare value begins in `rest`, or `rest.length`.
+ *
+ * `rest` is the line from the cursor onward. It ends at the first `//`, ` [`,
+ * ` (`, ` #` or ` key=` — the five things that follow a value on a `.alab`
+ * line — because those are what a "quote the tail" fix must NOT swallow.
+ *
+ * THE BOUNDARY IS THE WHOLE POINT and it is worth being explicit about the
+ * trade. `api:system Payments API [Go 1.22]` is missing its quotes; wrapping
+ * everything to end of line produces a node NAMED `Payments API [Go 1.22]`,
+ * which parses, renders, and has quietly eaten the technology field — the
+ * silent deformation `check:quickfix`'s mutation corpus exists to catch.
+ * Stopping at the bracket instead can truncate a value that genuinely
+ * contained one (`desc A note [see below]` loses its tail), and that case
+ * fails LOUDLY at a later column with `unexpected text after …`. Erring
+ * toward another visible error rather than toward silent damage is the whole
+ * of the rule; do not "improve" this by extending to end of line.
+ */
+const TAIL_BOUNDARY_RE = /\/\/| \[| \(| #| [A-Za-z][A-Za-z0-9_-]*=/;
+
+/** The bare value at the start of `rest`, cut at the first following token. */
+export function bareTail(rest: string): string {
+  const match = TAIL_BOUNDARY_RE.exec(rest);
+  return rest.slice(0, match ? match.index : rest.length).trimEnd();
+}
