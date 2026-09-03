@@ -41,7 +41,7 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -49,19 +49,6 @@ import {
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                     */
 /* -------------------------------------------------------------------------- */
-
-function renderReadError(error: ErInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${ER_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
 
 export type ReadErResult =
   | { status: "ok"; file: ErLabFile; format: ErSourceFormat }
@@ -73,10 +60,14 @@ export function readEr(source: string): ReadErResult {
 
   const result = parseErInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(ER_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };

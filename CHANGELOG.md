@@ -95,6 +95,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A parse error no longer says where twice.** Every `validate_<kind>` and
+  `format_<kind>` tool over MCP, and every error example in the syntax
+  reference and the bundled `alab` skill, opened with
+  `line 5, column 7: line 5, column 7: …` — the location was printed, then
+  printed again by the parser's own message. One location, once.
 - **A boundary no longer draws one huge rectangle around half the diagram.** A
   boundary's box came from the bounding box of everything in it, which is right
   only while its members sit together — so a boundary holding an inbound

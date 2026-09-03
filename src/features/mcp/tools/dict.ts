@@ -29,23 +29,10 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
-
-function renderReadError(error: DictInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${DICT_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
 
 export type ReadDictResult =
   | { status: "ok"; file: DictLabFile; format: DictSourceFormat }
@@ -56,10 +43,14 @@ export function readDict(source: string): ReadDictResult {
   if (!size.ok) return { status: "error", kind: "size", message: size.message };
   const result = parseDictInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(DICT_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };

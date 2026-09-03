@@ -65,7 +65,7 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -73,19 +73,6 @@ import {
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                     */
 /* -------------------------------------------------------------------------- */
-
-function renderReadError(error: TimelineInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${TIMELINE_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
 
 export type ReadTimelineResult =
   | { status: "ok"; file: TimelineLabFile; format: TimelineSourceFormat }
@@ -101,10 +88,14 @@ export function readTimeline(source: string): ReadTimelineResult {
 
   const result = parseTimelineInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(TIMELINE_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };

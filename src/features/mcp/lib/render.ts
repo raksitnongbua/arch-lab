@@ -109,6 +109,25 @@ export function quoteSourceLine(
 /* Issues                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Drops a location the message already opens with, so the headline states it
+ * once.
+ *
+ * `ArchTextParseError.message` is built as `line N, column M: <what>` for the
+ * editor's error strip, and the eight kind readers store that whole string as
+ * their failure's `message` — so any renderer that prefixes the location again
+ * emitted `line 5, column 14: line 5, column 14: …`. That shipped in all eight
+ * `validate_<kind>` tools and in the generated syntax reference.
+ *
+ * MATCHED AGAINST THE ISSUE'S OWN LOCATION rather than a `/^line \d+/` regex:
+ * a message that happens to begin by naming a DIFFERENT line ("line 3 opened a
+ * block that never closes") is information, not a repeat, and must survive.
+ */
+function withoutRepeatedLocation(message: string, location: string): string {
+  const prefix = `${location}: `;
+  return message.startsWith(prefix) ? message.slice(prefix.length) : message;
+}
+
 /** One issue as a numbered entry, with its quoted line when it has one. */
 function renderIssue(issue: CheckIssue, index: number, total: number): string {
   const ordinal = total > 1 ? `${index + 1}. ` : "";
@@ -121,7 +140,7 @@ function renderIssue(issue: CheckIssue, index: number, total: number): string {
   const headline =
     location === undefined
       ? `${ordinal}${issue.message}`
-      : `${ordinal}${location}: ${issue.message}`;
+      : `${ordinal}${location}: ${withoutRepeatedLocation(issue.message, location)}`;
 
   if (issue.lineText === undefined || issue.line === undefined) return headline;
   return `${headline}\n\n${quoteSourceLine(issue.lineText, issue.line, issue.column)}`;
@@ -131,6 +150,46 @@ export function renderIssues(issues: readonly CheckIssue[]): string {
   return issues
     .map((issue, index) => renderIssue(issue, index, issues.length))
     .join("\n\n");
+}
+
+/**
+ * A located parse failure from one of the eight kind readers, rendered the way
+ * `lib/read.ts` renders a C4 one: the verdict, then the issue with its quoted
+ * line and caret.
+ *
+ * THE ONE COPY. Every `validate_<kind>` / `format_<kind>` pair carried its own
+ * `renderReadError` — eight bodies that differed only in which
+ * `<KIND>_FORMAT_LABEL` they indexed — which is why the doubled location above
+ * had to be fixed in eight places to be fixed at all, and why it never was.
+ * `formatLabel` is a parameter rather than a `kind` argument because each
+ * reader owns its own label table and this module must not import nine of
+ * them.
+ */
+export function renderKindParseFailure(
+  /** The dialect the reader tried, e.g. `.alab flowchart`. */
+  formatLabel: string,
+  failure: {
+    line: number;
+    column: number;
+    message: string;
+    /**
+     * `null` when the location points past the last line (an unexpected end
+     * of input): there is nothing to quote and the message already says where.
+     */
+    lineText: string | null;
+  },
+): string {
+  return joinSections(
+    `INVALID as ${formatLabel}.`,
+    renderIssues([
+      {
+        message: failure.message,
+        line: failure.line,
+        column: failure.column,
+        lineText: failure.lineText ?? undefined,
+      },
+    ]),
+  );
 }
 
 /* -------------------------------------------------------------------------- */

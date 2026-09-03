@@ -513,8 +513,14 @@ const SECTION_BUILDERS: Record<SyntaxSectionId, () => SyntaxSection> = {
           "",
           code(snippet.code),
           "",
-          `→ \`line ${snippet.expected.line}, column ${snippet.expected.column}: ` +
-            `${snippet.expected.message}\``,
+          /* THE MESSAGE ALONE. `expected.message` is the parser's whole
+             sentence and it already opens `line <n>, column <n>: ` — prefixing
+             the location again put "line 5, column 7: line 5, column 7: …" in
+             front of every error example in this reference and in the
+             generated `skills/alab/SKILL.md`. The line and the column stay in
+             the snippet type because `check:syntax-docs` asserts the parser
+             reports exactly those; they are not text to re-render. */
+          `→ \`${snippet.expected.message}\``,
         ].join("\n"),
       ).join("\n\n"),
     ].join("\n"),

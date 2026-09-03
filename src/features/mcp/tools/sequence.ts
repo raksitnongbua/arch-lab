@@ -51,8 +51,8 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
   renderAdvisories,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -64,23 +64,20 @@ import {
 /**
  * Renders a typed reader failure as the caller-facing message. Each kind
  * gets its own shape because they need different next actions: a parse error
- * needs the location and the offending line, a C4 document needs to be told
- * which tool to use instead, and the rest ("flowchart-detected",
- * "usecase-detected", "unknown-format") carry a self-contained message that
- * says where the document does render or what to try.
+ * needs the location and the offending line (which every kind renders the same
+ * way, through `renderKindParseFailure`), a C4 document needs to be told which
+ * tool to use instead, and the rest ("flowchart-detected", "usecase-detected",
+ * "unknown-format") carry a self-contained message that says where the
+ * document does render or what to try.
+ *
+ * THE ONLY KIND THAT STILL NEEDS A FUNCTION HERE: the `c4-detected` arm is
+ * this reader's alone, because it is the only one whose sibling tool reports
+ * something the caller would otherwise never learn to ask for (the C4 review
+ * notes). The other eight tools inline the two-arm choice at their read site.
  */
 function renderReadError(error: SequenceInputError): string {
   if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${SEQUENCE_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      // The reader reports `lineText: null` when the location points past the
-      // last line (an unexpected end of input), and there is then nothing to
-      // quote — the message already says where.
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
+    return renderKindParseFailure(SEQUENCE_FORMAT_LABEL[error.format], error);
   }
   if (error.kind === "c4-detected") {
     return joinSections(

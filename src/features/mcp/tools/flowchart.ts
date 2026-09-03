@@ -47,7 +47,7 @@ import {
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -61,22 +61,6 @@ import {
  * needs the location and the offending line; `unknown-format` already carries
  * a self-contained sentence naming both dialects it tried.
  */
-function renderReadError(error: FlowchartInputError): string {
-  if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${FLOWCHART_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      // `lineText: null` means the location points past the last line (an
-      // unexpected end of input); there is nothing to quote and the message
-      // already says where.
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
-  }
-  return error.message;
-}
-
 export type ReadFlowchartResult =
   | { status: "ok"; file: FlowchartLabFile; format: FlowchartSourceFormat }
   /*
@@ -97,10 +81,14 @@ export function readFlowchart(source: string): ReadFlowchartResult {
 
   const result = parseFlowchartInput(source);
   if (result.status === "error") {
+    const { error } = result;
     return {
       status: "error",
-      kind: result.error.kind,
-      message: renderReadError(result.error),
+      kind: error.kind,
+      message:
+        error.kind === "parse"
+          ? renderKindParseFailure(FLOWCHART_FORMAT_LABEL[error.format], error)
+          : error.message,
     };
   }
   return { status: "ok", file: result.value.file, format: result.value.format };
