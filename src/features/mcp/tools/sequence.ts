@@ -46,8 +46,10 @@ import {
 import { layoutSequence } from "@/features/sequence/lib/layout";
 import { adviseSequence } from "@/features/validate/lib/advisories";
 
+import { hubAndSpokeFork, hubAndSpokeReading } from "../lib/ask";
 import { guardSourceSize } from "../lib/limits";
 import {
+  askHumanResult,
   errorResult,
   fence,
   joinSections,
@@ -316,27 +318,33 @@ export function validateSequence(source: string): McpTextResult {
   if (read.status === "error") return errorResult(read.message);
 
   const counts = countItems(read.file.items);
-  return textResult(
-    joinSections(
-      `VALID as ${SEQUENCE_FORMAT_LABEL[read.format]}.`,
-      renderSummary(read.file, counts),
-      renderParticipants(read.file),
-      /* Review notes, the same renderer the C4 tool uses. A sequence document
-         raises only the `.alab` FORMAT family — it has no C4 notation to conform
-         to — so today that is the title length. Reported for BOTH input formats,
-         because a long title survives a Mermaid import unchanged and an agent
-         that pasted Mermaid is exactly the one about to save it as `.alab`. */
-      renderAdvisories(adviseSequence(read.file), "sequence diagram"),
-      // Stated on success, not just on the import path, because a caller that
-      // validated Mermaid and then saved the .alab has silently accepted the
-      // loss; naming it here is the only place it can still act on it.
-      read.format === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
-      counts.messages === 0
-        ? "No messages: the document parses, but a sequence diagram with no " +
-            'messages records nothing. Add `from -> to "label"` lines.'
-        : null,
-    ),
+  const verdict = joinSections(
+    `VALID as ${SEQUENCE_FORMAT_LABEL[read.format]}.`,
+    renderSummary(read.file, counts),
+    renderParticipants(read.file),
+    /* Review notes, the same renderer the C4 tool uses. A sequence document
+       raises only the `.alab` FORMAT family — it has no C4 notation to conform
+       to — so today that is the title length. Reported for BOTH input formats,
+       because a long title survives a Mermaid import unchanged and an agent
+       that pasted Mermaid is exactly the one about to save it as `.alab`. */
+    renderAdvisories(adviseSequence(read.file), "sequence diagram"),
+    // Stated on success, not just on the import path, because a caller that
+    // validated Mermaid and then saved the .alab has silently accepted the
+    // loss; naming it here is the only place it can still act on it.
+    read.format === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
+    counts.messages === 0
+      ? "No messages: the document parses, but a sequence diagram with no " +
+          'messages records nothing. Add `from -> to "label"` lines.'
+      : null,
   );
+
+  // The mirror of `validate_model`'s step-like question, and the summary above
+  // travels with it for the same reason: the document is valid, so the counts
+  // a caller asked for are still the answer.
+  const hub = hubAndSpokeReading(read.file);
+  if (hub !== null) return askHumanResult(hubAndSpokeFork(hub), verdict);
+
+  return textResult(verdict);
 }
 
 export function formatSequence(source: string): McpTextResult {

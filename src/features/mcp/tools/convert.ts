@@ -16,8 +16,10 @@
 import { serializeMermaidC4 } from "@/features/mermaid";
 import type { CheckChoice } from "@/features/validate/lib/check";
 
-import { readSource } from "../lib/read";
+import { diagramFork } from "../lib/ask";
+import { readFailureResult, readSource } from "../lib/read";
 import {
+  askHumanResult,
   errorResult,
   fence,
   formatNote,
@@ -43,9 +45,16 @@ export function convertModel(
   diagramId: string | undefined,
 ): McpTextResult {
   const read = readSource(source, format);
-  if (read.status === "error") return errorResult(read.message);
+  if (read.status !== "ok") return readFailureResult(read);
 
-  const { file, aftText, jsonText, format: actual, autoDetected } = read.value;
+  const {
+    file,
+    summary,
+    aftText,
+    jsonText,
+    format: actual,
+    autoDetected,
+  } = read.value;
   const from = formatNote(actual, autoDetected);
 
   if (to === "alab") {
@@ -73,6 +82,21 @@ export function convertModel(
     );
   }
 
+  /*
+   * WHICH diagram, when the model has several and the root is a signpost.
+   * Mermaid emits exactly one, so this is the choice the tool has always made
+   * silently — and getting it wrong hands over a picture that contains none of
+   * the detail, which the agent cannot tell from the right answer. Raised only
+   * with `diagram_id` ABSENT: an explicit id is the agent saying it chose.
+   */
+  const fork = diagramFork(
+    "convert_model",
+    summary.diagrams,
+    file.rootDiagramId,
+    diagramId,
+  );
+  if (fork !== null) return askHumanResult(fork);
+
   const target = diagramId ?? file.rootDiagramId;
   return textResult(
     joinSections(
@@ -98,7 +122,7 @@ export function formatModel(
   format: CheckChoice,
 ): McpTextResult {
   const read = readSource(source, format);
-  if (read.status === "error") return errorResult(read.message);
+  if (read.status !== "ok") return readFailureResult(read);
 
   const { aftText, jsonText, format: actual, autoDetected } = read.value;
 

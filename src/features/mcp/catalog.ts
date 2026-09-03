@@ -66,7 +66,30 @@ const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} c
  * after there were six, and a tool description is the one place a stale count
  * is read by something that cannot look around and notice.
  */
-const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+
+/**
+ * The notations `get_syntax_reference` does NOT teach.
+ *
+ * The reference used to present itself as "the .alab grammar", which is a
+ * false signal with a cost: an agent told to read the grammar first before
+ * writing a gantt got a ~22 KB wall of C4 and no mention of `gantt` anywhere
+ * in it, which reads as "arch-lab does not draw those". Naming the gap is the
+ * honest fix; extending the section list is a larger change.
+ *
+ * DERIVED, not listed. C4 is the reference's default subject — `header`,
+ * `diagrams`, `nodes`, `edges`, `frames` and `paths` are all C4 productions —
+ * and every OTHER kind that is taught has a section named after it, so
+ * membership is "is there a section with this kind's name". Adding a `gantt`
+ * section to `content/syntax-sections.ts` therefore fixes the tool's own
+ * description in the same edit; `check:mcp` asserts the two agree.
+ */
+const KINDS_WITHOUT_SYNTAX_SECTIONS = (
+  Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]
+).filter(
+  (kind) =>
+    kind !== "c4" && !(SYNTAX_SECTION_IDS as readonly string[]).includes(kind),
+);
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -135,8 +158,64 @@ export interface McpToolDoc {
    * for that audience: what it does, when to reach for it, what it does not do.
    */
   description: string;
+  /**
+   * When this tool stops and puts a question to the human, in one sentence —
+   * or absent, for the tools that never do.
+   *
+   * SEPARATE FROM `description` so the `/mcp` page can show it as its own row
+   * ("may ask your human when…") and `check:mcp` can read the same field:
+   * every tool that can raise an ask must set it, and every tool that cannot
+   * must leave it undefined, so the page never advertises a question a tool is
+   * incapable of raising. The alternative — grepping the description for the
+   * phrase — would pass on a tool that merely mentions asking.
+   */
+  asks?: string;
   args: readonly McpArgDoc[];
 }
+
+/**
+ * The standing rule, in one sentence, appended to every `validate_<kind>`
+ * description.
+ *
+ * All nine already end "use X for Y", which answers "which TOOL for this
+ * document" and leaves "which DOCUMENT for this request" unanswered — and the
+ * second is the question an agent handed a sentence of English actually faces.
+ * One constant rather than nine copies, for the reason the blurbs are
+ * interpolated: nine copies is eight that go stale.
+ */
+/**
+ * The one repair an agent must NOT make, said in the words of the tools that
+ * provoke it.
+ *
+ * The failure is specific and was the likeliest one: told "the C4 tools cannot
+ * read this", an agent's cheapest edit is to change `archlab 1.0 gantt` on
+ * line 1 to `archlab 1.0` — the single change that makes every other line of a
+ * gantt meaningless — and then to report the resulting parse errors as the
+ * document's problem. Twin of `KEEP_THE_HEADER` in `lib/ask.ts`, which says it
+ * in the result; this says it in the description, which the model reads first.
+ */
+const NOT_A_HEADER_BUG =
+  'do not "fix" line 1 of a document whose header names another kind. The ' +
+  "header names the notation the rest of the document is written in; " +
+  "changing it converts nothing.";
+
+/**
+ * What the four C4 doors say about text of another notation, in one place.
+ *
+ * All four go through `lib/read.ts`, so all four behave identically here, and
+ * four hand-written versions of one behaviour is three that go stale — the
+ * `dry.md` rule that matters most in agent-facing prose, which is a contract.
+ */
+const ANOTHER_NOTATION_ASKS =
+  "Text of another notation is not a failure here: it comes back as a " +
+  "question naming the tool that reads it, and asks your human which " +
+  "picture they meant — so " +
+  NOT_A_HEADER_BUG;
+
+const CHOOSE_THE_NOTATION =
+  "If the request could reasonably be any of those, ask the human which " +
+  "picture they want before writing; `list_example_models` shows one real " +
+  "document per notation to show them.";
 
 /** Shared by every tool that takes model text. */
 const SOURCE_ARG: McpArgDoc = {
@@ -335,7 +414,21 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "technologies, unlabelled or vague relationships, bidirectional lines " +
       "— which do not affect validity but are what a reviewer will raise. " +
       "Use this after writing or editing any .alab file: it is the fastest " +
-      "way to confirm the result is both loadable and worth reviewing.",
+      "way to confirm the result is both loadable and worth reviewing. " +
+      // The three things a caller could not learn from "check whether it is
+      // valid", each of which produced a wrong next move before it was said.
+      `Hand it text of another notation and it does not fail: it says which ` +
+      `of the ${DOCUMENT_KIND_COUNT} notations the text is, names the tool ` +
+      "that reads it, and asks the human which picture they meant — so " +
+      NOT_A_HEADER_BUG +
+      " A VALID model can also come back with a notation question appended, " +
+      "when the relationships read as numbered steps rather than as " +
+      "structure; the verdict and the counts still travel with it, and " +
+      "nothing about the document is wrong.",
+    asks:
+      "the text turns out to be one of the other eight notations, or a valid " +
+      "C4 model reads as an ordered sequence of steps rather than as " +
+      "structure.",
     args: [SOURCE_ARG, FORMAT_ARG],
   },
   {
@@ -345,7 +438,9 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "Rewrite a model in its own format's canonical form — the exact bytes " +
       "arch-lab itself would write, so diffs stay minimal and reviewable. " +
       "Reports when the input was already canonical, so a no-op write can " +
-      "be skipped. Refuses Mermaid, which has no canonical form here.",
+      "be skipped. Refuses Mermaid, which has no canonical form here. " +
+      ANOTHER_NOTATION_ASKS,
+    asks: "the text turns out to be one of the other eight notations.",
     args: [SOURCE_ARG, FORMAT_ARG],
   },
   {
@@ -365,7 +460,12 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "which is the one defect a parse cannot see and a caller cannot look " +
       "at — rather than echoing the document back. Use this for message " +
       "flows over time; use `validate_model` for C4 structure diagrams. " +
-      "Passing a C4 document here says so and points you at the right tool.",
+      "Passing a C4 document here says so and points you at the right tool. " +
+      CHOOSE_THE_NOTATION,
+    asks:
+      "a valid flow turns out to be hub-and-spoke — four or more participants " +
+      "and almost every message aimed at one of them, which is a C4 context " +
+      "diagram drawn on a time axis.",
     args: [SEQUENCE_SOURCE_ARG],
   },
   {
@@ -401,7 +501,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "not say which exit is which), nodes no arrow reaches, and nodes no " +
       "arrow leaves that are not an `end`. Use this for step-by-step " +
       "processes; use `validate_model` for C4 structure and " +
-      "`validate_sequence` for message flows over time.",
+      "`validate_sequence` for message flows over time. " +
+      CHOOSE_THE_NOTATION,
     args: [FLOWCHART_SOURCE_ARG],
   },
   {
@@ -433,7 +534,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "generalization CYCLES, which UML forbids. Use this for who-may-do-what " +
       "at a system's edge; use `validate_model` for C4 structure, " +
       "`validate_sequence` for message flows and `validate_flowchart` for " +
-      "step-by-step processes.",
+      "step-by-step processes. " +
+      CHOOSE_THE_NOTATION,
     args: [USECASE_SOURCE_ARG],
   },
   {
@@ -461,7 +563,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "line `archlab 1.0 er`) and pasted Mermaid `erDiagram` code. Use " +
       "`validate_model` for C4 structure, `validate_sequence` for message " +
       "flows, `validate_flowchart` for processes and `validate_usecase` for " +
-      "actors at a system's edge.",
+      "actors at a system's edge. " +
+      CHOOSE_THE_NOTATION,
     args: [ER_SOURCE_ARG],
   },
   {
@@ -489,7 +592,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "description is a schema dump, not a dictionary), fields with no " +
       "`source`, fields marked deprecated without saying what replaces them, " +
       "and an enumeration of every field flagged `pii`. Reads `.alab` dict " +
-      "documents (first line `archlab 1.0 dict`).",
+      "documents (first line `archlab 1.0 dict`). " +
+      CHOOSE_THE_NOTATION,
     args: [DICT_SOURCE_ARG],
   },
   {
@@ -526,7 +630,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       `${KIND_BLURB.gantt}. Use ` +
       "`validate_flowchart` for the " +
       "order of steps with no duration, and `validate_sequence` for messages " +
-      "over time.",
+      "over time. " +
+      CHOOSE_THE_NOTATION,
     args: [GANTT_SOURCE_ARG],
   },
   {
@@ -577,7 +682,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
          `/syntax`, `/faq` and both `llms*.txt`. */
       `${KIND_BLURB.timeline}. Use ` +
       "`validate_gantt` when the work has lengths and prerequisites, and " +
-      "`validate_sequence` for messages between participants over time.",
+      "`validate_sequence` for messages between participants over time. " +
+      CHOOSE_THE_NOTATION,
     args: [TIMELINE_SOURCE_ARG],
   },
   {
@@ -625,7 +731,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
          page, `/demo`, `/syntax`, `/faq` and both `llms*.txt`. */
       `${KIND_BLURB.lifecycle}. Use ` +
       "`validate_flowchart` when the picture is steps and decisions rather " +
-      "than one thing moving, and `validate_timeline` when nothing branches.",
+      "than one thing moving, and `validate_timeline` when nothing branches. " +
+      CHOOSE_THE_NOTATION,
     args: [LIFECYCLE_SOURCE_ARG],
   },
   {
@@ -656,7 +763,12 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "README, never as a source of truth. C4 models only: a sequence " +
       "document has no Mermaid export here (Mermaid sequenceDiagram is " +
       "import-only, via format_sequence) — sequence documents travel as " +
-      ".alab text.",
+      ".alab text. " +
+      ANOTHER_NOTATION_ASKS,
+    asks:
+      "the text turns out to be one of the other eight notations, or a " +
+      "Mermaid export was asked for on a model with several diagrams whose " +
+      "root is too thin to be the one anybody meant.",
     args: [
       SOURCE_ARG,
       FORMAT_ARG,
@@ -669,8 +781,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         name: "diagram_id",
         required: false,
         description:
-          'Which diagram to emit, for to="mermaid" only. Defaults to the ' +
-          "model's root diagram.",
+          'Which diagram to emit, for to="mermaid" only. Omitting it is safe ' +
+          "when the model has one or two diagrams, or when its root holds " +
+          "the picture you mean: the root is then used. On a model with " +
+          "three or more diagrams whose root is a bare signpost, the tool " +
+          "STOPS and lists the diagrams with their counts rather than " +
+          "emitting the one that contains none of the detail. Naming an id " +
+          "never asks — it is taken as the choice already made.",
       },
     ],
   },
@@ -681,7 +798,9 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "Read the shape of a model without paying for its full text: " +
       "metadata, totals, and the drill-down hierarchy of diagrams. Use this " +
       "to orient in an unfamiliar model, or to find which diagram a change " +
-      "belongs in, before fetching or editing anything.",
+      "belongs in, before fetching or editing anything. " +
+      ANOTHER_NOTATION_ASKS,
+    asks: "the text turns out to be one of the other eight notations.",
     args: [
       SOURCE_ARG,
       FORMAT_ARG,
@@ -696,13 +815,16 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
   },
   {
     name: "get_syntax_reference",
-    title: "Get the .alab syntax reference",
+    title: "Get the C4 and sequence .alab grammar",
     description:
-      "The .alab grammar, generated from examples that are verified against " +
-      "the real parser on every build. Read this BEFORE writing .alab by " +
-      "hand — the format has significant indentation and order-free " +
-      "attributes that are easy to guess wrong. Also available as the " +
-      "resource archlab://syntax.",
+      "The .alab grammar FOR C4 MODELS AND SEQUENCE DIAGRAMS ONLY, generated " +
+      "from examples verified against the real parser on every build. Read " +
+      "it BEFORE writing either of those by hand — significant indentation " +
+      "and order-free attributes are easy to guess wrong. It does NOT cover " +
+      `the other seven notations (${KINDS_WITHOUT_SYNTAX_SECTIONS.join(", ")}): ` +
+      "for those, fetch a bundled document with list_example_models and " +
+      "get_example_model, which is the parser-verified reference for their " +
+      "grammar. Also available as the resource archlab://syntax.",
     args: [
       {
         name: "section",
@@ -733,7 +855,15 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       '(searching "postgres" finds the real slug, `postgresql`). Icons this ' +
       "registry lacks can be supplied by the document itself with a " +
       '`customicon <slug> "Name" "<svg>…"` header line — see the header ' +
-      "section of the syntax reference.",
+      "section of the syntax reference. A query with several plausible " +
+      "matches and nothing actually CALLED that comes back as a question for " +
+      "you to ask your human, not a list: do not take the first. " +
+      '("postgres" is a declared alias and resolves silently; "sql" names ' +
+      "nothing and asks.)",
+    asks:
+      "a query matches two to five icons and none of them is called that — " +
+      "a wrong `@slug` never errors anywhere, so nothing downstream would " +
+      "ever report the guess.",
     args: [
       {
         name: "query",
@@ -764,11 +894,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     description:
       "Every complete, real document arch-lab ships, grouped by notation — " +
       `all ${DOCUMENT_KIND_COUNT} of them, not just C4 — each with what it ` +
-      "holds, counted from the parsed document. Read it BEFORE choosing a " +
-      "notation as well as before writing one: the grouping says what each " +
-      "kind is for, so an agent that only knows arch-lab draws C4 finds the " +
-      "gantt, the ER schema or the lifecycle it actually wanted. Ids are " +
-      "unique across every notation, so an id alone names a document.",
+      "holds, counted from the parsed document. THE TOOL TO CALL WHEN A " +
+      "REQUEST FITS MORE THAN ONE NOTATION: the grouping says what each kind " +
+      "is for and each entry is a real document, so it is what to show a " +
+      "human who has to choose — and what stops an agent that only knows " +
+      "arch-lab draws C4 from writing a plan, a schema or a lifecycle as " +
+      "boxes and lines. Ids are unique across every notation, so an id alone " +
+      "names a document.",
     args: [],
   },
   {
@@ -811,9 +943,16 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "document is encoded into the URL fragment, which browsers never send " +
       "to a server — nothing is uploaded or stored. Refuses documents too " +
       "large to fit a link that would survive being pasted into chat or " +
-      "mail. Can optionally expire after a number of days. The format " +
+      "mail — and when a smaller, diagram-scoped link does fit, it offers " +
+      "those and asks your human which the reader actually needs rather " +
+      "than choosing for them. " +
+      "Can optionally expire after a number of days. The format " +
       "argument applies to the C4 readings; a sequence document is detected " +
       "from its first line.",
+    asks:
+      "a model with several diagrams has no `diagram_id` and a root too thin " +
+      "to be the picture anybody meant, or the whole model is too big for a " +
+      "link and a scoped one would fit instead.",
     args: [
       SHARE_SOURCE_ARG,
       FORMAT_ARG,
@@ -822,8 +961,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         required: false,
         description:
           "Open the link at this diagram (C4 models only — a sequence " +
-          "document is a single flow with no diagrams). Defaults to the " +
-          "root diagram.",
+          "document is a single flow with no diagrams). Omitting it is safe " +
+          "when the model has one or two diagrams, or when its root holds " +
+          "the picture you mean: the root is then used. On a model with " +
+          "three or more diagrams whose root is a bare signpost, the tool " +
+          "STOPS and lists the diagrams with their counts, because a link " +
+          "that opens on three boxes is a mistake the sender only learns " +
+          "about from the reply. Naming an id never asks.",
       },
       {
         name: "ttl_days",

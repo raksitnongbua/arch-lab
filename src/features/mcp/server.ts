@@ -592,6 +592,21 @@ function registerPrompts(server: McpServer): void {
               "",
               "Work in this order — it is the order that avoids rework:",
               "",
+              /* STEP 0, AND IT IS FIRST FOR A REASON. "Say plainly what you
+                 were unsure about" used to be the closing line of this
+                 prompt, where it arrived after the model was already drafted
+                 — by which point the only thing left to be unsure about is
+                 wording. The expensive uncertainty is which NOTATION the
+                 request wanted, and it is only cheap to resolve before
+                 anything is written: a request that is really a plan or a
+                 flow, drafted as C4 first, gets rewritten from nothing. */
+              "0. Before drafting anything: if the description above fits a",
+              "   sequence diagram (who calls whom, in order) or a flowchart",
+              "   (steps, decisions and the loops back) better than it fits",
+              "   C4 structure, ASK THE HUMAN which picture they want and",
+              "   wait. `list_example_models` shows one real document per",
+              "   notation, which is what to show them. Say plainly what you",
+              "   were unsure about rather than picking and finding out later.",
               "1. Call `get_syntax_reference` first. Do not write .alab from",
               "   memory; the format has significant indentation and",
               "   order-free attributes that are easy to get subtly wrong.",
