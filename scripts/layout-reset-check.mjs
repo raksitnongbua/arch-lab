@@ -73,20 +73,23 @@
  *      past release shipped a correct module behind a control nobody could
  *      reach (`67b35ae`) with every assertion green, because they all asked
  *      whether the MODULE agreed and none asked whether the CONTROL did.
- *  11. A SIGHTED READER IS TOLD, AT THE MOMENT OF THE PRESS. The menu's note
- *      is read BEFORE the press and the menu closes on it; the announcement
- *      beside it is `sr-only`. So the press itself raises a toast, and this
- *      section proves the sentence for all four shapes a layer can be in
- *      (nothing placed — silent; some placed; all placed; all pinned), that
- *      the toast's action is labelled from `resetLayerLabel` so it cannot
- *      drift from the menu row it runs, and that the path is reachable from
- *      the direction handler rather than a correct module behind nothing.
- *      It also pins the four judgements the wording rests on: the file-scope
- *      press warns with a layer-scoped sentence, `clearDirection` does not
- *      warn, the placement prose lives in ONE channel (the toast is itself a
- *      live region, so leaving it in the announcement too would say it twice),
- *      and a repeated press raises no second toast because the edit refuses
- *      first.
+ *  11. THE PRESS ITSELF TELLS BOTH READERS. The menu's note is a caveat read
+ *      BEFORE the press, so this section proves the REPORT that replaces it
+ *      afterwards, for all four shapes a layer can be in (nothing placed —
+ *      silent; some placed; all placed; all pinned). A toast carried that
+ *      report for one round and was rejected — a screen corner, a whole
+ *      canvas from the row that was pressed — so what is pinned now is that
+ *      the MENU STAYS OPEN on a press that moved nothing and closes on one
+ *      that did not, that the remedy it names is `resetLayerLabel`'s so it
+ *      cannot drift from the row it points at, and that the `sr-only`
+ *      ANNOUNCEMENT carries the placement sentence again: with no toast, that
+ *      live region is the only channel a screen reader has, and the note is a
+ *      plain `<p>`. It also pins the four judgements the wording rests on: the
+ *      file-scope press warns with a layer-scoped sentence, `clearDirection`
+ *      does not warn, the fact still lives in ONE channel per reader (the note
+ *      announces nothing), and a repeated press says nothing a second time
+ *      because the edit refuses first. And it scans the playground for a
+ *      returning `toast()`, so the rejected surface cannot creep back.
  *  12. A TOKEN WHOSE NUMBERS EQUAL THE DEFAULT SLOT still beats the direction
  *      — the shape the other eleven assertions could not see. The fixture is
  *      built by COMPUTATION (parse the token-free layer, write its own
@@ -100,7 +103,7 @@
  *      omits a default-valued token, which is a decision about canonical
  *      bytes and the one place the two questions answer differently — and
  *      that the menu's note is reachable under BOTH scopes, which it was not:
- *      `Whole file` warned only afterwards, from the toast.
+ *      `Whole file` wrote a line with nothing read first.
  *
  * Exits non-zero on any failure. Run with: pnpm check:layout-reset
  */
@@ -333,7 +336,7 @@ function everyElementDragged(text) {
  * direction moves nothing. But the numbers are exactly what the layout would
  * have chosen, so a comparison against the default layout answers "nothing is
  * placed here", which is how a diagram that refuses every direction came to be
- * described by a menu with no note and a press with no toast.
+ * described by a menu with no note and a press that reported nothing.
  */
 function defaultsWrittenBack(text) {
   const doc = c4Document(text);
@@ -1066,17 +1069,23 @@ console.log("\nThe menu offers the release, and the announcement is honest");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 11. The press tells a SIGHTED reader, and only once                      */
+/* 11. The press says what did not move, in the menu and to a screen reader  */
 /*                                                                          */
-/* The menu's note warns BEFORE the press and the menu closes on it, and    */
-/* the announcement beside it is `sr-only` — so the reader who pressed a    */
-/* direction, watched the diagram sit still and is deciding whether the      */
-/* control works was the one person told nothing. `directionInertWarning` is */
-/* that sentence. It is called here rather than regex-matched, because a     */
-/* message nothing ever evaluates is a message whose shape nothing proved.  */
+/* The menu's note is a caveat read BEFORE the press. The reader who needs   */
+/* the fact is the one who has already pressed, watched the diagram sit      */
+/* still and is deciding whether the control is broken.                      */
+/* `directionInertWarning` is that sentence, and it now has two callers:     */
+/* the menu shows it in place of the caveat and STAYS OPEN so the release    */
+/* row is still on screen, and `applyDirection` announces it into the live   */
+/* region. A toast held it for one round and was rejected — a corner of the  */
+/* screen, a whole canvas from the row that was pressed — so the assertions  */
+/* below pin the menu and the announcement where they used to pin the toast, */
+/* including the source scan that keeps the rejected surface from creeping   */
+/* back. The message is CALLED rather than regex-matched, because a message  */
+/* nothing ever evaluates is a message whose shape nothing proved.           */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nThe press says what did not move, to the reader who can see");
+console.log("\nThe press says what did not move, in the menu and out loud");
 
 {
   /** The layer with `ids` dragged and the rest left to the layout. */
@@ -1159,10 +1168,10 @@ console.log("\nThe press says what did not move, to the reader who can see");
     "blurring 'nothing moved' into 'some moved' is the wording this forbids",
   );
 
-  /* THE ACTION IS THE MENU'S ROW, under the menu's own label. Two spellings of
-     one control is the drift `resetLayerLabel` exists to prevent — and a
-     reader who read "Let the layout place them" in the menu must not be
-     offered "Release positions" by the toast. */
+  /* THE REMEDY IS NAMED AS THE MENU'S ROW, under the menu's own label. Two
+     spellings of one control is the drift `resetLayerLabel` exists to prevent
+     — a reader who is told to look for "Release positions" and finds a row
+     called "Let the layout place them" has been sent to the wrong place. */
   check(
     "the release is offered under the shared row label, not a second spelling",
     allWarning.releaseLabel === resetLayerLabel(all.placed) &&
@@ -1204,14 +1213,14 @@ console.log("\nThe press says what did not move, to the reader who can see");
         warning.message.includes("this layer") &&
         !/\bfile\b|\bdiagrams\b/.test(warning.message),
     ),
-    "a file-scope toast whose action can only release one layer",
+    "a file-scope sentence whose remedy can only release one layer",
   );
 
   /* JUDGEMENT 4 — A REPEATED PRESS. No dedupe is needed because the EDIT
      refuses first: choosing the direction already in force returns null, and
-     the handler returns before the toast. Pinned here rather than reasoned
-     about, because "it cannot happen" is what a stacking bug looks like from
-     the inside. */
+     the handler returns before it says anything. Pinned here rather than
+     reasoned about, because "it cannot happen" is what a repeating bug looks
+     like from the inside. */
   const placedDoc = everyElementDragged(FREE_TB).doc;
   const turned = revisedDirectionEdit(
     placedDoc,
@@ -1220,22 +1229,20 @@ console.log("\nThe press says what did not move, to the reader who can see");
     "lr",
   );
   check(
-    "pressing the direction already in force is refused, so no toast stacks",
+    "pressing the direction already in force is refused, so nothing repeats",
     turned !== null &&
       revisedDirectionEdit(turned.doc, turned.text, DIAGRAM_ID, "lr") === null,
-    "a repeated press would raise a second toast for an edit that did nothing",
+    "a repeated press would announce a second time for an edit that did nothing",
   );
 
-  /* REACHABILITY. `67b35ae` again, and the branch has already spent one round
+  /* REACHABILITY. `67b35ae` again, and the branch has already spent two rounds
      on it: a correct module behind a control nothing invokes is the same bug
      as no module at all. Read from the source with comments stripped — the
-     prose above this handler names the toast, and a regex counting the comment
-     would report success for exactly the state this forbids. */
+     prose above these handlers quotes the fragments, and a regex counting the
+     comment would report success for exactly the state this forbids. */
   const hookCode = code("src/features/playground/lib/use-canvas-editing.ts");
-  check(
-    "the hook imports the toast from the one renderer the app mounts",
-    /import \{ toast \} from "@\/components\/ui\/toast"/.test(hookCode),
-    "a second toast implementation, or none",
+  const menuCode = code(
+    "src/features/playground/components/layout-direction-menu.tsx",
   );
   const applyBody =
     /const applyDirection = useCallback\(([\s\S]*?)\n {4}\[/.exec(hookCode);
@@ -1245,51 +1252,172 @@ console.log("\nThe press says what did not move, to the reader who can see");
     "applyDirection not found — the assertions below would be vacuous",
   );
   check(
-    "the direction press is what raises the toast",
+    "the direction press is what asks whether anything moved",
     applyBody !== null &&
-      /directionInertWarning\(placement\)/.test(applyBody[1]) &&
-      /toast\(\{/.test(applyBody[1]) &&
-      /tone: "warning"/.test(applyBody[1]),
+      /directionInertWarning\(placement\)/.test(applyBody[1]),
     "a warning nobody can trigger is a warning that does not exist",
   );
-  check(
-    "its action is labelled from the module, not typed again in the handler",
-    applyBody !== null &&
-      /label: inert\.releaseLabel/.test(applyBody[1]) &&
-      !/Let the layout place/.test(applyBody[1]),
-    "the toast and the menu row could be reworded apart",
-  );
-  /* THE STALE-CLOSURE TRAP. A toast outlives the render that raised it, so a
-     release captured at raise time patches the PRE-EDIT bytes and drops the
-     `direction` line the reader just wrote. The ref is read at press time. */
-  check(
-    "the action runs the CURRENT release path, not the one captured at raise",
-    applyBody !== null &&
-      /releaseRef\.current\(diagramId\)/.test(applyBody[1]) &&
-      !/run: \(\) => resetLayerPositions\(/.test(applyBody[1]),
-    "pressing the toast would undo the direction it is warning about",
-  );
 
-  /* JUDGEMENT 3 — ONE CHANNEL PER FACT. `<Toaster />` is `aria-live` with a
-     `role="status"` per entry, so the placement prose in the announcement TOO
-     would tell a screen-reader user the same thing twice. The announcement
-     keeps what the FILE now says; the toast keeps what the picture did. */
-  const toaster = code("src/components/ui/toast.tsx");
+  /* THE `sr-only` ANNOUNCEMENT CARRIES THE PLACEMENT PROSE. Pinned first and
+     hardest, because it is the failure this whole change was most likely to
+     introduce. While a toast held the fact, this sentence deliberately did NOT
+     — `<Toaster />` is itself a live region, so saying it in both would have
+     said it twice. With the toast gone the live region is the ONLY channel a
+     screen reader has (the menu's note is a plain `<p>`), so dropping the
+     prose here leaves exactly those readers told nothing about a press that
+     did nothing: the original defect, aimed at the people who had it first. */
   check(
-    "the toast really is a live region, which is why the double had to go",
-    /aria-live="polite"/.test(toaster) && /role="status"/.test(toaster),
-    "if it were silent to assistive tech the announcement would have to keep the fact",
+    "the announcement carries the placement sentence itself, not a paraphrase",
+    applyBody !== null &&
+      /inert\.message/.test(applyBody[1]) &&
+      !/placed by hand|Nothing in this layer/.test(applyBody[1]),
+    "a screen-reader user told nothing at all about a press that did nothing",
   );
   check(
-    "the announcement carries no placement prose of its own any more",
+    "and it names the release row, so the remedy can be looked for",
     applyBody !== null &&
-      !/placed by hand|nothing moved|stayed where/.test(applyBody[1]),
-    "the same fact in two live regions — said twice to anyone listening",
+      /inert\.releaseLabel/.test(applyBody[1]) &&
+      !/Let the layout place/.test(applyBody[1]),
+    "the announcement and the menu row could be reworded apart",
   );
   check(
     "and it says what the FILE says, not what the shape did, when inert",
     applyBody !== null && /now says \$\{/.test(applyBody[1]),
-    "a live region claiming the layer turned beside a toast saying it did not",
+    "a live region claiming the layer turned beside a sentence saying it did not",
+  );
+  /* ONE CHANNEL PER FACT, STILL — the note must not become a second live
+     region now that the announcement carries the sentence, or the two say the
+     same thing to the same listener. */
+  check(
+    "the menu's note announces nothing of its own",
+    !/aria-live|role="status"|role="alert"/.test(menuCode),
+    "the same sentence in two live regions — said twice to anyone listening",
+  );
+
+  /* THE REJECTED SURFACE, KEPT OUT. A toast in a screen corner read as a
+     notification about the app rather than as the answer to the press, and it
+     duplicated a remedy the menu already holds one line below the row. It is
+     the obvious thing to reach for again, so the whole feature is scanned
+     rather than just the one handler — and `toast.tsx` keeps its ~20 other
+     callers, so this is a claim about the playground, not about the app. */
+  for (const file of [
+    "src/features/playground/lib/use-canvas-editing.ts",
+    "src/features/playground/components/layout-direction-menu.tsx",
+    "src/features/playground/components/view-playground.tsx",
+  ]) {
+    check(
+      `${path.basename(file)} raises no toast for the direction`,
+      !/\btoast\s*\(/.test(code(file)) &&
+        !/from "@\/components\/ui\/toast"/.test(code(file)),
+      "the surface the reader rejected, back in the corner of the screen",
+    );
+  }
+
+  /* THE MENU STAYS OPEN ON AN INERT PRESS, AND ONLY THEN. Both halves matter:
+     a menu that never closes hides the picture that is the reader's only proof
+     the press worked, and a menu that always closes is the state that read as
+     a broken control. The verdict comes from `directionInertWarning`, so the
+     menu cannot stay open on a press it would then describe as having moved
+     things. */
+  const chooseBody = /const choose = \(([\s\S]*?)\n {2}\};/.exec(menuCode);
+  check(
+    "the menu has a direction handler this section can read",
+    chooseBody !== null,
+    "choose not found — the assertions below would be vacuous",
+  );
+  check(
+    "the menu asks the gesture module whether the press can move anything",
+    /const inert =[\s\S]{0,80}directionInertWarning\(placement\)/.test(
+      menuCode,
+    ) && !/placedByHand|\.placed \+ placement\.pinned > 0/.test(chooseBody[1]),
+    "a component with a second opinion about what the note is asserting",
+  );
+  check(
+    "a press that re-laid the diagram closes the menu",
+    chooseBody !== null &&
+      /if \(inert === null\) \{\s*closeMenu\(\);\s*return;\s*\}/.test(
+        chooseBody[1],
+      ),
+    "a menu that never closes, over the corner of the picture it just turned",
+  );
+  /* MEASURED WITH THE GUARDED BRANCH CUT OUT, not by counting `closeMenu()`
+     in the whole handler. A count of one passes on a handler that closes
+     unconditionally, which is exactly the state this assertion is for. */
+  const inertPath =
+    chooseBody === null
+      ? ""
+      : chooseBody[1].replace(/if \(inert === null\) \{[\s\S]*?\n {4}\}/, "");
+  check(
+    "and a press that moved nothing leaves it open, with the note in it",
+    chooseBody !== null &&
+      /setReported\(true\)/.test(inertPath) &&
+      !/closeMenu\(\)|setOpen\(false\)/.test(inertPath),
+    "the caveat read before the press was the only telling the reader got",
+  );
+  /* AND THE OTHER TWO ROWS STILL CLOSE. Each takes a line out of the document
+     and leaves nothing to weigh, so `menuitem` is the honest role and
+     dismissal is what that role promises. */
+  check(
+    "clearing and releasing still close the menu",
+    /const clear = \(scope: DirectionScope\) => \{\s*closeMenu\(\);/.test(
+      menuCode,
+    ) && /const release = \(\) => \{\s*closeMenu\(\);/.test(menuCode),
+    "a menu left open by a row whose role promises to dismiss it",
+  );
+  /* THE ROLES. A `menuitem` conventionally dismisses its menu and a radio in a
+     menu conventionally does not — so the rows that survive a press have to be
+     the radios, or the new behaviour is a surprise rather than the role's own
+     promise. */
+  check(
+    "the direction rows are radios and the acting rows are menuitems",
+    (menuCode.match(/role="menuitemradio"/g) ?? []).length === 1 &&
+      /aria-checked=\{inForce\}/.test(menuCode) &&
+      (menuCode.match(/role="menuitem"/g) ?? []).length === 2,
+    "a menuitem that does not dismiss, which is the one thing its role promises",
+  );
+  /* AND NOTHING TRAPS FOCUS. The reader is left on the row they pressed and
+     Tabs down to the release row; a roving tabindex or an autofocus would
+     either strand them or put their caret on a destructive row they did not
+     choose. */
+  check(
+    "the menu neither traps focus nor moves it onto the release row",
+    !/tabIndex|autoFocus|\.focus\(\)/.test(menuCode),
+    "a menu that stays open around focus the reader cannot get out of",
+  );
+
+  /* THE TWO TENSES ARE TWO SENTENCES. Same slot, and that is the point: the
+     sentence in front of the reader is how they know whether they are being
+     warned about a press or told the outcome of one. Written once each — the
+     report is `directionInertWarning`'s own string, never re-typed here. */
+  check(
+    "the note switches to the module's own sentence after an inert press",
+    /reported && inert !== null\s*\?\s*inert\.message/.test(menuCode) &&
+      /placementNote\(placement\)/.test(menuCode),
+    "one tense for both moments, or a second hand-typed copy of the report",
+  );
+  check(
+    "the report is not a hand-typed second copy of it",
+    !menuCode.includes("Nothing in this layer moved"),
+    "two spellings of one sentence, one of which will be reworded alone",
+  );
+  check(
+    "and the caveat and the report cannot collapse into one string",
+    /won't move/.test(
+      read("src/features/playground/components/layout-direction-menu.tsx"),
+    ) &&
+      [allWarning, partlyWarning, mixed, pinnedOnly].every(
+        (warning) =>
+          !/won't|will not/.test(warning.message) &&
+          /moved|stayed/.test(warning.message),
+      ),
+    "a caveat read after the act, or a report worded as a warning",
+  );
+  /* AND THE REPORT IS CLEARED. A menu reopened later must show the caveat, not
+     a report of a press the reader has since scrolled past. */
+  check(
+    "reopening the menu starts on the caveat again",
+    (menuCode.match(/setReported\(false\)/g) ?? []).length === 2,
+    "a stale 'nothing moved' above rows that have not been pressed",
   );
 
   /* JUDGEMENT 2 — CLEARING DOES NOT WARN. It asks for no shape, so there is
@@ -1303,9 +1431,11 @@ console.log("\nThe press says what did not move, to the reader who can see");
     "clearDirection not found — the assertion below would be vacuous",
   );
   check(
-    "clearing raises no toast, so the warning stays about a refused shape",
-    clearBody !== null && !/toast\(/.test(clearBody[1]),
-    "a toast on every direction press is one nobody reads on the press that matters",
+    "clearing raises no placement warning, so the fact stays about a refused shape",
+    clearBody !== null &&
+      !/directionInertWarning|inert/.test(clearBody[1]) &&
+      !/placed by hand/.test(clearBody[1]),
+    "a warning on every direction press is one nobody reads on the press that matters",
   );
 }
 
@@ -1318,8 +1448,8 @@ console.log("\nThe press says what did not move, to the reader who can see");
 /* held the same wrong idea: the writer omits a token whose numbers equal   */
 /* the default slot, so a document that writes its defaults out was read as */
 /* placing nothing. Every assertion was green while three of three elements */
-/* refused the direction, the menu carried no note and the press raised no  */
-/* toast — the exact bug this feature exists to end, in its quietest shape. */
+/* refused the direction, the menu carried no note and the press reported   */
+/* nothing — the exact bug this feature exists to end, in its quietest form.*/
 /* ----------------------------------------------------------------------- */
 
 console.log("\nA coordinate that equals the default is still a coordinate");
@@ -1384,8 +1514,8 @@ console.log("\nA coordinate that equals the default is still a coordinate");
   );
 
   /* AND THE READER IS TOLD. Silence was the second half of the defect: no
-     note before the press because nothing was counted, and no toast after it
-     for the same reason. */
+     note before the press because nothing was counted, and no report after
+     it for the same reason. */
   const warning = directionInertWarning(placement);
   check(
     "the press is not silent, and the sentence is the inert one",
@@ -1463,8 +1593,8 @@ console.log("\nA coordinate that equals the default is still a coordinate");
 
   /* THE NOTE IS REACHABLE UNDER BOTH SCOPES. It was rendered inside the layer
      section, so `Whole file` — the same press, the same evidence, the same
-     diagram sitting still — warned only afterwards, from the toast, while
-     `This layer` warned twice. Source-scanned, in the manner of section 10:
+     diagram sitting still — was warned not at all, while `This layer` was.
+     Source-scanned, in the manner of section 10:
      the note has to be OUTSIDE the section loop for both headings to get it. */
   const menu = code(
     "src/features/playground/components/layout-direction-menu.tsx",

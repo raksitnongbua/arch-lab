@@ -1176,7 +1176,8 @@ export function movedNodeEdit(
  * COUNTED FROM `placedByHand`, the source's own answer. Counted from a
  * comparison against the default layout instead, it reported a hand-placed
  * layer as free to move — every element tokened at its default slot, nothing
- * counted, no note, no toast, and a direction that turned nothing.
+ * counted, no note before the press, no report after it, and a direction
+ * that turned nothing.
  */
 export interface LayerPlacement {
   /** Elements in the layer. */
@@ -1264,13 +1265,19 @@ export function layerPlacement(
  * layout is not allowed to place — or `null` when it was free to place
  * everything, which is the working case and says nothing.
  *
- * WHY THIS EXISTS AT ALL, given the menu already carries a note. The note is
- * INSIDE the menu, and the menu closes on the press: it warns before, and the
- * reader who needs the fact is the one who has already pressed, watched the
- * diagram sit still, and is deciding whether the control is broken. The
- * announcement that shipped beside it is `sr-only`, so it reached assistive
- * tech and nobody else. This is the sentence a sighted reader gets, at the
- * moment the picture disagrees with the press.
+ * WHY THIS EXISTS AT ALL, given the menu already carries a note. The note's
+ * own sentence is a caveat about what a direction WILL NOT move, read before
+ * the press. This is the report of what just did not move, and the reader who
+ * needs it is the one who has already pressed, watched the diagram sit still,
+ * and is deciding whether the control is broken. Two moments, two tenses, and
+ * a caveat re-read after the act does not answer the act.
+ *
+ * IT IS ALSO THE TEST, not only the wording. `null` here means the press could
+ * move something, which is what the menu reads to decide whether to close on
+ * it: a press that re-laid the diagram closes the menu, a press that changed
+ * nothing leaves it open with this sentence in it. Deciding that in the
+ * component would let the menu stay open on a press it then described as
+ * having moved things.
  *
  * HERE RATHER THAN IN THE HOOK THAT RAISES IT, for `layerPlacement`'s reason:
  * the counts and the sentence made from them belong to one module, so the
