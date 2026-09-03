@@ -29,7 +29,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { ViewerModel } from "../lib/model";
-import { diagramIdFromHash } from "../share/codec";
+import { diagramIdFromHash, pathFromHash } from "../share/codec";
 import { immersiveFromSearch } from "../share/immersive-param";
 import { ViewerShell } from "./viewer-shell";
 
@@ -76,6 +76,7 @@ export function ViewerBundledView({
       key={initialDiagramId ?? "root"}
       model={model}
       initialDiagramId={initialDiagramId ?? undefined}
+      initialPath={pathFromHash(hash)}
       share={{ kind: "bundled", modelId: model.id }}
       // Immersive ONLY when the link asked for it. Defaulting this route to
       // immersive dropped a reader somewhere with no visible route back to the

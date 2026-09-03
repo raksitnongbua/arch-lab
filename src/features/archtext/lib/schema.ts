@@ -55,6 +55,7 @@ export const DIAGRAM_KEYS = [
   "frames",
   "nodes",
   "edges",
+  "paths",
 ] as const;
 
 export const NODE_KEYS = [

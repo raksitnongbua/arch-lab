@@ -921,6 +921,88 @@
           "technology": "HTTP/JSON",
           "direction": "forward"
         }
+      ],
+      "paths": [
+        {
+          "id": "checkout",
+          "title": "Checkout path",
+          "beats": [
+            {
+              "caption": "A shopper arrives through the edge, and the ingress routes the page.",
+              "chains": [
+                {
+                  "nodes": ["ext-customer", "cloudflare-edge", "nginx-ingress", "web-app"]
+                }
+              ]
+            },
+            {
+              "caption": "Every API call goes through the gateway, which checks the session first.",
+              "chains": [
+                {
+                  "nodes": ["web-app", "kong-gateway"]
+                },
+                {
+                  "nodes": ["kong-gateway", "session-cache"]
+                }
+              ]
+            },
+            {
+              "caption": "The order reserves stock, then authorises the payment.",
+              "chains": [
+                {
+                  "nodes": ["kong-gateway", "orders-service", "catalog-service"]
+                },
+                {
+                  "nodes": ["orders-service", "ext-stripe"]
+                }
+              ]
+            },
+            {
+              "caption": "The order is written down, and the receipt is sent.",
+              "chains": [
+                {
+                  "nodes": ["orders-service", "orders-db"]
+                },
+                {
+                  "nodes": ["orders-service", "ext-sendgrid"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "browse",
+          "title": "Browsing the catalogue",
+          "beats": [
+            {
+              "caption": "A catalogue query takes the same route in as an order.",
+              "chains": [
+                {
+                  "nodes": ["ext-customer", "cloudflare-edge", "nginx-ingress", "web-app", "kong-gateway"]
+                }
+              ]
+            },
+            {
+              "caption": "The gateway routes it to the Catalog Service instead.",
+              "chains": [
+                {
+                  "nodes": ["kong-gateway", "catalog-service"]
+                }
+              ]
+            },
+            {
+              "caption": "Which reads its own store, and keeps the hot products in the cache.",
+              "chains": [
+                {
+                  "nodes": ["catalog-service", "catalog-db"]
+                },
+                {
+                  "nodes": ["catalog-service", "session-cache"]
+                }
+              ]
+            }
+          ]
+        }
       ]
     },
     {
@@ -1215,6 +1297,41 @@
           "technology": "SFTP",
           "direction": "bidirectional",
           "tags": ["batch", "daily"]
+        }
+      ],
+      "paths": [
+        {
+          "id": "one-order",
+          "title": "One order, end to end",
+          "beats": [
+            {
+              "caption": "A customer places an order in the platform.",
+              "chains": [
+                {
+                  "nodes": ["customer", "shopflow-platform"]
+                }
+              ]
+            },
+            {
+              "caption": "The payment is authorised and captured with Stripe.",
+              "chains": [
+                {
+                  "nodes": ["shopflow-platform", "stripe"]
+                }
+              ]
+            },
+            {
+              "caption": "The confirmation goes out, and the warehouse gets the fulfilment batch.",
+              "chains": [
+                {
+                  "nodes": ["shopflow-platform", "sendgrid"]
+                },
+                {
+                  "nodes": ["shopflow-platform", "warehouse-wms"]
+                }
+              ]
+            }
+          ]
         }
       ]
     }

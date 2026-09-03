@@ -125,6 +125,18 @@ function useViewerNodeActions(): ViewerNodeActions {
 }
 
 /* -------------------------------------------------------------------------- */
+/**
+ * The aura's bands: perimeter strokes, widest and faintest first, whose alpha
+ * accumulates into a falloff. Widths are in screen px (`non-scaling-stroke`),
+ * so a small node and a large one wear the same light rather than the large
+ * one wearing a thicker halo.
+ */
+const AURA_BANDS: readonly { width: number; opacity: number }[] = [
+  { width: 16, opacity: 0.1 },
+  { width: 9, opacity: 0.16 },
+  { width: 3.5, opacity: 0.5 },
+];
+
 /* Selection-outline geometry                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -297,6 +309,57 @@ function ViewerNodeInner({
             text is one click away in the detail panel, and already in this
             element's `title` for a hover. */}
       </div>
+      {/*
+       * The lit aura — light BEHIND the card, so an element that is the one
+       * being shown reaches forward out of a dimmed diagram.
+       *
+       * Its own always-mounted span rather than a shadow bolted onto one of
+       * the marks below, because the mark differs by state and the light must
+       * not: a selected element wears a marching outline, a multi-selected or
+       * beat element wears the static ring, and all three are the same claim
+       * — "this is the one" — so all three light this. Hanging the glow off
+       * whichever edge happened to be showing is how a feature ends up with a
+       * fourth visual language for an idea the canvas already had.
+       *
+       * Behind the card (`z-0`) and inset outwards, so only the halo escapes
+       * past the card's own background. The shadow itself lives in the
+       * canvas's stylesheet — one definition, three consumers.
+       */}
+      <svg
+        aria-hidden="true"
+        viewBox={`0 0 ${node.size.width} ${node.size.height}`}
+        preserveAspectRatio="none"
+        className="viewer-node-aura pointer-events-none absolute inset-0 z-0 size-full overflow-visible opacity-0 transition-opacity duration-150"
+      >
+        {/*
+         * THREE STACKED STROKES ON THE NODE'S OWN PERIMETER, widest and
+         * faintest first, so their alpha builds into a falloff.
+         *
+         * The same `outlinePath` the selection comet traces, which is what
+         * makes this the only version of the glow that is correct for every
+         * node type: as a `box-shadow` it was a rounded rectangle, which is
+         * right for a container and wrong for a database — a cylinder wearing
+         * a rectangular halo.
+         *
+         * Stacked strokes rather than a `filter: drop-shadow`, and that is
+         * this codebase's standing answer for a soft edge near the canvas: a
+         * filter region is expressed in bounding-box units, and the one time
+         * one was used on a flat path the region collapsed and painted bands
+         * across a whole diagram. A wider path has no region to collapse.
+         */}
+        {AURA_BANDS.map((band) => (
+          <path
+            key={band.width}
+            d={outline}
+            fill="none"
+            stroke="var(--primary)"
+            strokeWidth={band.width}
+            strokeOpacity={band.opacity}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
       {/* Hover outline — always mounted, opacity-only transition. */}
       <span
         aria-hidden="true"

@@ -9,6 +9,47 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A paste that came in with the wrong indentation can be fixed in one
+  click.** `.alab` indentation is significant, so text copied out of somewhere
+  that had its own — a chat window, a nested code block, a docs page — arrives
+  with two or four spaces on every line and refuses to parse. The error named
+  one line when every line had moved, and fixing that line just produced the
+  same error on the next one. The pane now offers **Remove 2 spaces from every
+  line** beside the error, and only when removing them is proved to make the
+  document parse — so the button never leaves you with a second failure.
+- **A focused element is lit from behind, however you focused it.** Selecting
+  an element, grouping several, and stepping through a path's beats all light
+  the same soft halo in the theme's own accent, traced on the element's own
+  silhouette — so a database glows like a cylinder, not like a box, and "this
+  is the one I am showing you" looks the same whichever way you said it. The mark at the edge
+  still differs (a selection marches, a group and a beat wear the ring), and
+  hover deliberately stays a preview that changes nothing but opacity.
+- **A C4 diagram can carry an authored walk through itself.** Write
+  `path send "Send email path"` at the end of a diagram, with
+  `beat "One sentence"` lines under it and the chain of elements each beat is
+  about (`caller -> gateway -> service`), and a reader can step through it —
+  with `→`/`←`, or with a presenter's clicker, which sends PageDown and
+  PageUp. Everything off the walk recedes, the rest of the walk stays legible
+  behind the current step, and the beat's connectors carry the moving light.
+  A diagram with no paths looks exactly as it did; one with paths gains a
+  single `Paths` control beside the breadcrumb, and the beat's sentence appears
+  only while somebody is reading it. Escape leaves the walk before it climbs a
+  level, so a story is never interrupted by a jump out of the diagram. A share
+  link can name the walk and the beat it opens on (`p=send.2`), so a link can
+  arrive on the story rather than on the whole picture. The arrow in a beat
+  orders the telling, not the traffic: a hop lights whatever joins those two
+  elements in either direction, and `~edge-id` picks one where several do.
+  Additive grammar on a beta surface — no existing document, link or route
+  changes, and an older arch-lab refuses a `path` line with a parse error
+  rather than misreading it. `validate_model` flags a beat that doubles back
+  and a walk that jumps with nothing joining it, as review notes rather than
+  errors. Boundaries recede along with the elements inside them, the current
+  beat's elements are lit from behind (the same light selection uses) so the
+  walk reads as a set standing out of the drawing, and the player is the
+  same size on every beat so the Next button never moves out from under the
+  cursor. The control that offers the walks sits where the player will, at the
+  bottom of the canvas — one place for the whole feature, and out of the
+  corner that answers "where am I".
 - **The layout direction can be set from the canvas, not only in the text.**
   With the padlock open, a small button beside it carries the shape the diagram
   is laid out in — bars stacked for top-down, bars in a row for left-right —

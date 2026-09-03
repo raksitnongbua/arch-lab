@@ -48,7 +48,7 @@ export function ViewerToolbar({
         >
           <CornerLeftUp aria-hidden="true" className="size-4" />
         </button>
-        <nav aria-label="Diagram path" className="min-w-0">
+        <nav aria-label="Diagram trail" className="min-w-0">
           <ol className="flex min-w-0 items-center overflow-x-auto text-sm whitespace-nowrap">
             {crumbs.map((crumb, index) => {
               const isCurrent = index === crumbs.length - 1;

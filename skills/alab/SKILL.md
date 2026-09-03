@@ -29,6 +29,7 @@ either connect the [arch-lab MCP server](https://arch-lab.dev/mcp) and call
 - [Frames (C4 boundaries)](#frames-c4-boundaries)
 - [Nodes](#nodes)
 - [Edges](#edges)
+- [Paths (authored walks)](#paths-authored-walks)
 - [Unknown & forward-compatible fields (`!` lines)](#unknown-forward-compatible-fields-lines)
 - [Sequence diagrams (a second document kind)](#sequence-diagrams-a-second-document-kind)
 - [What errors look like](#what-errors-look-like)
@@ -335,6 +336,50 @@ title "Orders"
   web -> db : "Reads and writes orders" [SQL/TCP (pgx)] #system-of-record ~e-cust-shop id=e-ord-db via (640,700) (600,760)
 ```
 
+## Paths (authored walks)
+
+A path is an ordered walk through ONE diagram that a reader steps
+through beat by beat. It is a pure overlay: the viewer dims everything
+off the walk and lights the current beat, and nothing about the model
+changes. Paths are written last in a diagram, after the edges:
+
+```
+path send "Send email path"
+  beat "Callers reach the service only through the gateway"
+    caller -> gateway -> service
+  beat "Requests are queued and consumed"
+    service -> queue -> consumer
+    consumer -> provider ~e-consumer-provider
+```
+
+The shape, exactly:
+
+- `path <id> "Title"` at diagram body depth (indent 2). Ids are
+  unique within their diagram.
+- `beat "One sentence"` at indent 4. At least one per path. The
+  sentence is the caption the reader is shown; there is no second
+  prose slot, because a beat with words and no elements would be a
+  caption card floating over the drawing.
+- Chain lines at indent 6, at least one per beat: `a -> b -> c`. A
+  beat may carry several, and its elements are the union of them, so a
+  branching step is one beat, not two.
+
+**The arrow orders the telling, not the traffic.** Only `->` is legal
+in a chain, and a hop matches every relationship joining its pair in
+EITHER direction — a request and its response point opposite ways, and
+a walk has to be able to go against an arrow. Where two relationships
+join one pair the hop lights both; append `~<edge-id>` to the line to
+pin its last hop to one of them.
+
+Every id a beat names must exist on the same diagram, and every hop
+must be joined by a relationship that is actually written down. Both
+are parse errors rather than silent omissions: a walk that lights the
+wrong thing is worse than one that refuses to load.
+
+Paths keep the order they were written in — it is the order the reader
+walks and the order the menu offers — so they are never sorted by id
+the way frames, nodes and edges are.
+
 ## Unknown & forward-compatible fields (`!` lines)
 
 Any field the grammar has no sugar for — an unknown key from a newer
@@ -595,7 +640,7 @@ title "Broken"
    api:person "API"
 ```
 
-→ `line 5, column 4: line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body) or 4 (node/edge continuation)`
+→ `line 5, column 4: line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat's chain line)`
 
 **An edge whose endpoint is not a node in this diagram**
 

@@ -119,6 +119,24 @@ const CLEAN = PREFIX + CLEAN_BODY;
  * One case per rule. `source` violates exactly the rule named (plus whatever
  * the baseline already guarantees), `expect` is how many times.
  */
+/* Four containers in two unconnected pairs, so a path can be written that
+   jumps between them with nothing joining the two halves — which is the only
+   way to trip `path-teleports` at all. Everything else about the body is the
+   clean baseline, so these cases raise exactly the rule they are named for. */
+const PATH_BODY = `  db:database "Orders DB" [PostgreSQL 16]
+    desc "Stores order state."
+  web:container "Web App" [Next.js 15]
+    desc "The storefront users browse."
+  cache:database "Cache" [Redis 7]
+    desc "Holds hot rows."
+  jobs:container "Batch Jobs" [Go 1.22]
+    desc "Runs the nightly reconciliation."
+
+  web -> db : "Reads and writes orders" [SQL/TCP]
+  web -> cache : "Reads hot rows" [RESP]
+  jobs -> db : "Reconciles order state" [SQL/TCP]
+`;
+
 const CASES = [
   {
     rule: "column-layout",
@@ -241,6 +259,34 @@ title "T"
     desc "The storefront users browse."
 
   web -> db : "Reads and writes orders"
+`,
+  },
+  {
+    rule: "path-revisits-element",
+    why: "a beat that goes out and comes home inside one chain",
+    expect: 1,
+    source:
+      PREFIX +
+      PATH_BODY +
+      `
+  path round "Round trip"
+    beat "The app reads the cache and comes back to answer"
+      web -> cache -> web
+`,
+  },
+  {
+    rule: "path-teleports",
+    why: "two beats with no element between them",
+    expect: 1,
+    source:
+      PREFIX +
+      PATH_BODY +
+      `
+  path split "Two unrelated steps"
+    beat "The app reads its hot rows"
+      web -> cache
+    beat "The nightly job reconciles what is stored"
+      jobs -> db
 `,
   },
 ];
@@ -499,7 +545,15 @@ for (const name of ["shopflow", "order-shop"]) {
      or it is declared here as a format rule and states the limit it enforces. */
   /* Rules that are arch-lab's own rather than C4's, and so cite the format
    * instead of the spec. `column-layout` is about how a document is DRAWN. */
-  const FORMAT_RULES = new Set(["long-title", "column-layout"]);
+  /* Rules about how an `.alab` document READS rather than what C4 asks for:
+     they cite the format, not the model. The two path rules are here because
+     a walk's shape is a presentation question — C4 has no opinion on it. */
+  const FORMAT_RULES = new Set([
+    "long-title",
+    "column-layout",
+    "path-revisits-element",
+    "path-teleports",
+  ]);
 
   const uncited = declared.filter((rule) => {
     const because = ADVISORY_RULES[rule].because;

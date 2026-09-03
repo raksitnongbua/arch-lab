@@ -396,6 +396,49 @@ export interface C4Frame {
  */
 export type C4LayoutDirection = "tb" | "lr";
 
+/**
+ * One line of a beat: the elements it walks, in the order it tells them.
+ *
+ * `nodes` are node ids in the same diagram, at least two of them, and each
+ * adjacent pair is a HOP. A hop matches every edge joining that pair in
+ * EITHER orientation — the arrow here orders the telling, it does not assert
+ * direction. A request and its response are two edges pointing opposite ways,
+ * and a walk that could not go against an arrow would be a walk authors fight.
+ *
+ * `edgeId` pins the LAST hop of this line to one relationship, for the pair
+ * joined by several. One anchor per line, on the final hop: an author who
+ * needs two writes two lines, which a beat already allows. Anything richer
+ * would need a per-hop syntax to say something a second line says better.
+ */
+export interface C4Chain {
+  nodes: string[];
+  edgeId?: string;
+}
+
+/** One step of a path — the author's sentence, and the lines it is about. */
+export interface C4Beat {
+  /** Required, one sentence. A beat with prose and no elements is a caption. */
+  caption: string;
+  chains: C4Chain[];
+}
+
+/**
+ * An authored walk through one diagram: an ordered list of beats a reader
+ * steps through, drawn as a pure overlay. Selecting one never changes the
+ * model, so a path costs the document nothing but the lines that declare it.
+ *
+ * Diagram-scoped on purpose. A walk that drills between levels needs a camera
+ * story and a parse story this format does not have yet, and inventing one
+ * before anybody has asked for it would be scaffolding.
+ */
+export interface C4Path {
+  /** Slug, unique within its diagram. Addressable: share links name it. */
+  id: string;
+  title: string;
+  /** At least one. Author order — this is the sequence the reader walks. */
+  beats: C4Beat[];
+}
+
 export interface C4Diagram {
   /** Slug, unique in file. Convention `d-<level>-<owner-slug>`. */
   id: string;
@@ -425,6 +468,13 @@ export interface C4Diagram {
   nodes: C4Node[];
   /** Sorted by `id` on write. */
   edges: C4Edge[];
+  /**
+   * Authored walks through this diagram. **Author order, never sorted** —
+   * unlike the three lists above. The order is the reader's menu and the
+   * sequence a story is told in, so sorting by id would silently rewrite
+   * somebody's argument on every save. Do not add `paths` to `sortById`.
+   */
+  paths?: C4Path[];
 }
 
 /* -------------------------------------------------------------------------- */

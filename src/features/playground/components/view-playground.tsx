@@ -75,6 +75,7 @@ import {
   FilePlus2,
   FileText,
   ChevronDown,
+  Indent,
   Info,
   Pencil,
   Shrink,
@@ -179,6 +180,7 @@ import {
   sourceFileStem,
   ViewerShell,
   type PaneErrorDetail,
+  type SharePathRequest,
 } from "@/features/viewer";
 import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -187,6 +189,7 @@ import {
   convertedSourceText,
   describeDocument,
   documentTitle,
+  indentRepairFor,
   JSON_EXTENSION,
   MERMAID_C4_EXPORT_CAVEAT,
   parseViewSource,
@@ -491,6 +494,9 @@ export function ViewPlayground({
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
+  /** The walk a `p=` link asked to open on, cleared once it has been taken. */
+  const [sharedInitialPath, setSharedInitialPath] =
+    useState<SharePathRequest | null>(null);
   /** A link that would not open; non-null takes over the whole page. */
   const [shareFailure, setShareFailure] = useState<ShareOpenFailure | null>(
     null,
@@ -805,9 +811,11 @@ export function ViewPlayground({
                 : model.rootDiagramId;
             currentDiagramRef.current = target;
             setSharedInitialDiagram(target);
+            setSharedInitialPath(decoded.path);
             setShellEpoch((epoch) => epoch + 1);
           } else {
             setSharedInitialDiagram(null);
+            setSharedInitialPath(null);
             /* The link's immersive request, re-applied now the KIND is known.
                The C4 branch above needs nothing: the shell it remounts takes
                `defaultImmersive` and owns the mode itself. This branch does,
@@ -946,6 +954,16 @@ export function ViewPlayground({
     if (pane === "source") setText(value);
     else setJsonText(value);
     setPending({ pane, value });
+  }, []);
+
+  /**
+   * Take an offered repair: the pane's text becomes the rewrite, and the same
+   * edit path a keystroke takes carries it — so it re-parses, adopts and
+   * redraws exactly as typing it would have, and Undo puts it back.
+   */
+  const handleRepair = useCallback((repaired: string) => {
+    setText(repaired);
+    setPending({ pane: "source", value: repaired });
   }, []);
 
   const handleFormat = useCallback(
@@ -1143,6 +1161,7 @@ export function ViewPlayground({
     currentDiagramRef.current = diagramId;
     setActiveDiagramId(diagramId);
     setSharedInitialDiagram((current) => (current === null ? current : null));
+    setSharedInitialPath((current) => (current === null ? current : null));
   }, []);
 
   /* ---- Tab handling — indent, with a documented escape ------------------ */
@@ -1591,7 +1610,11 @@ export function ViewPlayground({
                 />
 
                 {paneError?.pane === "source" ? (
-                  <SourceErrorBox error={paneError.error} />
+                  <SourceErrorBox
+                    error={paneError.error}
+                    source={text}
+                    onRepair={handleRepair}
+                  />
                 ) : null}
               </section>
 
@@ -1901,6 +1924,7 @@ export function ViewPlayground({
                   titleAs="h2"
                   model={doc.synced.model}
                   initialDiagramId={sharedInitialDiagram ?? undefined}
+                  initialPath={sharedInitialPath}
                   /* The link's `?i=1`, handed to the canvas that owns
                      immersive for a C4 document. Passed on every mount of
                      this shell rather than consumed once: the URL still says
@@ -2445,8 +2469,12 @@ function PaneActions({
 /** The source pane's failure: located wherever its own reader located it. */
 function SourceErrorBox({
   error,
+  source,
+  onRepair,
 }: {
   error: ViewSourceError;
+  source: string;
+  onRepair: (text: string) => void;
 }): React.JSX.Element {
   if (error.kind === "unknown-format") {
     // Not a located failure — the first line matched no reader, so there is
@@ -2487,7 +2515,44 @@ function SourceErrorBox({
         />
       )}
 
+      <IndentRepairOffer source={source} onRepair={onRepair} />
       <WorkIsSafeFooter />
+    </div>
+  );
+}
+
+/**
+ * Offered only when a uniform dedent is PROVED to make the text parse — see
+ * `indentRepairFor`. A button that might not work would be worse than the
+ * error alone, because a reader who presses it and sees the same failure now
+ * distrusts the panel as well as their paste.
+ */
+function IndentRepairOffer({
+  source,
+  onRepair,
+}: {
+  source: string;
+  onRepair: (text: string) => void;
+}): React.JSX.Element | null {
+  const repair = useMemo(() => indentRepairFor(source), [source]);
+  if (repair === null) return null;
+  const spaces = repair.spaces === 1 ? "1 space" : `${repair.spaces} spaces`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <button
+        type="button"
+        onClick={() => onRepair(repair.text)}
+        className={buttonClasses({ variant: "outline", size: "sm" })}
+      >
+        <Indent aria-hidden="true" />
+        Remove {spaces} from every line
+      </button>
+      {/* Says what happened, not what to do: the button already says that, and
+          a reader who understands the cause can also fix it by hand. */}
+      <p className="text-xs text-muted-foreground">
+        Every line is indented {spaces} too far — what a copy that picked up its
+        surroundings looks like.
+      </p>
     </div>
   );
 }

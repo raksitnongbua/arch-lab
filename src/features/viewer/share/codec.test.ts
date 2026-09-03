@@ -16,6 +16,7 @@ import {
   decodeShareFragment,
   diagramIdFromHash,
   encodeShareFragment,
+  pathFromHash,
   normalizeShareFragment,
 } from "./codec";
 
@@ -36,6 +37,7 @@ describe("encode → decode roundtrip", () => {
       status: "ok",
       aftText: MODEL,
       diagramId: null,
+      path: null,
     });
   });
 
@@ -135,5 +137,62 @@ describe("diagramIdFromHash", () => {
 describe("the documented length ceilings", () => {
   it("keeps the safe length below the hard maximum", () => {
     expect(SHARE_URL_SAFE_LENGTH).toBeLessThan(MAX_SHARE_URL_LENGTH);
+  });
+});
+
+/**
+ * `p=` is additive, and every malformed form has to answer "no path" rather
+ * than an error: a link that names a walk the author has since deleted must
+ * still open the diagram. The payload is the point; the path is a request.
+ */
+describe("the p= path request", () => {
+  it("round-trips a path and its beat, 1-based in the link", async () => {
+    const fragment = await encodeShareFragment(MODEL, "context", undefined, {
+      pathId: "send",
+      beat: 1,
+    });
+    expect(fragment).toContain("&p=send.2");
+    const decoded = await decodeShareFragment(`#${fragment}`);
+    expect(decoded).toMatchObject({
+      status: "ok",
+      diagramId: "context",
+      path: { pathId: "send", beat: 1 },
+    });
+  });
+
+  it("opens on the first beat when the link names only a path", () => {
+    expect(pathFromHash("#m=x&p=send")).toEqual({ pathId: "send", beat: 0 });
+  });
+
+  it("answers no path for every form it cannot read", () => {
+    for (const hash of [
+      "#m=x",
+      "#m=x&p=",
+      "#m=x&p=send.0",
+      "#m=x&p=send.x",
+      "#m=x&p=send.-1",
+      "#m=x&p=.2",
+      "",
+    ]) {
+      expect(pathFromHash(hash)).toBeNull();
+    }
+  });
+
+  /* A forwarder that doubles a fragment is a real shape this codec already
+     normalises for `m=`; the path must survive the same trip. */
+  it("survives a doubled fragment", () => {
+    expect(
+      pathFromHash(normalizeShareFragment("#m=x&p=send.3#m=x&p=send.3")),
+    ).toEqual({ pathId: "send", beat: 2 });
+  });
+
+  /* Additive, and provably so: a link minted before this parameter existed
+     decodes exactly as it always did. */
+  it("leaves a link that names no path alone", async () => {
+    const fragment = await encodeShareFragment(MODEL, "context");
+    expect(fragment).not.toContain("&p=");
+    expect(await decodeShareFragment(`#${fragment}`)).toMatchObject({
+      path: null,
+    });
   });
 });

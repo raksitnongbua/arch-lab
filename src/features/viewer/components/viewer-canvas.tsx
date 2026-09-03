@@ -8,6 +8,11 @@
  *     opens its detail panel and focuses the diagram on it. Element and
  *     relationship selection are mutually exclusive; the pane click or
  *     Escape clears whichever is active.
+ *   - WALK — a diagram whose text declares paths offers them from a pill in
+ *     the top-left; entering one dims everything off the walk, lights the
+ *     current beat, and puts a player at the bottom that steps through the
+ *     author's sentences. Arrows and PageUp/PageDown both step, so a path is
+ *     presentable from a clicker.
  *   - DRILL — the zoom chip on a node with a child layer, or double-click
  *     on the node body, zooms INTO it; climbing back out reverses the move
  *     (IcePanel-style continuous descent, not a screen swap).
@@ -86,12 +91,18 @@ import {
 } from "@/features/editor/lib/edge-geometry";
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
+import { beatBounds, findPath, pathsOf, resolvePath } from "../lib/paths";
+import type { SharePathRequest } from "../share/codec";
+import { ViewerPathPlayer } from "./viewer-path-player";
+import { ViewerPathsPill } from "./viewer-paths-pill";
 import {
+  boundsOf,
   breadcrumbFor,
   climbAnchorNodeId,
   findEdge,
   findNode,
   getDiagram,
+  type Rect,
   type ViewerModel,
 } from "../lib/model";
 import {} from "@/features/editor/lib/canvas-constants";
@@ -365,6 +376,42 @@ const HOVER_DIM_NODE_OPACITY = 0.55;
 const HOVER_DIM_EDGE_OPACITY = 0.35;
 
 /**
+ * How far a connector recedes when it is not part of what is in focus — the
+ * counterpart of `DIM_NODE_OPACITY`, a shade deeper for a thin line's sake,
+ * exactly as the hover pair is.
+ *
+ * Named because two stylesheets now spell it: the static `viewer-edge-base-dimmed`
+ * class the `emphasis` prop switches on, and the path overlay, which addresses
+ * connectors by id instead. A literal in each is two numbers that must agree
+ * and no way to notice when they stop.
+ */
+const DIM_EDGE_OPACITY = 0.2;
+
+/**
+ * Lights the aura on one node — the single spelling every state that marks an
+ * element uses.
+ *
+ * ONE STATE, NOT ONE PER FEATURE. The light arrived for a path's current beat,
+ * where dimming alone told a reader which elements were not being shown and
+ * never made the ones that were reach forward. But "this is the element I am
+ * showing you" is a claim selection and multi-select already make, and giving
+ * the newest of the three its own glow would have left the canvas with a
+ * fourth visual language for an idea it already had. So all three light this,
+ * and the MARK each one draws — a marching outline for a selection, the static
+ * ring for a multi-select or a beat — stays its own.
+ *
+ * Hover is deliberately not one of them. It has its own softer ring and its
+ * own rule: a preview you get for free by moving the mouse changes opacity and
+ * nothing else, or the canvas lights up under a wandering cursor.
+ *
+ * The glow itself is drawn by the node (`viewer-node.tsx`), on its own
+ * silhouette, because only the node knows what shape it is.
+ */
+function litNodeCss(id: string): string {
+  return `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-aura { opacity: 1; }`;
+}
+
+/**
  * An element and everything one relationship away from it — the set both the
  * selection focus and the hover reveal keep at full strength.
  *
@@ -467,7 +514,7 @@ const EDGE_INTERACTION_CSS = `
   stroke-width: 2;
   opacity: 1;
 }
-.viewer-canvas .viewer-edge-base-dimmed { opacity: 0.2; }
+.viewer-canvas .viewer-edge-base-dimmed { opacity: ${DIM_EDGE_OPACITY}; }
 .viewer-canvas .viewer-edge-base-selected,
 .viewer-canvas .react-flow__edge:hover .viewer-edge-base-selected {
   stroke: var(--primary);
@@ -769,35 +816,13 @@ const EDGE_INTERACTION_CSS = `
 /* Pure helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function diagramBounds(diagram: C4Diagram): Rect {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const node of diagram.nodes) {
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + node.size.width);
-    maxY = Math.max(maxY, node.position.y + node.size.height);
-  }
-  if (minX === Infinity) return { x: 0, y: 0, width: 1, height: 1 };
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
-
 function fitViewportFor(
   diagram: C4Diagram,
   width: number,
   height: number,
 ): Viewport {
   return getViewportForBounds(
-    diagramBounds(diagram),
+    boundsOf(diagram.nodes),
     width,
     height,
     MIN_ZOOM,
@@ -899,12 +924,15 @@ function cancelTransition(active: ActiveTransition | null): void {
 function ViewerCanvasInner({
   model,
   initialDiagramId,
+  initialPath,
   onDiagramChange,
   edit,
   lockSlot,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
+  /** A walk the link asked to open on. Honoured once, on mount. */
+  initialPath?: SharePathRequest | null;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
   lockSlot?: React.ReactNode;
@@ -982,6 +1010,33 @@ function ViewerCanvasInner({
    * React Flow re-adopt of every element (`lib/project-nodes.ts`).
    */
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  /**
+   * The path being walked, and how far along. `null` is the resting state and
+   * the common one — a diagram with no paths never leaves it.
+   *
+   * A pair rather than two states because the beat is meaningless without the
+   * path: leaving a path and forgetting to reset the beat is the shape of bug
+   * that shows up three interactions later as a walk starting in the middle.
+   */
+  const [activePath, setActivePath] = useState<{
+    diagramId: string;
+    pathId: string;
+    beat: number;
+  } | null>(() => {
+    // A link that names a walk opens on it. Not the auto-show the tour was
+    // cured of: the person who minted the link asked for this, and it is the
+    // whole point of a link that says "look at this". Resolved against the
+    // diagram the link also chose, so a path id from another canvas simply
+    // does not take.
+    if (initialPath == null) return null;
+    const startId =
+      initialDiagramId !== undefined &&
+      model.diagrams[initialDiagramId] !== undefined
+        ? initialDiagramId
+        : model.rootDiagramId;
+    return { diagramId: startId, ...initialPath };
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
@@ -1956,6 +2011,129 @@ function ViewerCanvasInner({
     [],
   );
 
+  /* ---- paths ---------------------------------------------------------- */
+
+  /**
+   * The active path resolved against the diagram it walks, or null.
+   *
+   * Resolution is by id and re-runs on every diagram change, so a pane edit
+   * that deletes the path simply ends the walk instead of leaving the canvas
+   * lit for something no longer written down. The diagram id is part of the
+   * state for the same reason: a path is a reading of ONE canvas, and after a
+   * drill or a climb its element ids name nothing here — so a walk is inactive
+   * on any diagram but its own, with no reset to remember to perform.
+   */
+  const walk = useMemo(() => {
+    if (activePath === null || activePath.diagramId !== diagramId) return null;
+    const path = findPath(diagram, activePath.pathId);
+    if (path === null || path.beats.length === 0) return null;
+    const resolved = resolvePath(diagram, path);
+    // Clamped rather than trusted: an edit can shorten a path under a reader
+    // standing on its last beat.
+    const beat = Math.min(
+      Math.max(activePath.beat, 0),
+      resolved.beats.length - 1,
+    );
+    return { resolved, beat, current: resolved.beats[beat] };
+  }, [activePath, diagram, diagramId]);
+
+  /** The current beat's connectors — the set the edges memo emphasises. */
+  const beatEdgeIds = walk?.current.edgeIds ?? null;
+
+  /* Mirrored into a ref on every write, not during render: the Escape ladder
+     is a window listener registered once, and reads this the way every other
+     rung reads its own selection ref. */
+  const activePathRef = useRef<{
+    diagramId: string;
+    pathId: string;
+    beat: number;
+  } | null>(null);
+
+  const goToWalk = useCallback(
+    (next: { diagramId: string; pathId: string; beat: number } | null) => {
+      activePathRef.current = next;
+      setActivePath(next);
+    },
+    [],
+  );
+
+  const leavePath = useCallback(() => goToWalk(null), [goToWalk]);
+
+  const enterPath = useCallback(
+    (pathId: string, beat = 0) => {
+      goToWalk({ diagramId: diagramIdRef.current, pathId, beat });
+    },
+    [goToWalk],
+  );
+
+  /**
+   * Step through the beats. Forward off the end LEAVES — a story ends by
+   * ending, the way a deck does, and the alternative (parking on the last
+   * beat) leaves a reader pressing a key that has silently stopped working.
+   * Backward off the start does nothing, because there is nowhere earlier to
+   * be and leaving is what the way out is for.
+   */
+  const goToBeat = useCallback(
+    (beat: number) => {
+      if (walk === null) return;
+      goToWalk({
+        diagramId: diagramIdRef.current,
+        pathId: walk.resolved.id,
+        beat,
+      });
+    },
+    [goToWalk, walk],
+  );
+
+  const stepBeat = useCallback(
+    (delta: number) => {
+      if (walk === null) return;
+      const next = walk.beat + delta;
+      if (next < 0) return;
+      if (next > walk.resolved.beats.length - 1) {
+        leavePath();
+        return;
+      }
+      goToWalk({
+        diagramId: diagramIdRef.current,
+        pathId: walk.resolved.id,
+        beat: next,
+      });
+    },
+    [goToWalk, leavePath, walk],
+  );
+
+  /**
+   * Frame the current beat.
+   *
+   * The same viewport pipe every other camera move uses, and the same clamp
+   * rule as a fit — except the top of the zoom range is 1: a walk zooms out to
+   * FRAME a beat, never in to magnify one, because a two-node beat filling the
+   * screen at 250% tells a reader nothing they could not already see and loses
+   * the diagram it belongs to. `duration()` is 0 under `prefers-reduced-motion`,
+   * so that reader gets the cut and none of the travel.
+   */
+  useEffect(() => {
+    if (walk === null) return;
+    const container = containerRef.current;
+    if (container === null) return;
+    const box = container.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return;
+    const target = getViewportForBounds(
+      beatBounds(diagram, walk.current),
+      box.width,
+      box.height,
+      MIN_ZOOM,
+      Math.min(MAX_ZOOM, 1),
+      FIT_PADDING,
+    );
+    void setViewport(target, { duration: duration("fitView") });
+    // `diagram` is deliberately absent: a pane edit while a beat is on screen
+    // should not yank the camera back to the beat the reader has been reading
+    // around. Entering, stepping and leaving are what move it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walk?.resolved.id, walk?.beat, setViewport]);
+
   /* ---- Escape: deselect first, then climb one level ------------------------- */
 
   useEffect(() => {
@@ -1996,6 +2174,15 @@ function ViewerCanvasInner({
         clearSelection();
         return;
       }
+      // Then the path, between clearing a selection and climbing: most local
+      // first. A reader who selected something inside a walk backs out of the
+      // selection, then the walk, and only then the level — one layer per
+      // press, and a presenter never gets dumped out of a diagram mid-story.
+      if (activePathRef.current !== null) {
+        event.preventDefault();
+        leavePath();
+        return;
+      }
       const current = getDiagram(model, diagramIdRef.current);
       if (current.parentDiagramId === null) return;
       event.preventDefault();
@@ -2003,7 +2190,7 @@ function ViewerCanvasInner({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, climbTo, clearSelection, editable]);
+  }, [model, climbTo, clearSelection, editable, leavePath]);
 
   /* ---- editing: nudge and delete the selected element ----------------------
    * ONE GRID STEP PER PRESS, and deliberately no fine (Shift) variant. The
@@ -2247,6 +2434,13 @@ function ViewerCanvasInner({
       // Node selected: the edges TOUCHING it keep full strength — they are
       // the payload (what this element talks to) — and the rest dim. The
       // animation stays on the node's own outline; the connectors hold still.
+      // Path walked, nothing selected: the CURRENT BEAT's connectors carry the
+      // comet. That is the beat's moving light, and it is the only one — the
+      // beat's nodes get no ring and no marching outline, because N marching
+      // outlines is N moving lights and the rule that there is exactly one is
+      // what keeps a twenty-edge diagram legible. Everything else stays
+      // "idle" here and is dimmed by `pathFocusCss`, which needs three tiers
+      // where this enum has two.
       const emphasis: EdgeEmphasis = isSelected
         ? "selected"
         : selectedEdge !== null
@@ -2255,7 +2449,9 @@ function ViewerCanvasInner({
             ? edge.source === selectedNodeId || edge.target === selectedNodeId
               ? "idle"
               : "dimmed"
-            : "idle";
+            : beatEdgeIds !== null && beatEdgeIds.has(edge.id)
+              ? "selected"
+              : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
         // Idle/dimmed arrowheads only — while selected, the edge component
@@ -2303,7 +2499,13 @@ function ViewerCanvasInner({
     });
 
     return flowEdges;
-  }, [diagram, selectedEdgeId, selectedNodeId, toggleEdgeSelection]);
+  }, [
+    beatEdgeIds,
+    diagram,
+    selectedEdgeId,
+    selectedNodeId,
+    toggleEdgeSelection,
+  ]);
 
   /* ---- selected-relationship detail ----------------------------------------- */
 
@@ -2518,6 +2720,114 @@ function ViewerCanvasInner({
     detailNode.externalRef === undefined;
   const canUnnest = edit !== undefined && nodeDetail?.emptyChild != null;
 
+  /**
+   * The three tiers, as one stylesheet: everything off the path at the
+   * SELECTION depth (entering a path is a commitment, like a click), the rest
+   * of the walk at the HOVER depth (context, still legible), and the current
+   * beat untouched at full strength.
+   *
+   * Three depths the canvas already owns, not a fourth set of numbers. A path
+   * that dimmed by its own values would be a second visual language for the
+   * same idea, and a reader would have to learn which greys mean what.
+   *
+   * Returns null under any selection — see the ranking note on
+   * `hoverFocusCss`. The path stays ACTIVE while suspended: the player holds
+   * its place, and the light comes back when Escape clears the selection.
+   */
+  const pathFocusCss = useMemo<string | null>(() => {
+    if (walk === null) return null;
+    if (
+      detail !== null ||
+      selectedNodeId !== null ||
+      activeMultiIds !== null ||
+      selectedFrameId !== null
+    ) {
+      return null;
+    }
+    const { resolved, current } = walk;
+    const offPathNodes = [...resolved.nodeIds]
+      .map((id) => `:not([data-id="${id}"])`)
+      .join("");
+    const offPathEdges = [...resolved.edgeIds]
+      .map((id) => `:not([data-id="${id}"])`)
+      .join("");
+    const offPathChips = [...resolved.edgeIds]
+      .map((id) => `:not([data-edge-id="${id}"])`)
+      .join("");
+
+    /* Boundaries recede with what is inside them. A frame left bright while
+     * its members dim reads as the boundary being what is in focus, which is
+     * the opposite of what a walk is saying — and in a diagram with three
+     * namespaces it is most of the ink on screen. Depth is the SHALLOWEST its
+     * members reach, so a frame holding one lit element stays whole rather
+     * than half-dimming around it. */
+    const frameDepth = new Map<string, number>();
+    for (const node of diagram.nodes) {
+      if (node.frameId === undefined) continue;
+      const depth = current.nodeIds.has(node.id)
+        ? 1
+        : resolved.nodeIds.has(node.id)
+          ? 2
+          : 3;
+      frameDepth.set(
+        node.frameId,
+        Math.min(frameDepth.get(node.frameId) ?? 3, depth),
+      );
+    }
+
+    /* The middle tier is written id by id rather than as one exclusion
+     * selector: "on the path but not in this beat" is a set difference, and
+     * `:not()` chains cannot express one without repeating both sets. Paths
+     * are short, so this is a handful of rules. */
+    const rest: string[] = [];
+    for (const frame of diagram.frames ?? []) {
+      const depth = frameDepth.get(frame.id) ?? 3;
+      if (depth === 1) continue;
+      const opacity = depth === 2 ? HOVER_DIM_NODE_OPACITY : DIM_NODE_OPACITY;
+      rest.push(
+        `.viewer-canvas [data-frame-id="${frame.id}"] { opacity: ${opacity}; }`,
+      );
+    }
+    for (const id of resolved.nodeIds) {
+      if (current.nodeIds.has(id)) continue;
+      rest.push(
+        `.viewer-canvas .react-flow__node[data-id="${id}"] { opacity: ${HOVER_DIM_NODE_OPACITY}; }`,
+      );
+    }
+    for (const id of resolved.edgeIds) {
+      if (current.edgeIds.has(id)) continue;
+      rest.push(
+        `.viewer-canvas .react-flow__edge[data-id="${id}"] .viewer-edge-base { opacity: ${HOVER_DIM_EDGE_OPACITY}; }`,
+      );
+      rest.push(
+        `.viewer-canvas .viewer-edge-chip[data-edge-id="${id}"] { opacity: ${HOVER_DIM_EDGE_OPACITY}; }`,
+      );
+    }
+
+    /* The beat's own elements wear the STATIC selection ring — the multi
+     * select's affordance, and for its reason. Un-dimming alone was not
+     * enough: on a dark ground a node at full strength beside one at 0.3 is a
+     * difference in weight, not a mark, and a reader scanning for "which ones
+     * am I being shown" had to compare rather than look. A ring is a mark.
+     *
+     * STATIC, never marching. N moving outlines would be N moving lights, and
+     * the rule that a beat's moving light is its connectors is what keeps this
+     * from becoming the noise the selection focus is careful to avoid. */
+    for (const id of current.nodeIds) {
+      rest.push(
+        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+        litNodeCss(id),
+      );
+    }
+
+    return (
+      `.viewer-canvas .react-flow__node${offPathNodes} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      `.viewer-canvas .react-flow__edge${offPathEdges} .viewer-edge-base { opacity: ${DIM_EDGE_OPACITY}; }\n` +
+      `.viewer-canvas .viewer-edge-chip${offPathChips} { opacity: ${DIM_EDGE_OPACITY}; }` +
+      (rest.length > 0 ? `\n${rest.join("\n")}` : "")
+    );
+  }, [activeMultiIds, detail, diagram, selectedFrameId, selectedNodeId, walk]);
+
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
   // edges memo — emphasised by contrast, never animated); everything else
@@ -2541,10 +2851,17 @@ function ViewerCanvasInner({
     // still at full strength. Reduced motion: nothing marches anywhere — the
     // classic static ring lights instead, exactly as before this animation
     // existed.
+    //
+    // THE AURA IS OUTSIDE THAT SPLIT, and deliberately: the light saying "this
+    // is the one" is the same claim whichever mark draws the edge, and a
+    // reader who has motion off should not get a quieter selection than one
+    // who has it on. It is also what a path's beat and a multi-select light,
+    // so all three read as one state rather than three.
     const flowAnimation = (name: string): string =>
       `animation: ${name} ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;`;
     return (
       `.viewer-canvas .react-flow__node${excludeKeptSelector} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      `${litNodeCss(selectedNodeId)}\n` +
       `@media (prefers-reduced-motion: no-preference) {\n` +
       `  ${selected} .viewer-node-outline { opacity: 1; visibility: visible; transition-delay: 0s; }\n` +
       `  ${selected} .viewer-node-flow-glow { ${flowAnimation("viewer-edge-flow-glow")} }\n` +
@@ -2572,13 +2889,18 @@ function ViewerCanvasInner({
    * focus ring) and its neighbourhood hold full strength while everything else
    * recedes.
    *
-   * SELECTION WINS, and that is the whole interaction rule. A reader who has
-   * clicked has said which element they care about; letting the cursor keep
-   * re-aiming the dim on the way to the detail panel would take that back, and
-   * two dims fighting over the same opacity is how you get a diagram that
-   * flickers while someone reads a description. So this returns null whenever
-   * ANY selection is live — relationship, element, multi or frame — and the
-   * cursor goes back to being free the moment Escape clears it.
+   * SELECTION > PATH > HOVER, and that ranking is the whole interaction rule.
+   *
+   * A reader who has clicked has said which element they care about; letting
+   * the cursor keep re-aiming the dim on the way to the detail panel would
+   * take that back, and two dims fighting over the same opacity is how you get
+   * a diagram that flickers while someone reads a description.
+   *
+   * A path sits in the middle for the same reason one rung down: choosing one
+   * is a deliberate act, and the cursor should not be able to undo it by
+   * wandering. So this returns null whenever ANY selection is live —
+   * relationship, element, multi or frame — OR a path is being walked, and the
+   * cursor goes back to being free the moment either is cleared.
    */
   const hoverFocusCss = useMemo<string | null>(() => {
     if (hoveredNodeId === null) return null;
@@ -2586,7 +2908,8 @@ function ViewerCanvasInner({
       detail !== null ||
       selectedNodeId !== null ||
       activeMultiIds !== null ||
-      selectedFrameId !== null
+      selectedFrameId !== null ||
+      activePath !== null
     ) {
       return null;
     }
@@ -2630,6 +2953,7 @@ function ViewerCanvasInner({
     );
   }, [
     activeMultiIds,
+    activePath,
     detail,
     diagram,
     hoveredNodeId,
@@ -2645,7 +2969,7 @@ function ViewerCanvasInner({
     const rings = activeMultiIds
       .map(
         (id) =>
-          `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+          `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }\n${litNodeCss(id)}`,
       )
       .join("\n");
     return (
@@ -2751,6 +3075,7 @@ function ViewerCanvasInner({
         // remount note above the `nodes` memo.
         <style>{`.viewer-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
       ) : null}
+      {pathFocusCss !== null ? <style>{pathFocusCss}</style> : null}
       {hoverFocusCss !== null ? <style>{hoverFocusCss}</style> : null}
       {nodeFocusCss !== null ? <style>{nodeFocusCss}</style> : null}
       {multiFocusCss !== null ? <style>{multiFocusCss}</style> : null}
@@ -2991,6 +3316,43 @@ function ViewerCanvasInner({
               sit in opposite corners, so answering it took a trip across the
               whole canvas. `CanvasMinimap` is `!static` now precisely so this
               column owns the corner instead of the map pinning itself. */}
+          {/* ONE HOME FOR THE WALK, centre-bottom: the pill that offers the
+              paths and the player that walks one occupy the same spot, so
+              entering expands a control in place rather than making a reader
+              find a new one somewhere else on the canvas.
+
+              It started under the breadcrumb, which was wrong twice over — it
+              stacked with the node palette on an unlocked canvas, and it put
+              "would you like to be shown around" in the corner that answers
+              "where am I".
+
+              Mounted inside the flow so it rides into immersive and native
+              fullscreen the way the zoom cluster does, which is the point: a
+              path is walked in front of an audience. `pointer-events-none` on
+              the panel, re-enabled on the control itself, keeps the empty
+              space either side from swallowing a drag of the canvas. */}
+          <Panel
+            position="bottom-center"
+            className="pointer-events-none max-w-full"
+          >
+            {walk !== null ? (
+              <div className="pointer-events-auto">
+                <ViewerPathPlayer
+                  title={walk.resolved.title}
+                  caption={walk.current.caption}
+                  beat={walk.beat}
+                  beatCount={walk.resolved.beats.length}
+                  onStep={stepBeat}
+                  onGoTo={goToBeat}
+                  onLeave={leavePath}
+                />
+              </div>
+            ) : (
+              <div className="pointer-events-auto">
+                <ViewerPathsPill paths={pathsOf(diagram)} onEnter={enterPath} />
+              </div>
+            )}
+          </Panel>
           <Panel position="bottom-right">
             <div className="flex flex-col items-end gap-2">
               {minimap.open ? <CanvasMinimap /> : null}
@@ -3010,6 +3372,7 @@ function ViewerCanvasInner({
 export function ViewerCanvas({
   model,
   initialDiagramId,
+  initialPath,
   onDiagramChange,
   edit,
   lockSlot,
@@ -3017,6 +3380,8 @@ export function ViewerCanvas({
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
   initialDiagramId?: string;
+  /** Open inside this walk (share deep links); an unknown path opens none. */
+  initialPath?: SharePathRequest | null;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
   /**
@@ -3039,6 +3404,7 @@ export function ViewerCanvas({
       <ViewerCanvasInner
         model={model}
         initialDiagramId={initialDiagramId}
+        initialPath={initialPath}
         onDiagramChange={onDiagramChange}
         edit={edit}
         lockSlot={lockSlot}

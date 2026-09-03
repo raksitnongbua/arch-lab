@@ -458,6 +458,71 @@
           "technology": "HTTP/JSON",
           "direction": "forward"
         }
+      ],
+      "paths": [
+        {
+          "id": "command",
+          "title": "The write path",
+          "beats": [
+            {
+              "caption": "A shopper's command reaches the region nearest them.",
+              "chains": [
+                {
+                  "nodes": ["ext-shopper", "storefront", "order-command-service"]
+                }
+              ]
+            },
+            {
+              "caption": "The command authorises the payment and appends its events.",
+              "chains": [
+                {
+                  "nodes": ["order-command-service", "ext-payment"]
+                },
+                {
+                  "nodes": ["order-command-service", "event-store"]
+                }
+              ]
+            },
+            {
+              "caption": "Committed events are published, and mirrored to the peer region.",
+              "chains": [
+                {
+                  "nodes": ["order-command-service", "kafka", "us-region"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "query",
+          "title": "The read path",
+          "beats": [
+            {
+              "caption": "A query never touches the command side.",
+              "chains": [
+                {
+                  "nodes": ["ext-shopper", "storefront", "order-projection-service"]
+                }
+              ]
+            },
+            {
+              "caption": "The projection service consumes both regions' events.",
+              "chains": [
+                {
+                  "nodes": ["order-projection-service", "kafka"]
+                }
+              ]
+            },
+            {
+              "caption": "And serves its views from the read store.",
+              "chains": [
+                {
+                  "nodes": ["order-projection-service", "read-store"]
+                }
+              ]
+            }
+          ]
+        }
       ]
     },
     {

@@ -82,6 +82,25 @@ The reader's remembered choice that the canvas must not accept edits. Locked is
 the default, because the common visit is reading a diagram somebody else sent.
 _Avoid_: read-only mode, view mode, edit toggle
 
+## Reading
+
+**Path**:
+An authored walk through one diagram — an ordered list of beats, written in the
+document at diagram level, drawn as a pure overlay. A path travels inside the
+file and inside a share link; selecting one never changes the model.
+_Avoid_: story, tour, guided view, journey, flow
+
+**Beat**:
+One step of a path — a caption sentence and the chain of elements it is about.
+The reader advances beat by beat; the current beat is the only lit thing.
+_Avoid_: step, stage, scene, slide
+
+**Player**:
+The transient control that appears while a path is active — caption, beat
+counter, previous/next, play, and the way out. Gone the moment the path is
+left.
+_Avoid_: bar, panel, HUD, toolbar
+
 ## Sharing
 
 **Share link**:

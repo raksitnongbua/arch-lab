@@ -787,6 +787,73 @@ function emitDiagram(
   for (const edge of edges) {
     emitEdge(lines, edge);
   }
+
+  // Paths last, and in STORED order — unlike frames, nodes and edges, whose
+  // order the JSON writer decides by id. A path is a reading of the
+  // relationships above it, and the order it is read in is the author's
+  // argument, so sorting here would rewrite what somebody wrote.
+  const pathsValue = diagram.paths;
+  if (pathsValue !== undefined) {
+    if (!Array.isArray(pathsValue))
+      invalid(`diagram "${id}".paths`, pathsValue);
+    pathsValue.forEach((path, i) => {
+      if (!isRecord(path)) invalid(`diagram "${id}".paths[${i}]`, path);
+      // Blank-separated the way nodes and edges are, and guarded the same way:
+      // an unconditional blank line would trail a diagram whose only body is
+      // its paths.
+      if (nodes.length > 0 || edges.length > 0 || i > 0) lines.push("");
+      emitPath(lines, id, path, i);
+    });
+  }
+}
+
+function emitPath(
+  lines: string[],
+  diagramId: string,
+  path: Record<string, unknown>,
+  index: number,
+): void {
+  const where = `diagram "${diagramId}".paths[${index}]`;
+  const pathId = path.id;
+  if (typeof pathId !== "string" || pathId === "")
+    invalid(`${where}.id`, pathId);
+  const title = path.title;
+  if (typeof title !== "string" || title === "")
+    invalid(`${where}.title`, title);
+  const beats = path.beats;
+  // Not a silent drop: the parser cannot produce a beatless path, so a model
+  // that has one was hand-built and the bug is worth naming here.
+  if (!Array.isArray(beats) || beats.length === 0) {
+    invalid(`${where}.beats`, beats);
+  }
+  lines.push(`  path ${pathId} ${JSON.stringify(title)}`);
+  beats.forEach((beat, j) => {
+    if (!isRecord(beat)) invalid(`${where}.beats[${j}]`, beat);
+    const caption = beat.caption;
+    if (typeof caption !== "string" || caption === "") {
+      invalid(`${where}.beats[${j}].caption`, caption);
+    }
+    const chains = beat.chains;
+    if (!Array.isArray(chains) || chains.length === 0) {
+      invalid(`${where}.beats[${j}].chains`, chains);
+    }
+    lines.push(`    beat ${JSON.stringify(caption)}`);
+    chains.forEach((chain, k) => {
+      const chainWhere = `${where}.beats[${j}].chains[${k}]`;
+      if (!isRecord(chain)) invalid(chainWhere, chain);
+      const chainNodes = chain.nodes;
+      if (
+        !Array.isArray(chainNodes) ||
+        chainNodes.length < 2 ||
+        chainNodes.some((n) => typeof n !== "string" || n === "")
+      ) {
+        invalid(`${chainWhere}.nodes`, chainNodes);
+      }
+      const anchor =
+        chain.edgeId === undefined ? "" : ` ~${chain.edgeId as string}`;
+      lines.push(`      ${(chainNodes as string[]).join(" -> ")}${anchor}`);
+    });
+  });
 }
 
 /**

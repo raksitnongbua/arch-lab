@@ -66,3 +66,23 @@ export const VIEWER_DURATIONS = {
   edgeEnter: 240,
   edgeEnterDelay: 200,
 } as const;
+
+/**
+ * How long Play rests on one beat before advancing, in ms:
+ * `PATH_PLAY_BASE_MS + PATH_PLAY_MS_PER_BEAT × caption length`, capped.
+ *
+ * READING PACE, not a fixed slide interval. A path's beats carry sentences of
+ * very different lengths, and a constant dwell either rushes the long ones or
+ * strands the reader on the short ones. The base is the time it takes to
+ * notice the light has moved and find where it went; the per-character term is
+ * the sentence itself; the cap is there because a caption long enough to need
+ * more than nine seconds is a caption that wanted to be two beats.
+ *
+ * These live here rather than in the player because this file is where every
+ * other number the canvas moves by already is — `check:viewer-motion` reads
+ * durations from one place, and a timing constant hidden in a component is one
+ * it cannot see.
+ */
+export const PATH_PLAY_BASE_MS = 3200;
+export const PATH_PLAY_MS_PER_BEAT = 45;
+export const PATH_PLAY_MAX_MS = 9000;

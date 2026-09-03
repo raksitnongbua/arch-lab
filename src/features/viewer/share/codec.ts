@@ -57,6 +57,44 @@ export const SHARE_FORWARD_ATTRIBUTE = "data-share-forward";
 export const SHARE_PARAM_DIAGRAM = "d";
 
 /**
+ * Fragment parameter naming a path, and optionally the beat to open on:
+ * `p=send` or `p=send.2`, the beat 1-based as a reader counts.
+ *
+ * In the FRAGMENT rather than the query, by `immersive-param.ts`'s own rule:
+ * it names something inside the model, has no effect before first paint, and
+ * depends on `d=`, which is already here.
+ *
+ * Opening straight into a walk is not the uninvited auto-show the tour was
+ * cured of. Whoever minted the link asked for it, and honouring the ask is
+ * the entire point of a link that says "look at this".
+ */
+export const SHARE_PARAM_PATH = "p";
+
+/** A path a link asks to open on. */
+export interface SharePathRequest {
+  pathId: string;
+  /** 0-based, as the canvas counts. */
+  beat: number;
+}
+
+/**
+ * Reads `p=` from a fragment body. Every malformed, empty or unparseable form
+ * answers null rather than erroring: a link that names a path the author has
+ * since deleted must still open the diagram. The payload is the point; the
+ * path is a request.
+ */
+function readPathParam(params: URLSearchParams): SharePathRequest | null {
+  const raw = params.get(SHARE_PARAM_PATH);
+  if (raw === null || raw === "") return null;
+  const dot = raw.lastIndexOf(".");
+  if (dot === -1) return { pathId: raw, beat: 0 };
+  const pathId = raw.slice(0, dot);
+  const beat = Number(raw.slice(dot + 1));
+  if (pathId === "" || !Number.isInteger(beat) || beat < 1) return null;
+  return { pathId, beat: beat - 1 };
+}
+
+/**
  * Share-link length is a GRADIENT of carrier risk, not one number — so there
  * are two thresholds, and it matters why each is where it is.
  *
@@ -194,11 +232,17 @@ export async function encodeShareFragment(
   aftText: string,
   diagramId: string | null,
   expiry?: ShareExpiry,
+  path?: SharePathRequest | null,
 ): Promise<string> {
   const compressed = await compress(new TextEncoder().encode(aftText));
   let fragment = `${SHARE_PARAM_MODEL}=${SHARE_VERSION_PREFIX}${toBase64Url(compressed)}`;
   if (diagramId !== null) {
     fragment += `&${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagramId)}`;
+  }
+  if (path !== undefined && path !== null) {
+    fragment +=
+      `&${SHARE_PARAM_PATH}=${encodeURIComponent(path.pathId)}` +
+      `.${(path.beat + 1).toString()}`;
   }
   if (expiry !== undefined) {
     // Both or neither: an `exp` with no `sig` is refused on decode, so emitting
@@ -236,7 +280,13 @@ export interface ShareExpiry {
 
 export type DecodedShare =
   /** A model payload was present and decoded; `.alab` parsing is the caller's. */
-  | { status: "ok"; aftText: string; diagramId: string | null }
+  | {
+      status: "ok";
+      aftText: string;
+      diagramId: string | null;
+      /** The walk the link asks to open on, if it named one. */
+      path: SharePathRequest | null;
+    }
   /** No model payload in this fragment — not a shared-model link. */
   | { status: "none" }
   /**
@@ -402,6 +452,7 @@ export async function decodeShareFragment(hash: string): Promise<DecodedShare> {
       status: "ok",
       aftText,
       diagramId: rawDiagram === null || rawDiagram === "" ? null : rawDiagram,
+      path: readPathParam(params),
     };
   } catch {
     return {
@@ -421,4 +472,14 @@ export function diagramIdFromHash(hash: string): string | null {
   if (body === "") return null;
   const raw = new URLSearchParams(body).get(SHARE_PARAM_DIAGRAM);
   return raw === null || raw === "" ? null : raw;
+}
+
+/**
+ * Just the `p=` path request from a hash — the bundled-model twin of
+ * `diagramIdFromHash`, whose fragments carry no payload to decode.
+ */
+export function pathFromHash(hash: string): SharePathRequest | null {
+  const body = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (body === "") return null;
+  return readPathParam(new URLSearchParams(body));
 }

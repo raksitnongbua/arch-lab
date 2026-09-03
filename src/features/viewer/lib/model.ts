@@ -77,6 +77,42 @@ export function deepFreeze<T>(value: T): T {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Geometry                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The model-space box enclosing a set of nodes.
+ *
+ * One function, because every fit the canvas performs must agree about what
+ * "the bounds of these nodes" means — a whole diagram, a beat of a path, a
+ * selection. A second copy would drift and the camera would frame two things
+ * differently for no reason a reader could see. An empty set has no box, so it
+ * answers a unit rect at the origin: `getViewportForBounds` needs a rect, and
+ * an infinite one silently produces NaN.
+ */
+export function boundsOf(nodes: readonly C4Node[]): Rect {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const node of nodes) {
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + node.size.width);
+    maxY = Math.max(maxY, node.position.y + node.size.height);
+  }
+  if (minX === Infinity) return { x: 0, y: 0, width: 1, height: 1 };
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Reads                                                                       */
 /* -------------------------------------------------------------------------- */
 
