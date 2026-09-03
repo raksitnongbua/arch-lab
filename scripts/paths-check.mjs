@@ -413,6 +413,24 @@ check(
       "the aura carries a colour literal — nine themes, and a literal is " +
         "outside all of them",
     );
+    /* Two shadows: a tight bright bloom over a wide faint one. One blur reads
+       as a smudge at the edge; two read as light, which is the difference
+       between an element that is lit and one that is outlined. */
+    assert.equal(
+      (aura.match(/color-mix\(/g) ?? []).length,
+      2,
+      "the aura is no longer layered — a single blur reads as a smudge at the " +
+        "node's edge rather than as light behind it",
+    );
+    /* And no hard ring inside it: the span it hangs on already draws one, and
+       a third edge inside the node's own border made a lit element look
+       re-bordered rather than lit. */
+    assert.doesNotMatch(
+      aura,
+      /0 0 0 \d/,
+      "the aura carries a hard ring again — that is a third edge inside the " +
+        "node's own border, and it reads as a repaint rather than as light",
+    );
     const body = memoBody(canvas, "pathFocusCss");
     assert.ok(
       body.includes("${BEAT_AURA}"),

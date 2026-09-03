@@ -395,6 +395,12 @@ const DIM_EDGE_OPACITY = 0.2;
  * the ring the beat already lights, so the walk reads as a set standing out of
  * the drawing rather than as the drawing behind a veil.
  *
+ * TWO SHADOWS, not one. A single blur reads as a smudge at the edge; a tight
+ * bright bloom over a wide faint one reads as light, which is the whole point
+ * — the element is lit, not outlined. There is deliberately no hard ring in
+ * here: the span this hangs on already draws one, and a third edge inside the
+ * node's own border made a lit element look re-bordered rather than lit.
+ *
  * A `box-shadow` on the ring's own span, which already carries the node's
  * rounding. Not an SVG `filter`, which this codebase forbids near the canvas
  * after a percentage filter region on a flat path painted bands across a whole
@@ -404,8 +410,8 @@ const DIM_EDGE_OPACITY = 0.2;
  * carries its own halo and no tenth palette is introduced.
  */
 const BEAT_AURA =
-  "0 0 0 1px var(--primary), " +
-  "0 0 22px 3px color-mix(in oklch, var(--primary) 42%, transparent)";
+  "0 0 14px 2px color-mix(in oklch, var(--primary) 55%, transparent), " +
+  "0 0 40px 12px color-mix(in oklch, var(--primary) 24%, transparent)";
 
 /**
  * An element and everything one relationship away from it — the set both the
