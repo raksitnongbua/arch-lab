@@ -700,6 +700,24 @@ expectParseError(
   `${OK_HEAD}@context d "C"\n\ta:person "A"\n`,
   "spaces, not tabs",
 );
+/* THE WHOLE SENTENCE, not a fragment, and it is the only assertion in this
+   file written that way. That list of keywords is no longer typed inside the
+   message — it is joined from `C4_HEADER_KEYWORDS`, which the near-match quick
+   fix also ranks against — so a reordered or extended array now rewrites a
+   sentence that has been in front of readers since 1.0. Pinning the bytes is
+   what makes the derivation free to be correct and not free to reword. */
+expectParseError(
+  "an unknown header keyword is refused, naming the whole closed set",
+  `${OK_HEAD}tagcodlor regional "#8b5cf6"\n`,
+  '"tagcodlor" is not a recognised header keyword — expected archlab, schema, ' +
+    "title, description, owner, direction, tags, created, updated, reviewed, " +
+    "tagcolor, customicon, generator or root",
+);
+expectParseError(
+  "a header line indented like a diagram body is refused",
+  `${OK_HEAD}  owner "O"\n@context d "C"\n  a:person "A"\n`,
+  'this line is indented like a diagram body, but no "@" diagram is open above it',
+);
 expectParseError(
   "an unknown level is refused",
   `${OK_HEAD}@warehouse d "C"\n`,

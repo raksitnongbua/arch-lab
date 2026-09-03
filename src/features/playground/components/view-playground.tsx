@@ -95,6 +95,7 @@ import { CaretQuote } from "@/components/ui/caret-quote";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
+import { applyFixToTextarea, FixOffer } from "@/components/ui/fix-offer";
 import {
   SourceRailToggle,
   SplitWorkbench,
@@ -118,6 +119,7 @@ import {
   serializeTimelineText,
   serializeLifecycleText,
 } from "@/features/archtext";
+import type { ArchTextIssue, FixCandidate } from "@/features/archtext";
 import {
   MERMAID_ER_CAVEAT,
   MERMAID_ER_EXPORT_CAVEAT,
@@ -207,6 +209,7 @@ import {
   CANVAS_EDITABLE_SUMMARY,
   CANVAS_GESTURE_CLAUSES,
   canvasEditability,
+  layerPlacement,
 } from "../input/canvas-edit";
 
 /**
@@ -966,6 +969,34 @@ export function ViewPlayground({
     setPending({ pane: "source", value: repaired });
   }, []);
 
+  /**
+   * Apply one fix candidate to the source pane.
+   *
+   * Deliberately NOT `handleRepair`, and the difference is the whole reason
+   * `fix.ts` hands out ranges rather than documents: this goes through the
+   * real `<textarea>` with `setRangeText`, so the caret stays where the edit
+   * landed and the browser records an undo entry the reader can reach with
+   * Cmd-Z. `handleRepair` swaps the whole value and can do neither, which is
+   * acceptable for a whole-document dedent (there is no one place for the
+   * caret to be) and not for a one-character repair.
+   */
+  const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleFix = useCallback(
+    (fix: FixCandidate) => {
+      const el = sourceTextareaRef.current;
+      if (el === null) return;
+      applyFixToTextarea(el, fix.edits);
+      handlePaneChange("source", el.value);
+      /* Focus follows the edit. A reader who clicked a button in the error
+         panel has their focus THERE, and the panel is about to be replaced by
+         a different error or by nothing — leaving focus on a button that no
+         longer exists drops it to the document body. */
+      el.focus();
+      setAnnouncement(`Applied: ${fix.title}`);
+    },
+    [handlePaneChange],
+  );
+
   const handleFormat = useCallback(
     (pane: EditedPane) => {
       setPending(null);
@@ -1132,6 +1163,7 @@ export function ViewPlayground({
     flowchartEdit,
     applyDirection,
     clearDirection,
+    resetLayerPositions,
   } = useCanvasEditing({
     doc,
     text,
@@ -1185,9 +1217,23 @@ export function ViewPlayground({
         el.setRangeText("  ", el.selectionStart, el.selectionEnd, "end");
         handlePaneChange(pane, el.value);
       }
+      /* ALT+ENTER TAKES THE ONE SAFE FIX, and only ever that one. It is the
+         key every editor binds to this, so it costs the reader nothing to
+         learn — but it is deliberately blind to `choice` candidates: a
+         keystroke that applied a guess without the radio list on screen would
+         rewrite the author's text with nothing to have read first. Nothing to
+         apply is a no-op rather than a beep, because the pane cannot tell
+         whether the reader meant this or mistyped. */
+      if (event.key === "Enter" && event.altKey && pane === "source") {
+        const only = soleSafeFix(paneError);
+        if (only !== null) {
+          event.preventDefault();
+          handleFix(only);
+        }
+      }
       tabEscapeRef.current = false;
     },
-    [handlePaneChange],
+    [handleFix, handlePaneChange, paneError],
   );
 
   /* ---- render ------------------------------------------------------------ */
@@ -1584,6 +1630,7 @@ export function ViewPlayground({
 
                 <NumberedTextarea
                   id={sourcePaneId}
+                  textareaRef={sourceTextareaRef}
                   value={text}
                   onChange={(event) =>
                     handlePaneChange("source", event.target.value)
@@ -1614,6 +1661,7 @@ export function ViewPlayground({
                     error={paneError.error}
                     source={text}
                     onRepair={handleRepair}
+                    onFix={handleFix}
                   />
                 ) : null}
               </section>
@@ -1967,11 +2015,15 @@ export function ViewPlayground({
                               )?.direction ?? null
                             }
                             fileDirection={doc.synced.file.direction ?? null}
+                            placement={layerPlacement(doc, activeDiagramId)}
                             onApply={(scope, direction) =>
                               applyDirection(activeDiagramId, scope, direction)
                             }
                             onClear={(scope) =>
                               clearDirection(activeDiagramId, scope)
+                            }
+                            onRelease={() =>
+                              resetLayerPositions(activeDiagramId)
                             }
                           />
                         ) : null}
@@ -2471,10 +2523,12 @@ function SourceErrorBox({
   error,
   source,
   onRepair,
+  onFix,
 }: {
   error: ViewSourceError;
   source: string;
   onRepair: (text: string) => void;
+  onFix: (fix: FixCandidate) => void;
 }): React.JSX.Element {
   if (error.kind === "unknown-format") {
     // Not a located failure — the first line matched no reader, so there is
@@ -2515,10 +2569,55 @@ function SourceErrorBox({
         />
       )}
 
+      {/* THE FIX OFFER SITS ABOVE THE INDENT REPAIR, not instead of it. The
+          two answer different questions and only one of them is per-issue: a
+          quick fix repairs the line that failed, while `indentRepairFor`
+          repairs EVERY line at once, which is the failure a paste out of a
+          chat window produces and which no per-issue fix can see. They are
+          also never both offered in practice — the whole-document dedent is
+          only proved when the document is uniformly shifted. */}
+      <FixOffer
+        issue={fixableIssue(error)}
+        onApply={onFix}
+        shortcutHint={true}
+      />
       <IndentRepairOffer source={source} onRepair={onRepair} />
       <WorkIsSafeFooter />
     </div>
   );
+}
+
+/**
+ * The `.alab` issue behind a pane error, when there is one.
+ *
+ * The two error shapes carry it differently and that is not worth flattening:
+ * the C4 detail already held the whole `issues` array (the C4 and Mermaid
+ * readers can report several), and the per-grammar `parse` details carry the
+ * first issue whole under `issue`. Everything else here — a JSON failure, a
+ * Mermaid import, an unrecognised header — has no `ArchTextIssue` and
+ * therefore no candidates, which the component renders as nothing.
+ */
+function fixableIssue(error: ViewSourceError): ArchTextIssue | undefined {
+  if (error.kind === "aft") return error.issues[0];
+  if (error.kind === "parse") return error.issue;
+  return undefined;
+}
+
+/**
+ * The pane's single `safe` candidate, or null — what Alt+Enter is allowed to
+ * apply.
+ *
+ * "Single" is the condition, not "first": a `safe` candidate sitting beside
+ * others is not a case the parser produces (`check:quickfix` asserts a `safe`
+ * code carries only safe candidates and a `choice` code carries none), and
+ * treating one as keyboard-applicable anyway would make the keystroke depend
+ * on an invariant enforced somewhere else.
+ */
+function soleSafeFix(paneError: PaneErrorState | null): FixCandidate | null {
+  if (paneError === null || paneError.pane !== "source") return null;
+  const fixes = fixableIssue(paneError.error)?.fixes ?? [];
+  if (fixes.length !== 1 || fixes[0].kind !== "safe") return null;
+  return fixes[0];
 }
 
 /**

@@ -35,6 +35,11 @@
  */
 
 import { defaultPositions } from "@/features/archtext";
+/* The release row's own label. This advice used to end at "the shape is only
+   changed by moving them", which was true when nothing offered to remove the
+   coordinates and became a dead end the day something did — and naming the row
+   in prose here would go stale the day it is reworded. */
+import { resetLayerLabel } from "@/lib/prose";
 import { MAX_TITLE_LENGTH, titleLengthOverCap } from "@/lib/constants";
 import type { ArchLabFile, C4Diagram, C4Level, SequenceLabFile } from "@/types";
 import { C4_ABSTRACTION, isBoundaryPlaceholder } from "@/types";
@@ -273,14 +278,16 @@ function adviseColumnLayout(diagram: C4Diagram, out: Advisory[]): void {
   const shape = `${Math.round(extent.width)}x${Math.round(extent.height)} (ratio ${ratio.toFixed(2)})`;
 
   const derived = laidOutBy(diagram, "tb");
-  const omitsGeometry = diagram.nodes.every((node) => {
+  /* COUNTED, not just detected, because the advice below names the control
+     that releases them and that control's label is singular for one. */
+  const placed = diagram.nodes.filter((node) => {
     const at = derived.get(node.id);
     return (
-      at !== undefined && at.x === node.position.x && at.y === node.position.y
+      at === undefined || at.x !== node.position.x || at.y !== node.position.y
     );
   });
 
-  if (!omitsGeometry) {
+  if (placed.length > 0) {
     out.push({
       rule: "column-layout",
       where: diagram.id,
@@ -288,7 +295,8 @@ function adviseColumnLayout(diagram: C4Diagram, out: Advisory[]): void {
         `"${diagram.title}" is ${shape} — far deeper than it is wide, so a ` +
         "landscape frame will shrink it and its labels. Its coordinates are " +
         "written into the document, so a layout direction would not move " +
-        "them: the shape is only changed by moving them.",
+        `them — open it in the playground and choose “${resetLayerLabel(placed.length)}” ` +
+        "in the direction menu to hand them back, or move them yourself.",
     });
     return;
   }

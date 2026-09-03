@@ -516,6 +516,21 @@ function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
       <p className="mt-2 leading-relaxed text-muted-foreground">
         {tool.description}
       </p>
+      {/* A ROW OF ITS OWN, not a sentence buried in the description above.
+          Whether a tool can stop and hand its human a question is the thing
+          a reader deciding to wire this into an automated loop needs to see
+          without reading a paragraph — and it reads from `tool.asks`, the
+          same field `check:mcp` asserts is set for exactly the tools that can
+          raise one, so this row cannot advertise a question that never
+          arrives. */}
+      {tool.asks === undefined ? null : (
+        <p className="mt-2 leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">
+            May ask your human when{" "}
+          </span>
+          {tool.asks}
+        </p>
+      )}
       {tool.args.length > 0 ? (
         <dl className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
           {tool.args.map((arg) => (

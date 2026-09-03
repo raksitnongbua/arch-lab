@@ -34,7 +34,9 @@ import {
   type IconDef,
 } from "@/features/editor/lib/icons/registry";
 
+import { iconFork } from "../lib/ask";
 import {
+  askHumanResult,
   errorResult,
   joinSections,
   textResult,
@@ -101,6 +103,29 @@ export function listIcons(
         joinSections(FALLBACK_NOTE, CUSTOM_ICON_NOTE),
       ),
     );
+  }
+
+  /*
+   * A HANDFUL OF PLAUSIBLE MARKS AND NOTHING CALLED WHAT WAS TYPED is a
+   * question, not a list. `postgres` is a declared alias, so it resolves
+   * silently — the caller has already named the icon. `sql` names nothing and
+   * matches several unrelated marks, and taking the first is how a diagram
+   * ends up with the wrong database on it, permanently and quietly (the
+   * fallback story in this file's header). Asking here rather than in
+   * `lib/ask.ts` deciding by itself keeps the trigger next to the search that
+   * produced the candidates.
+   */
+  if (query !== undefined) {
+    const fork = iconFork(
+      query,
+      matches.map((def) => ({
+        slug: def.slug,
+        name: def.name,
+        aliases: def.aliases,
+        categoryLabel: ICON_CATEGORY_LABELS[def.category],
+      })),
+    );
+    if (fork !== null) return askHumanResult(fork);
   }
 
   // Category-major, in picker order — searchIcons already returns registry

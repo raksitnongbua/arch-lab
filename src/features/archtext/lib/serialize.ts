@@ -28,7 +28,15 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchLabFile, C4NodeType, EdgeDirection, Point } from "@/types";
+import type {
+  ArchLabFile,
+  C4Diagram,
+  C4Node,
+  C4NodeType,
+  EdgeDirection,
+  Point,
+  Size,
+} from "@/types";
 
 import {
   compareStrings,
@@ -879,7 +887,9 @@ function emitPath(
  */
 export function resolveDirection(
   file: Record<string, unknown> | ArchLabFile,
-  diagram: Record<string, unknown>,
+  /* Structurally typed for `defaultNodeLayout`'s benefit — see the note on
+     `defaultLayoutFor`; `Record<string, unknown>` still satisfies it. */
+  diagram: { readonly direction?: unknown },
 ): "tb" | "lr" {
   const own = diagram.direction;
   if (own === "tb" || own === "lr") return own;
@@ -888,9 +898,14 @@ export function resolveDirection(
   return "tb";
 }
 
+/* Structurally typed rather than `Record<string, unknown>[]` so the TYPED
+   diagrams `defaultNodeLayout` is handed satisfy it as well: `C4Node` is an
+   interface and therefore not assignable to an index-signature type, and the
+   alternative — a cast at that one call site — would be a cast standing where
+   the whole point is that both callers compute the same map. */
 function defaultLayoutFor(
-  nodes: readonly Record<string, unknown>[],
-  edges: readonly Record<string, unknown>[],
+  nodes: readonly { readonly id?: unknown }[],
+  edges: readonly { readonly source?: unknown; readonly target?: unknown }[],
   direction: "tb" | "lr",
 ): ReadonlyMap<string, Point> {
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
@@ -902,6 +917,85 @@ function defaultLayoutFor(
         : [],
     ),
     direction,
+  );
+}
+
+/**
+ * Where one diagram's elements sit when the text says nothing — the map every
+ * node's own coordinates are measured against, with the direction resolved
+ * exactly as the parser resolves it.
+ *
+ * EXPORTED FOR THE RESET GESTURE, which needs the coordinates themselves
+ * rather than a verdict about them: handing a node back to the layout means
+ * writing this map's entry onto it, after which `hasAuthoredGeometry` is
+ * false and the emitted line carries no token. Computing it a second time in
+ * the playground would be the "two halves of one thing" failure this file
+ * already guards against for `resolveDirection` — a reset aimed at a slot the
+ * serializer does not agree is the default writes a token back on the way out.
+ *
+ * A node's default slot depends only on the diagram's ids, its edges and the
+ * direction, so releasing ONE node does not move any other: reset-one and
+ * reset-all read the same map and neither has to recompute it.
+ */
+export function defaultNodeLayout(
+  file: ArchLabFile,
+  diagram: C4Diagram,
+): ReadonlyMap<string, Point> {
+  return defaultLayoutFor(
+    diagram.nodes,
+    diagram.edges,
+    resolveDirection(file, diagram),
+  );
+}
+
+/**
+ * Whether `position`/`size` are exactly what the default layout would put
+ * there — the test that decides whether a declaration line carries a geometry
+ * token at all.
+ *
+ * ONE DEFINITION, TWO READERS, which is the whole reason it is a function:
+ * `emitNode` omits the token when this is true, and `hasAuthoredGeometry`
+ * inverts it for the controls that offer to release a node. A second copy of
+ * the comparison would let the direction menu offer to release a node the
+ * serializer considers already released, or say nothing about one it does not.
+ */
+function geometryIsDefault(
+  defaultPosition: Point | undefined,
+  defaultSize: Size,
+  position: Point,
+  size: Size,
+): boolean {
+  return (
+    defaultPosition !== undefined &&
+    Object.is(position.x, defaultPosition.x) &&
+    Object.is(position.y, defaultPosition.y) &&
+    Object.is(size.width, defaultSize.width) &&
+    Object.is(size.height, defaultSize.height)
+  );
+}
+
+/**
+ * Whether the coordinates on `node` are the AUTHOR'S — a `(x,y wxh)` token
+ * this module will write out — rather than the slot the default layout put it
+ * in, which it omits.
+ *
+ * TRUE MEANS A LAYOUT DIRECTION CANNOT MOVE THIS NODE. The parser resolves
+ * `node.geometry ?? layout.get(node.id)` per node, so a tokened node keeps
+ * its coordinates whichever way the diagram runs — and a diagram whose every
+ * node carries one makes the direction control completely inert. The controls
+ * that say so, and the gesture that undoes it, all ask this function rather
+ * than looking for a `(` in the text or comparing coordinates themselves.
+ */
+export function hasAuthoredGeometry(
+  file: ArchLabFile,
+  diagram: C4Diagram,
+  node: C4Node,
+): boolean {
+  return !geometryIsDefault(
+    defaultNodeLayout(file, diagram).get(node.id),
+    defaultSizeFor(node.type),
+    node.position,
+    node.size,
   );
 }
 
@@ -1037,15 +1131,14 @@ function emitNode(
   ) {
     invalid(`node "${id}".size`, size);
   }
-  const dp = layout.get(id);
-  const ds = defaultSizeFor(type as C4NodeType);
-  const isDefault =
-    dp !== undefined &&
-    Object.is(position.x, dp.x) &&
-    Object.is(position.y, dp.y) &&
-    Object.is(size.width, ds.width) &&
-    Object.is(size.height, ds.height);
-  if (!isDefault) {
+  if (
+    !geometryIsDefault(
+      layout.get(id),
+      defaultSizeFor(type as C4NodeType),
+      { x: position.x, y: position.y },
+      { width: size.width, height: size.height },
+    )
+  ) {
     line += ` (${numberToken(position.x)},${numberToken(position.y)} ${numberToken(size.width)}x${numberToken(size.height)})`;
   }
 

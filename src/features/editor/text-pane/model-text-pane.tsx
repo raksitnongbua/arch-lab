@@ -35,14 +35,23 @@
  * editable surface (that pane exists at `/live`).
  */
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AlignLeft, CircleAlert, CircleCheck, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { CaretQuote } from "@/components/ui/caret-quote";
+import { applyFixToTextarea, FixOffer } from "@/components/ui/fix-offer";
 import { buttonClasses } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
+import type { FixCandidate } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 
 import { useEditorStore } from "../state";
@@ -143,6 +152,27 @@ export function ModelTextPane(): React.JSX.Element {
       setPending({ text });
     },
     [effective.base],
+  );
+
+  /**
+   * Apply one fix candidate through the real `<textarea>`.
+   *
+   * Same shape as the playground's, and for the same two reasons: the caret
+   * stays on the character that changed, and the browser records an undo entry
+   * the reader can reach with Cmd-Z. Handing `handleChange` a whole new string
+   * instead would lose both — and this pane's whole promise is that the text
+   * is kept exactly as typed.
+   */
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleFix = useCallback(
+    (fix: FixCandidate) => {
+      const el = textareaRef.current;
+      if (el === null) return;
+      applyFixToTextarea(el, fix.edits);
+      handleChange(el.value);
+      el.focus();
+    },
+    [handleChange],
   );
 
   const handleFormat = useCallback(() => {
@@ -261,6 +291,7 @@ export function ModelTextPane(): React.JSX.Element {
 
       <textarea
         id={textareaId}
+        ref={textareaRef}
         value={value}
         readOnly={isJson}
         onChange={(event) => handleChange(event.target.value)}
@@ -277,7 +308,7 @@ export function ModelTextPane(): React.JSX.Element {
       />
 
       {visibleError !== null && !isJson ? (
-        <ErrorBox error={visibleError} />
+        <ErrorBox error={visibleError} onFix={handleFix} />
       ) : null}
 
       <p id={hintId} className="text-xs text-muted-foreground">
@@ -340,7 +371,13 @@ function StatusLine({
 /* Errors — the parser's own precision, work always preserved                  */
 /* -------------------------------------------------------------------------- */
 
-function ErrorBox({ error }: { error: ModelTextError }): React.JSX.Element {
+function ErrorBox({
+  error,
+  onFix,
+}: {
+  error: ModelTextError;
+  onFix: (fix: FixCandidate) => void;
+}): React.JSX.Element {
   return (
     <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5">
       <p className="text-xs font-medium text-foreground">
@@ -381,6 +418,14 @@ function ErrorBox({ error }: { error: ModelTextError }): React.JSX.Element {
           ))}
         </ul>
       )}
+
+      {/* Above the reassurance, not below it: that sentence is what makes
+          pressing the button low-stakes, so it has to be the last thing read.
+          No `shortcutHint` — this pane binds no Alt+Enter, and a panel that
+          promised a key nothing listens for would be worse than silence. */}
+      {error.kind === "syntax" ? (
+        <FixOffer issue={error.issues[0]} onApply={onFix} />
+      ) : null}
 
       <p className="mt-2 text-xs text-muted-foreground">
         Your text is kept exactly as typed — the canvas catches up as soon as it

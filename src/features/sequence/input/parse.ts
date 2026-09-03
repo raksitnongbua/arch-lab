@@ -34,6 +34,7 @@ import {
   detectAlabKind,
   parseSequenceText,
 } from "@/features/archtext";
+import type { ArchTextIssue } from "@/features/archtext";
 import {
   MERMAID_DIAGRAM_TYPES,
   MERMAID_FLOWCHART_HEADER_WORDS,
@@ -67,6 +68,17 @@ export interface SequenceParseErrorDetail {
   line: number;
   column: number;
   lineText: string | null;
+  /**
+   * The `.alab` issue this was flattened from, when there is one.
+   *
+   * CARRIED WHOLE rather than as three more fields, because what the UI needs
+   * off it now is a `code` and a list of `fixes` — and the next thing it needs
+   * would have been a fourth field, then a fifth, each one a place the pane
+   * and the parser can fall out of step. Absent for a Mermaid failure: that
+   * grammar has its own error type and no fix candidates, and inventing an
+   * `ArchTextIssue` to carry it would be claiming a contract it does not meet.
+   */
+  issue?: ArchTextIssue;
 }
 
 /** The text is a recognisable C4 document — belongs on `/live`. */
@@ -215,6 +227,8 @@ export function parseSequenceInput(text: string): SequenceParseResult {
             line: error.line,
             column: error.column,
             lineText: sourceLineAt(text, error.line),
+
+            issue: error.issues[0],
           },
         };
       }

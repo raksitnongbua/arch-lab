@@ -164,6 +164,19 @@ const { ICON_CATEGORY_ORDER, ICON_CATEGORY_LABELS } = await load(
   "src/features/editor/lib/icons/categories.ts",
 );
 const { createShareLink } = await load("src/features/mcp/tools/share.ts");
+/* The five kinds this file did not previously exercise directly. Section 10
+   needs every notation's validator, because the "no bundled example raises an
+   ask" guarantee is driven from the registry rather than from a hand-listed
+   set — a hardcoded list cannot notice the notation it has never heard of. */
+const { validateEr } = await load("src/features/mcp/tools/er.ts");
+const { validateDict } = await load("src/features/mcp/tools/dict.ts");
+const { validateGantt } = await load("src/features/mcp/tools/gantt.ts");
+const { validateTimeline } = await load("src/features/mcp/tools/timeline.ts");
+const { validateLifecycle } = await load("src/features/mcp/tools/lifecycle.ts");
+const { EXAMPLE_KINDS, listBundledExamples, loadBundledExample } = await load(
+  "src/features/playground/lib/example-registry.ts",
+);
+const { KIND_BLURB } = await load("src/features/playground/lib/kind-copy.ts");
 const { decodeShareFragment, SHARE_URL_SAFE_LENGTH, MAX_SHARE_URL_LENGTH } =
   await load("src/features/viewer/share/codec.ts");
 const { MAX_SOURCE_CHARS } = await load("src/features/mcp/lib/limits.ts");
@@ -201,6 +214,108 @@ function expectError(result) {
     true,
     `expected an error result, got success:\n${textOf(result)}`,
   );
+  return textOf(result);
+}
+
+/**
+ * An ask-human result, with its shape proved before anything reads it.
+ *
+ * Every assertion here is one an ask has to satisfy to be usable at all, so
+ * it is checked on EVERY ask the fixtures provoke rather than once on a
+ * fixture built to pass: the whole envelope's value is that an agent can rely
+ * on the shape without parsing prose. The individual rules are argued at the
+ * `AskHuman` declaration in `features/mcp/lib/render.ts`.
+ */
+function expectAsk(result) {
+  const text = textOf(result);
+  assert.notEqual(
+    result.isError,
+    true,
+    "an ask must NOT be isError: the call did its work and stopped at a " +
+      "fork, and marking it an error teaches the model to retry with a " +
+      `guess — which is the behaviour the envelope exists to stop:\n${text}`,
+  );
+  assert.match(
+    text,
+    /^ASK YOUR HUMAN/,
+    `an ask must open with the headline the handshake tells agents to stop ` +
+      `on, on the FIRST line:\n${text}`,
+  );
+
+  const ask = result.structuredContent?.archlab_ask;
+  assert.ok(
+    ask !== undefined,
+    `an ask must carry structuredContent.archlab_ask:\n${text}`,
+  );
+
+  assert.ok(
+    ask.options.length >= 2 && ask.options.length <= 5,
+    `2..5 options; got ${ask.options.length}. One is not a fork, and six is ` +
+      "a menu nobody reads out loud",
+  );
+  const ids = ask.options.map((option) => option.id);
+  assert.equal(
+    new Set(ids).size,
+    ids.length,
+    `option ids must be unique — a human answering "2" must land somewhere: ${ids.join(", ")}`,
+  );
+  for (const option of ask.options) {
+    assert.ok(
+      typeof option.consequence === "string" && option.consequence !== "",
+      `option \`${option.id}\` has no consequence`,
+    );
+    assert.notEqual(
+      option.consequence,
+      option.label,
+      `option \`${option.id}\`'s consequence only restates its label, which ` +
+        "turns the fork into a coin toss",
+    );
+    if (option.next !== undefined) {
+      assert.ok(
+        MCP_TOOLS.some((tool) => tool.name === option.next.tool),
+        `option \`${option.id}\` points at \`${option.next.tool}\`, which is ` +
+          "not a tool this server has",
+      );
+    }
+  }
+
+  assert.ok(
+    typeof ask.otherwise === "string" &&
+      /own words|free text/i.test(ask.otherwise),
+    "every ask must offer the free-text escape: a list of options is never " +
+      `the whole world. Got: ${JSON.stringify(ask.otherwise)}`,
+  );
+
+  if (ask.defaultId === null) {
+    assert.doesNotMatch(
+      text,
+      /^Default the server would take/m,
+      "an ask with no default must not print a default line",
+    );
+  } else {
+    assert.ok(
+      ids.includes(ask.defaultId),
+      `defaultId \`${ask.defaultId}\` is not one of ${ids.join(", ")}`,
+    );
+    assert.match(
+      text,
+      /^Default the server would take if you cannot ask: option \d+\.$/m,
+      `a non-null defaultId must be stated in the TEXT too — a client that ` +
+        `ignores structuredContent must still see it:\n${text}`,
+    );
+  }
+  return { text, ask };
+}
+
+/** Nothing stopped to ask: the result is a plain one, whichever kind. */
+function expectNoAsk(result, why) {
+  assert.equal(
+    result.structuredContent?.archlab_ask,
+    undefined,
+    `${why} — an ask here is noise, and a question that fires often is one ` +
+      `an agent learns to answer without reading:\n${textOf(result)}`,
+  );
+  assert.doesNotMatch(textOf(result), /ASK YOUR HUMAN/, why);
   return textOf(result);
 }
 
@@ -519,11 +634,13 @@ check("validate_sequence sends a C4 document to the right tool", () => {
 });
 
 check("validate_model does not silently accept a sequence document", () => {
-  const text = expectError(validateModel(VALID_SEQUENCE, "auto"));
-  assert.ok(
-    /sequence/i.test(text) || /INVALID/.test(text),
-    "a sequence document must not read as a valid C4 model",
-  );
+  // REWRITTEN when the kind redirects became asks. What must hold is
+  // unchanged — a sequence document must never read as a valid C4 model —
+  // but the verdict is now a question rather than a failure, because the
+  // text and the tool call disagree and only a person knows which was meant.
+  const { text } = expectAsk(validateModel(VALID_SEQUENCE, "auto"));
+  assert.match(text, /sequence/i);
+  assert.doesNotMatch(text, /^VALID as/m);
 });
 
 check(
@@ -827,8 +944,11 @@ check(
 
 check("the C4 tools send a use-case document to the right tool", () => {
   // read.ts promises `validate_usecase` exists — this is what keeps that
-  // promise from being prose.
-  const text = expectError(validateModel(VALID_USECASE, "auto"));
+  // promise from being prose. REWRITTEN when the redirect became an ask: the
+  // catalogue sentence it backs ("says so and points you at the right tool")
+  // is still true, and now the pointing is a numbered option rather than a
+  // sentence the agent has to parse.
+  const { text } = expectAsk(validateModel(VALID_USECASE, "auto"));
   assert.match(text, /validate_usecase/);
   assert.doesNotMatch(text, /^INVALID as/m);
 });
@@ -1472,8 +1592,15 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
   // in the SAME response — the canonical `.alab` text inline, and a measured
   // diagram-scoped link when one fits (here: the small context diagram; the
   // giant container diagram is the very thing that does not fit).
+  //
+  // REWRITTEN when this refusal moved into the ask envelope. It was already a
+  // question in prose — here are the scoped links, here is the file, you
+  // choose — so what changed is that it now carries the header that tells the
+  // agent to stop, and no longer claims `isError` for a call that parsed the
+  // model, minted every candidate link and measured them all. Every fact the
+  // old assertions demanded is still asserted below.
   const big = sizedModel(900, "Too big to link");
-  const text = expectError(await createShareLink(big, "auto", undefined));
+  const { text } = expectAsk(await createShareLink(big, "auto", undefined));
   assert.match(text, /does not fit in a share link/);
 
   // The canonical model text is inline — no convert_model round trip.
@@ -1481,9 +1608,13 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
   assert.match(text, /title "Too big to link"/);
 
   // The scoped offer names the diagram and carries a real, measured URL.
-  assert.match(text, /diagram-scoped link fits/);
-  assert.match(text, /`ctx-root`/);
-  const scopedUrl = text.split("\n").find((line) => line.startsWith("http"));
+  // Trimmed, because an offer's URL now hangs under its option and is
+  // therefore indented; it is still on a line of its own.
+  assert.match(text, /ctx-root/);
+  const scopedUrl = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("http"));
   assert.ok(scopedUrl !== undefined, `no scoped URL in:\n${text}`);
   assert.ok(
     scopedUrl.length <= MAX_SHARE_URL_LENGTH,
@@ -1667,9 +1798,12 @@ check("the C4 tools tell a sequence document where to go", () => {
     ],
     ["describe_model", () => describeModel(VALID_SEQUENCE, "auto", false)],
   ];
+  // REWRITTEN when the redirect became an ask, for all four tools at once:
+  // whichever door a document of another kind arrives at, it must come back
+  // as the same question, and never as a line-1 C4 parse error.
   for (const [name, run] of attempts) {
-    const text = expectError(run());
-    assert.match(text, /sequence diagram/i, name);
+    const { text } = expectAsk(run());
+    assert.match(text, /sequence/i, name);
     assert.match(text, /validate_sequence/, name);
     assert.doesNotMatch(text, /^INVALID as \.alab text/m, name);
   }
@@ -1774,6 +1908,460 @@ check("every JSON recipe is parseable, and TOML ones name the server", () => {
       assert.match(recipe.snippet(ENDPOINT), /^\[mcp_servers\.[\w-]+\]/m);
     }
   }
+});
+
+/* ----------------------------------------------------------------------- */
+/* 10. Asking the human                                                     */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * This server cannot ask a question over the protocol — elicitation and
+ * sampling both need a session, and the deployment is stateless by design (the
+ * long note on `askHumanResult` in `features/mcp/lib/render.ts` has the
+ * evidence). So a fork travels as the TEXT of a result, which makes three
+ * things checkable and worth checking:
+ *
+ *   1. THE SHAPE, on every ask the fixtures provoke. An agent is asked to rely
+ *      on this envelope without parsing prose; `expectAsk` above is where the
+ *      contract lives.
+ *   2. THAT THE TRIGGERS FIRE. A question nobody sees is prose in a file.
+ *   3. THAT THEY DO NOT FIRE OTHERWISE — and this is the group that matters
+ *      most, because it is the whole "rare" guarantee. A question that appears
+ *      on ordinary work is one an agent learns to answer without reading, and
+ *      the feature is then strictly worse than nothing: it has taught the
+ *      model to click through the one prompt that mattered. The bundled
+ *      examples are the definition of an unambiguous document, so every one of
+ *      them through its own validator must come back silent.
+ *
+ * A NEW SECTION HERE rather than a `check:ask-human` script, deliberately: the
+ * ~170-line module loader at the top of this file is what lets a check
+ * exercise the real tools, and a second copy of it is the duplication
+ * `dry.md` names.
+ */
+
+/** A model whose relationships are numbered steps rather than intents. */
+const STEP_LABELLED_C4 = `archlab 1.0
+title "Checkout steps"
+
+@context ctx-root "Checkout steps"
+  cust:person "Customer"
+  web:system "Storefront"
+  pay:external "Payments"
+  mail:external "Mailer"
+
+  cust -> web : "1. Submits the basket"
+  web -> pay : "2. Takes the payment"
+  pay -> mail : "3. Confirms by email"
+`;
+
+/** Four participants, every message aimed at one of them. */
+const HUB_SEQUENCE = `archlab 1.0 sequence
+title "Everything calls the gateway"
+
+@sequence
+  a:participant "Service A"
+  b:participant "Service B"
+  c:participant "Service C"
+  gw:participant "Gateway"
+
+  a -> gw : "Fetches the profile" [HTTPS]
+  b -> gw : "Fetches the profile" [HTTPS]
+  c -> gw : "Fetches the profile" [HTTPS]
+  a -> gw : "Writes the profile" [HTTPS]
+`;
+
+/** Three diagrams and a two-node root: the signpost case. */
+const SIGNPOST_ROOT_C4 = `archlab 1.0
+title "Atlas"
+
+@context ctx-root "Atlas"
+  cust:person "Customer"
+  atlas:system "Atlas" >cnt-atlas
+
+  cust -> atlas : "Places orders with" [HTTPS]
+
+@container cnt-atlas owner=atlas
+  web:container "Storefront" [Next.js]
+  api:container "Orders API" [Go] >cmp-api
+  db:database "Order Store" [PostgreSQL]
+
+  web -> api : "Submits orders to" [HTTPS]
+  api -> db : "Reads and writes" [SQL]
+
+@component cmp-api owner=api
+  handler:component "Order handler" [Go]
+  repo:component "Order repository" [Go]
+
+  handler -> repo : "Persists orders through" [in-process]
+`;
+
+/* ---- the triggers fire ---------------------------------------------------- */
+
+check("validate_model asks which notation, on all eight other kinds", () => {
+  /* THE TEST THAT DOCUMENTS THE BUG BEING FIXED. Only flowchart, usecase and
+     sequence were redirected in prose; `er`, `dict`, `gantt`, `timeline` and
+     `lifecycle` fell through to the C4 reader and came back as "INVALID …
+     line 1, column 13" — which reads as "your syntax is wrong" when the
+     syntax is fine and only the tool choice was. Driven from the bundled
+     examples so a tenth notation is covered here with no edit. */
+  const seen = new Set();
+  for (const listing of listBundledExamples()) {
+    if (listing.status !== "ok") continue;
+    const kind = listing.example.kind;
+    if (kind === "c4" || seen.has(kind)) continue;
+    seen.add(kind);
+    const loaded = loadBundledExample(listing.example.id);
+    const { text, ask } = expectAsk(
+      validateModel(loaded.document.alabText, "auto"),
+    );
+    assert.equal(
+      ask.defaultId,
+      kind,
+      `the DETECTED kind must be the default for ${kind}: the text is ` +
+        "evidence and the tool name is a guess",
+    );
+    assert.match(text, new RegExp(`validate_${kind}`), kind);
+    assert.doesNotMatch(
+      text,
+      /^INVALID as \.alab text/m,
+      `${kind} must not come back as a C4 line-1 parse error`,
+    );
+  }
+  assert.equal(
+    seen.size,
+    EXAMPLE_KINDS.length - 1,
+    `every notation but C4 must be covered; got ${[...seen].join(", ")}`,
+  );
+});
+
+check("validate_model asks about a valid model that reads as steps", () => {
+  const { text, ask } = expectAsk(validateModel(STEP_LABELLED_C4, "auto"));
+  // The verdict TRAVELS WITH the question: nothing about the document is
+  // wrong, so a caller that wanted the counts must still get them.
+  assert.match(text, /^VALID as \.alab text \(auto-detected\)\./m);
+  assert.match(text, /step number/);
+  assert.equal(
+    ask.defaultId,
+    null,
+    "a valid model has no safe default — every branch is defensible, which " +
+      "is exactly when a default would be the server choosing",
+  );
+  assert.deepEqual(
+    ask.options.map((option) => option.id),
+    ["c4", "sequence", "flowchart"],
+    "all three readings, or the server has decided half the question",
+  );
+});
+
+check("validate_model asks about an unbranched chain of relationships", () => {
+  // The second half of the step-like heuristic, and it must fire with no
+  // ordinal words at all: a -> b -> c -> d with nothing branching off it is
+  // the shape of a call sequence however the lines are labelled.
+  const chain = `archlab 1.0
+title "One long chain"
+
+@context ctx-root "One long chain"
+  cust:person "Customer"
+  web:system "Storefront"
+  pay:external "Payments"
+  mail:external "Mailer"
+
+  cust -> web : "Places an order with"
+  web -> pay : "Charges the card through"
+  pay -> mail : "Notifies by email through"
+`;
+  const { text } = expectAsk(validateModel(chain, "auto"));
+  assert.match(text, /one unbranched chain/);
+});
+
+check("validate_sequence asks about a hub-and-spoke flow", () => {
+  const { text, ask } = expectAsk(validateSequence(HUB_SEQUENCE));
+  assert.match(text, /^VALID as \.alab sequence\./m);
+  assert.match(text, /`gw`/);
+  assert.equal(ask.defaultId, null);
+});
+
+check("convert_model asks which diagram when the root is a signpost", () => {
+  const { text, ask } = expectAsk(
+    convertModel(SIGNPOST_ROOT_C4, "auto", "mermaid", undefined),
+  );
+  assert.equal(
+    ask.defaultId,
+    "ctx-root",
+    "the default must be what the tool would have used silently — the ask " +
+      "makes the fallback visible, it does not change it",
+  );
+  // The counts are what distinguish the options, and they come from the same
+  // summary `renderDiagramTable` renders, so the ask cannot claim a shape the
+  // structure table denies.
+  assert.match(text, /cnt-atlas.*\n.*3 node\(s\), 2 edge\(s\)/);
+  for (const option of ask.options) {
+    assert.equal(option.next.tool, "convert_model");
+    assert.equal(option.next.args.diagram_id, option.id);
+  }
+});
+
+check("create_share_link asks which diagram the link opens at", () => {
+  // Sharper here than in convert_model: this URL is what a human clicks, and
+  // a link that lands on three boxes is a mistake the sender only learns
+  // about from the reply.
+  return createShareLink(SIGNPOST_ROOT_C4, "auto", undefined, undefined).then(
+    (result) => {
+      const { ask } = expectAsk(result);
+      assert.equal(ask.defaultId, "ctx-root");
+      for (const option of ask.options) {
+        assert.equal(option.next.tool, "create_share_link");
+      }
+    },
+  );
+});
+
+check(
+  "list_icons asks when several marks match and none is called that",
+  () => {
+    const { text, ask } = expectAsk(listIcons("sql", undefined));
+    assert.equal(ask.defaultId, null, "no mark is a defensible first guess");
+    assert.match(text, /never errors/, "why guessing is unrecoverable here");
+    for (const option of ask.options) {
+      assert.ok(
+        ICONS[option.id] !== undefined,
+        `\`${option.id}\` is not a slug in the registry the canvas draws from`,
+      );
+    }
+  },
+);
+
+/* ---- the triggers do NOT fire -------------------------------------------- */
+
+check("no bundled example raises an ask through its own validator", () => {
+  /* THE RARENESS GUARANTEE, and the most important assertion in this section.
+     The bundled models are the definition of an unambiguous document — they
+     are what `/demo` shows and what `get_example_model` hands out as the
+     pattern to copy — so a question raised over one of them is a question
+     that fires on ordinary work. Driven from the registry, not a hand-listed
+     set, so a tenth notation's examples are covered with no edit here. */
+  const validators = {
+    c4: (text) => validateModel(text, "auto"),
+    sequence: validateSequence,
+    flowchart: validateFlowchart,
+    usecase: validateUseCase,
+    er: validateEr,
+    dict: validateDict,
+    gantt: validateGantt,
+    timeline: validateTimeline,
+    lifecycle: validateLifecycle,
+  };
+  assert.deepEqual(
+    Object.keys(validators).sort(),
+    [...EXAMPLE_KINDS].sort(),
+    "a notation with bundled examples and no validator listed here would be " +
+      "silently skipped by the guarantee below",
+  );
+
+  let checked = 0;
+  for (const listing of listBundledExamples()) {
+    if (listing.status !== "ok") continue;
+    const { id, kind } = listing.example;
+    const loaded = loadBundledExample(id);
+    expectNoAsk(
+      validators[kind](loaded.document.alabText),
+      `the bundled ${kind} \`${id}\` is unambiguous by definition`,
+    );
+    checked += 1;
+  }
+  assert.ok(checked >= EXAMPLE_KINDS.length, `only ${checked} examples read`);
+});
+
+check("list_icons resolves a declared alias silently", () => {
+  // `postgres` is an alias of `postgresql`, so the caller has already named
+  // the icon; a question there would be an obstruction. This and the `sql`
+  // trigger above are the pair that defines the rule.
+  const text = expectNoAsk(
+    listIcons("postgres", undefined),
+    "an exact alias hit is an answer, not a question",
+  );
+  assert.match(text, /@postgresql/);
+});
+
+check("a given diagram_id never asks", () => {
+  // An explicit argument is the agent saying it already chose. A tool that
+  // second-guesses one cannot be used in a loop.
+  expectNoAsk(
+    convertModel(SIGNPOST_ROOT_C4, "auto", "mermaid", "cnt-atlas"),
+    "convert_model was told which diagram",
+  );
+  return createShareLink(SIGNPOST_ROOT_C4, "auto", "cnt-atlas", undefined).then(
+    (result) => expectNoAsk(result, "create_share_link was told which diagram"),
+  );
+});
+
+check("a forced format never asks about notation", () => {
+  // Same rule one argument over: `format: "alab"` is the caller declaring the
+  // reading, so validate_model reports and stops there.
+  expectNoAsk(
+    validateModel(STEP_LABELLED_C4, "alab"),
+    "the format was forced, so the notation is not in question",
+  );
+});
+
+check("the happy path is silent from end to end", () => {
+  /* The target the whole trigger table is tuned against: reference → draft →
+     validate → format → share, on an ordinary two-diagram model, must show an
+     agent no ask at all. If this ever fails, the thresholds are wrong, not
+     this check. */
+  expectNoAsk(validateModel(VALID_ALAB, "auto"), "an ordinary C4 model");
+  expectNoAsk(formatModel(VALID_ALAB, "auto"), "formatting is not a fork");
+  expectNoAsk(
+    describeModel(VALID_ALAB, "auto", false),
+    "describing is not a fork",
+  );
+  expectNoAsk(
+    convertModel(VALID_ALAB, "auto", "mermaid", undefined),
+    "two diagrams is not enough of a choice to stop over",
+  );
+  expectNoAsk(validateSequence(VALID_SEQUENCE), "an ordinary sequence flow");
+  return createShareLink(VALID_ALAB, "auto", undefined, undefined).then(
+    (result) => expectNoAsk(result, "a model that fits in a link"),
+  );
+});
+
+/* ---- the descriptions carry it, and only where they should ---------------- */
+
+/**
+ * The tools that can raise an ask, derived from the trigger table in
+ * `features/mcp/lib/ask.ts` — the four C4 doors that go through `lib/read.ts`,
+ * plus the three tools with a fork of their own.
+ */
+const ASKING_TOOLS = [
+  "validate_model",
+  "format_model",
+  "convert_model",
+  "describe_model",
+  "validate_sequence",
+  "create_share_link",
+  "list_icons",
+];
+
+check("every asking tool says so, and no other tool claims to", () => {
+  /* Both directions. A tool that can stop and does not say so surprises an
+     agent mid-loop; a tool that advertises a question it cannot raise makes
+     the /mcp page lie, and the page renders `asks` directly. */
+  for (const name of ASKING_TOOLS) {
+    const tool = MCP_TOOLS.find((candidate) => candidate.name === name);
+    assert.ok(tool !== undefined, `${name} is not in the catalogue`);
+    assert.match(
+      tool.description,
+      /asks? (the|your) human/i,
+      `${name} can stop and ask, and its description — which is what the ` +
+        "model reads BEFORE it calls — must say so",
+    );
+    assert.ok(
+      typeof tool.asks === "string" && tool.asks !== "",
+      `${name} must set \`asks\`, which is what the /mcp page renders`,
+    );
+  }
+  for (const tool of MCP_TOOLS) {
+    if (ASKING_TOOLS.includes(tool.name)) continue;
+    assert.equal(
+      tool.asks,
+      undefined,
+      `${tool.name} cannot raise an ask, so it must not advertise one`,
+    );
+  }
+});
+
+check("the handshake carries the standing rule, verbatim", async () => {
+  /* A client may connect without any human ever opening /mcp, so the rule
+     that a result beginning with the headline must be put to a person travels
+     with `initialize` — and it must quote the headline the results actually
+     use, not a paraphrase, or it is a rule the agent never recognises.
+     Source-scanned in the same style as the MCP_BETA_NOTICE_SHORT assertion
+     above. */
+  const route = await readFile(
+    path.join(ROOT, "src/app/api/mcp/route.ts"),
+    "utf8",
+  );
+  assert.match(route, /ASK_HUMAN_HEADLINE/, "the rule must quote the constant");
+  assert.match(
+    route,
+    /numbered options to the person you are working for/,
+    "the instructions must say what to DO with an ask, not just name it",
+  );
+  assert.match(
+    route,
+    /Do not choose for them/,
+    "and must forbid the one thing an agent would otherwise do",
+  );
+  assert.match(
+    route,
+    /DOCUMENT_KIND_COUNT/,
+    "the handshake must name how many notations there are, from the " +
+      "catalogue — it claimed C4 alone for eight notations' worth of releases",
+  );
+});
+
+check("the authoring prompt asks about notation before it drafts", () => {
+  const prompt = registered.prompts.find(
+    (candidate) => candidate.name === "author_c4_model",
+  );
+  const text = prompt.handler({ system: "a coffee shop" }).messages[0].content
+    .text;
+  const step0 = text.indexOf("0.");
+  const draft = text.indexOf("Draft the model");
+  assert.ok(step0 !== -1, "the prompt has no step 0");
+  assert.ok(
+    step0 < draft,
+    "the notation question must come BEFORE drafting: after a draft exists, " +
+      "the only thing left to be unsure about is wording",
+  );
+  assert.match(text, /ASK THE HUMAN/);
+  assert.match(text, /list_example_models/);
+});
+
+/* ---- prose is derived, not typed ----------------------------------------- */
+
+check("a notation option's label is its KIND_BLURB, exactly", () => {
+  /* The one-line job of each notation is quoted verbatim on the home page,
+     /demo, /faq, both llms*.txt and the tool descriptions. A near-miss
+     paraphrase in an ask would be a tenth answer to "what is a gantt for",
+     and it is the copy a human is read out loud. */
+  const { ask } = expectAsk(
+    validateModel(
+      `archlab 1.0 gantt\ntitle "P"\n\n@gantt\n  section "S"\n    task t "T" 5d\n`,
+      "auto",
+    ),
+  );
+  for (const option of ask.options) {
+    assert.equal(
+      option.label,
+      KIND_BLURB[option.id],
+      `option \`${option.id}\`'s label is not KIND_BLURB[${option.id}]`,
+    );
+  }
+});
+
+check("get_syntax_reference is honest about what it does not cover", () => {
+  /* Either the reference teaches a kind or its own description names the gap.
+     The failure this prevents: an agent told "read the grammar first" for a
+     gantt got a ~22KB wall of C4 with the word `gantt` nowhere in it, which
+     reads as "arch-lab does not draw those". */
+  const tool = MCP_TOOLS.find((t) => t.name === "get_syntax_reference");
+  const taught = new Set(["c4", ...SYNTAX_SECTION_IDS]);
+  for (const kind of Object.keys(KIND_BLURB)) {
+    if (taught.has(kind)) continue;
+    assert.match(
+      tool.description,
+      new RegExp(`\\b${kind}\\b`),
+      `the reference has no ${kind} section, so the description must name ` +
+        `${kind} as a gap and say where the real reference for it is`,
+    );
+  }
+  assert.match(
+    tool.description,
+    /get_example_model|list_example_models/,
+    "naming the gap is only half of it — the description must point at the " +
+      "parser-verified reference that does cover those kinds",
+  );
 });
 
 /* ----------------------------------------------------------------------- */

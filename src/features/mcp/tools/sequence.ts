@@ -46,13 +46,15 @@ import {
 import { layoutSequence } from "@/features/sequence/lib/layout";
 import { adviseSequence } from "@/features/validate/lib/advisories";
 
+import { hubAndSpokeFork, hubAndSpokeReading } from "../lib/ask";
 import { guardSourceSize } from "../lib/limits";
 import {
+  askHumanResult,
   errorResult,
   fence,
   joinSections,
-  quoteSourceLine,
   renderAdvisories,
+  renderKindParseFailure,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -64,23 +66,20 @@ import {
 /**
  * Renders a typed reader failure as the caller-facing message. Each kind
  * gets its own shape because they need different next actions: a parse error
- * needs the location and the offending line, a C4 document needs to be told
- * which tool to use instead, and the rest ("flowchart-detected",
- * "usecase-detected", "unknown-format") carry a self-contained message that
- * says where the document does render or what to try.
+ * needs the location and the offending line (which every kind renders the same
+ * way, through `renderKindParseFailure`), a C4 document needs to be told which
+ * tool to use instead, and the rest ("flowchart-detected", "usecase-detected",
+ * "unknown-format") carry a self-contained message that says where the
+ * document does render or what to try.
+ *
+ * THE ONLY KIND THAT STILL NEEDS A FUNCTION HERE: the `c4-detected` arm is
+ * this reader's alone, because it is the only one whose sibling tool reports
+ * something the caller would otherwise never learn to ask for (the C4 review
+ * notes). The other eight tools inline the two-arm choice at their read site.
  */
 function renderReadError(error: SequenceInputError): string {
   if (error.kind === "parse") {
-    return joinSections(
-      `INVALID as ${SEQUENCE_FORMAT_LABEL[error.format]}.`,
-      `line ${error.line}, column ${error.column}: ${error.message}`,
-      // The reader reports `lineText: null` when the location points past the
-      // last line (an unexpected end of input), and there is then nothing to
-      // quote — the message already says where.
-      error.lineText === null
-        ? null
-        : quoteSourceLine(error.lineText, error.line, error.column),
-    );
+    return renderKindParseFailure(SEQUENCE_FORMAT_LABEL[error.format], error);
   }
   if (error.kind === "c4-detected") {
     return joinSections(
@@ -319,27 +318,33 @@ export function validateSequence(source: string): McpTextResult {
   if (read.status === "error") return errorResult(read.message);
 
   const counts = countItems(read.file.items);
-  return textResult(
-    joinSections(
-      `VALID as ${SEQUENCE_FORMAT_LABEL[read.format]}.`,
-      renderSummary(read.file, counts),
-      renderParticipants(read.file),
-      /* Review notes, the same renderer the C4 tool uses. A sequence document
-         raises only the `.alab` FORMAT family — it has no C4 notation to conform
-         to — so today that is the title length. Reported for BOTH input formats,
-         because a long title survives a Mermaid import unchanged and an agent
-         that pasted Mermaid is exactly the one about to save it as `.alab`. */
-      renderAdvisories(adviseSequence(read.file), "sequence diagram"),
-      // Stated on success, not just on the import path, because a caller that
-      // validated Mermaid and then saved the .alab has silently accepted the
-      // loss; naming it here is the only place it can still act on it.
-      read.format === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
-      counts.messages === 0
-        ? "No messages: the document parses, but a sequence diagram with no " +
-            'messages records nothing. Add `from -> to "label"` lines.'
-        : null,
-    ),
+  const verdict = joinSections(
+    `VALID as ${SEQUENCE_FORMAT_LABEL[read.format]}.`,
+    renderSummary(read.file, counts),
+    renderParticipants(read.file),
+    /* Review notes, the same renderer the C4 tool uses. A sequence document
+       raises only the `.alab` FORMAT family — it has no C4 notation to conform
+       to — so today that is the title length. Reported for BOTH input formats,
+       because a long title survives a Mermaid import unchanged and an agent
+       that pasted Mermaid is exactly the one about to save it as `.alab`. */
+    renderAdvisories(adviseSequence(read.file), "sequence diagram"),
+    // Stated on success, not just on the import path, because a caller that
+    // validated Mermaid and then saved the .alab has silently accepted the
+    // loss; naming it here is the only place it can still act on it.
+    read.format === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
+    counts.messages === 0
+      ? "No messages: the document parses, but a sequence diagram with no " +
+          'messages records nothing. Add `from -> to "label"` lines.'
+      : null,
   );
+
+  // The mirror of `validate_model`'s step-like question, and the summary above
+  // travels with it for the same reason: the document is valid, so the counts
+  // a caller asked for are still the answer.
+  const hub = hubAndSpokeReading(read.file);
+  if (hub !== null) return askHumanResult(hubAndSpokeFork(hub), verdict);
+
+  return textResult(verdict);
 }
 
 export function formatSequence(source: string): McpTextResult {

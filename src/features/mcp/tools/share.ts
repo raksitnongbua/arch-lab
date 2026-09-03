@@ -60,9 +60,11 @@ import {
 import { signExpiry } from "@/features/viewer/share/sign-server";
 import type { ArchLabFile, C4Node } from "@/types";
 
+import { diagramFork, oversizeShareFork } from "../lib/ask";
 import { publicOrigin } from "../lib/origin";
-import { readSource } from "../lib/read";
+import { readFailureResult, readSource } from "../lib/read";
 import {
+  askHumanResult,
   errorResult,
   fence,
   joinSections,
@@ -589,7 +591,7 @@ export async function createShareLink(
   if (lifecycle.kind === "parse") return errorResult(lifecycle.message);
 
   const read = readSource(source, format);
-  if (read.status === "error") return errorResult(read.message);
+  if (read.status !== "ok") return readFailureResult(read);
 
   const { file, aftText, summary } = read.value;
 
@@ -610,6 +612,21 @@ export async function createShareLink(
         "the .alab text instead.",
     );
   }
+
+  /*
+   * WHICH diagram the link opens at, when there are several and the root is a
+   * signpost. The same fork `convert_model` raises, and it belongs here for a
+   * sharper reason: this URL is what a human clicks, and a link that lands on
+   * three boxes saying "a customer, the system, a payment provider" is a link
+   * the sender only finds out was wrong from the reply.
+   */
+  const fork = diagramFork(
+    "create_share_link",
+    summary.diagrams,
+    file.rootDiagramId,
+    diagramId,
+  );
+  if (fork !== null) return askHumanResult(fork);
 
   const minted = await mintExpiry(aftText, ttlDays);
   if (minted.status === "error") return errorResult(minted.message);
@@ -641,6 +658,31 @@ export async function createShareLink(
     const anyOfferOverSafe = offers.some(
       (offer) => offer.url.length > SHARE_URL_SAFE_LENGTH,
     );
+
+    /*
+     * THIS REFUSAL WAS ALREADY AN ASK IN PROSE — it listed the scoped links
+     * that fit and the canonical text to send instead, and then left the agent
+     * to pick between them. Through the envelope it carries the header that
+     * tells the agent to stop, and loses `isError`, which it never earned: the
+     * call parsed the model, minted every candidate link and measured them all.
+     *
+     * `null` when nothing scoped fits, because there is then exactly ONE thing
+     * to do and one option is not a fork — the plain refusal below is the
+     * honest shape for it, and it is unchanged.
+     */
+    const oversize = oversizeShareFork(
+      url.length,
+      MAX_SHARE_URL_LENGTH,
+      offers,
+    );
+    const wholeModel = joinSections(
+      "The canonical `.alab` text, so nothing has to be regenerated — the " +
+        "playground at /live accepts it by paste or drop:",
+      fence("", aftText),
+      anyOfferOverSafe ? EMAIL_CAVEAT : null,
+    );
+    if (oversize !== null) return askHumanResult(oversize, wholeModel);
+
     return errorResult(
       joinSections(
         `This model does not fit in a share link: the URL would be ` +
@@ -648,19 +690,6 @@ export async function createShareLink(
           `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling ` +
           `past which enough carrier apps truncate that the link would fail ` +
           `silently for whoever receives it.`,
-        offers.length === 0
-          ? null
-          : joinSections(
-              "A smaller, diagram-scoped link fits. Each carries just that " +
-                "diagram plus the ancestors it drills down from:",
-              ...offers.map(
-                (offer) =>
-                  `\`${offer.diagramId}\` ${JSON.stringify(offer.title)} — ` +
-                  `${offer.url.length.toLocaleString("en-US")} characters:\n` +
-                  offer.url,
-              ),
-              anyOfferOverSafe ? EMAIL_CAVEAT : null,
-            ),
         "To share the WHOLE model, save the canonical `.alab` text below as " +
           "a `.alab` file and send that — the playground at /live " +
           "accepts it by paste or drop:",

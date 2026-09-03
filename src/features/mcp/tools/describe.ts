@@ -14,9 +14,8 @@
 import type { ArchLabFile, C4Diagram, C4Edge, C4Frame, C4Node } from "@/types";
 import type { CheckChoice } from "@/features/validate/lib/check";
 
-import { readSource } from "../lib/read";
+import { readFailureResult, readSource } from "../lib/read";
 import {
-  errorResult,
   formatNote,
   joinSections,
   textResult,
@@ -160,7 +159,7 @@ export function describeModel(
   includeContents: boolean,
 ): McpTextResult {
   const read = readSource(source, format);
-  if (read.status === "error") return errorResult(read.message);
+  if (read.status !== "ok") return readFailureResult(read);
 
   const { file, summary, format: actual, autoDetected } = read.value;
   const { metadata } = file;

@@ -42,10 +42,23 @@
 import type { FlowchartLabFile, FlowchartNodeShape } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { joinList } from "@/lib/prose";
 
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { failAt } from "../errors";
+import {
+  arrowShapeAt,
+  closestMatches,
+  dedentProof,
+  expandedIndent,
+  indentChoices,
+  insertLineBefore,
+  replaceOnLine,
+  retypeChoices,
+  setIndent,
+} from "../fix";
+import type { FixCandidate } from "../fix";
 import {
   assemble,
   onceString,
@@ -64,6 +77,7 @@ import { USECASE_HEADER_WORD } from "../usecase/keywords";
 import {
   FLOWCHART_ARROW,
   FLOWCHART_BLOCK,
+  FLOWCHART_HEADER_KEYWORDS,
   FLOWCHART_HEADER_WORD,
   GROUP_KEYWORD,
   NODE_SHAPE_BY_KEYWORD,
@@ -79,6 +93,15 @@ import {
   FLOW_NODE_KEYS,
   FLOW_NODE_RAW,
 } from "./schema";
+
+/**
+ * The rungs of the flowchart indent ladder, for the top-level gate's fix
+ * candidates. Named rather than left as the message's prose, which is where
+ * they lived: 0 header, 2 body, 4 inside a group, 6 a continuation one level
+ * under a group member. A gate and the fixes it offers reading one list is
+ * the pair `codebase.md` §4 asks for.
+ */
+const FLOWCHART_INDENTS = [0, 2, 4, 6] as const;
 
 /* -------------------------------------------------------------------------- */
 /* Pending structures collected during the line pass                          */
@@ -235,15 +258,35 @@ export function parseFlowchartTextWithSpans(source: string): {
         indent + 1,
         "indentation must use spaces, not tabs",
         "\\t",
+        {
+          code: "alab.indent-tabs",
+          fixes: [
+            {
+              title: "Use spaces for this indent",
+              edits: [setIndent(lineNo, text, expandedIndent(text))],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
     if (text.trimStart().startsWith("//")) continue;
     if (indent % 2 !== 0) {
+      /* TWO CANDIDATES, NEITHER PROVABLE. This gate runs before the body
+         state is known, so the parser cannot say which rung the line belongs
+         on — only that it is between two. Down is offered first because a
+         stray space is far commoner than a missing one, and neither is
+         applied without a person choosing. The contextual gate further down
+         DOES know, and is safe. */
       failAt(
         lineNo,
         indent + 1,
         `inconsistent indentation of ${indent} space${indent === 1 ? "" : "s"} — flowchart documents indent 2 spaces per level (0 header, 2 body, +2 inside a group, +2 for a continuation)`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.indent-ambiguous",
+          fixes: indentChoices(lineNo, text, indent, FLOWCHART_INDENTS),
+        },
       );
     }
 
@@ -344,6 +387,10 @@ export function parseFlowchartTextWithSpans(source: string): {
         indent + 1,
         `this line is indented, but no "${FLOWCHART_BLOCK}" block is open above it`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.body-indent-orphan",
+          fixes: dedentProof(source, lineNo, text, parseFlowchartTextWithSpans),
+        },
       );
     }
 
@@ -364,11 +411,25 @@ export function parseFlowchartTextWithSpans(source: string): {
     if (openGroup !== null && indent < 4) openGroup = null;
     const itemIndent = openGroup === null ? 2 : 4;
     if (indent !== itemIndent) {
+      /* EVERY FLOWCHART INDENT ERROR THAT REACHES HERE IS SAFE, and it is the
+         grammar rather than a guess that makes it so: the legal body indents
+         are exactly {2, 4}, and `itemIndent` is single-valued once the open
+         group is known. There is one rung this line can be on. */
       failAt(
         lineNo,
         indent + 1,
         `inconsistent indentation of ${indent} spaces — expected ${itemIndent} here (2 per level; a group body is one level deeper than its opener)`,
         text.trim().slice(0, 40),
+        {
+          code: "flow.indent-expected",
+          fixes: [
+            {
+              title: `Indent ${itemIndent} spaces`,
+              edits: [setIndent(lineNo, text, itemIndent)],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
 
@@ -479,9 +540,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a flowchart header keyword — expected archlab, schema, title, ` +
-          'description, owner, tags, created, updated or reviewed (other metadata rides "! meta.<key> : <json>")',
+        `"${keyword}" is not a flowchart header keyword — expected ${joinList(FLOWCHART_HEADER_KEYWORDS, "or")} (other metadata rides "! meta.<key> : <json>")`,
         keyword,
+        {
+          code: "alab.header-keyword-unknown",
+          fixes: retypeChoices(loc, keyword, FLOWCHART_HEADER_KEYWORDS),
+        },
       );
   }
   cursor.expectEnd(`the "${keyword}" line`);
@@ -710,6 +774,9 @@ function parseNodeLine(
       idLoc.column,
       `duplicate node id "${id}" — already declared on line ${existing.line}`,
       id,
+      /* No fix: which of the two declarations the author meant to keep is a
+         question about the diagram, not about the text. */
+      { code: "flow.duplicate-id" },
     );
   }
   cursor.skipSpaces();
@@ -800,9 +867,40 @@ function parseEdgeLine(
     );
   }
   if (!cursor.text.startsWith(FLOWCHART_ARROW, cursor.pos)) {
+    /* THE STRONGEST AUTO-FIX IN THE FORMAT, and safe for a structural reason
+       rather than a statistical one: `FLOWCHART_ARROW` is the ONLY legal
+       arrow, so an arrow-shaped token here has exactly one destination and
+       nothing is being guessed. `-->`, `->>`, `=>`, `..>` and `→` all arrive
+       in text pasted out of Mermaid, which is the commonest way a flowchart
+       reaches this page at all.
+
+       No token that is not arrow-shaped gets a fix. This site is also where a
+       misspelled shape keyword lands (`stepp foo "x"` reads as an id followed
+       by junk), and offering to rewrite `foo` as `->` would produce a
+       document that parses and means something the author never wrote. */
+    const shape = arrowShapeAt(cursor.text.slice(cursor.pos));
     cursor.fail(
       `expected "${FLOWCHART_ARROW}" between the two node ids — or, for a node, a shape keyword (start, end, step, decision, io, call) before the id`,
       cursor.foundHere(),
+      shape === ""
+        ? undefined
+        : {
+            code: "flow.arrow-unknown",
+            fixes: [
+              {
+                title: `Change "${shape}" to "${FLOWCHART_ARROW}"`.slice(0, 40),
+                edits: [
+                  replaceOnLine(
+                    cursor.line,
+                    cursor.column,
+                    cursor.column + shape.length,
+                    FLOWCHART_ARROW,
+                  ),
+                ],
+                kind: "safe",
+              },
+            ],
+          },
     );
   }
   cursor.pos += FLOWCHART_ARROW.length;
@@ -1098,13 +1196,52 @@ function resolve(
   });
 
   /* -------------------------------- edges -------------------------------- */
+  /* The first edge line is where a declaration has to go IN FRONT OF: nodes
+     come first in this grammar (see `parseNodeLine`), so a new node line
+     inserted anywhere below an edge would fail the ordering rule and trade one
+     error for another. */
+  const firstEdgeLine = edges[0]?.fromLoc.line;
   const requireNode = (id: string, at: Loc, what: string): void => {
     if (!nodeById.has(id)) {
+      /* CHOICE, NOT SAFE, and the reason is worth stating because the fix
+         looks obvious: a near-match on an id is a guess about which node the
+         author meant, and applying it silently REWIRES the flow. The declare
+         candidate is ranked first instead — it adds rather than redirects, so
+         the worst case is a node the author then renames. `step` is its shape
+         because it is the only shape with no semantics to be wrong about;
+         guessing `decision` would draw a diamond the author has to notice. */
+      const fixes: FixCandidate[] = [];
+      if (firstEdgeLine !== undefined) {
+        fixes.push({
+          title: `Declare "${id}" as a step`.slice(0, 40),
+          edits: [
+            insertLineBefore(
+              firstEdgeLine,
+              `  step ${id} ${JSON.stringify(id)}`,
+            ),
+          ],
+          kind: "choice",
+          rank: 0,
+        });
+      }
+      for (const [rank, near] of closestMatches(id, [
+        ...nodeById.keys(),
+      ]).entries()) {
+        fixes.push({
+          title: `Change "${id}" to "${near}"`.slice(0, 40),
+          edits: [
+            replaceOnLine(at.line, at.column, at.column + id.length, near),
+          ],
+          kind: "choice",
+          rank: rank + 1,
+        });
+      }
       failAt(
         at.line,
         at.column,
         `the ${what} "${id}" does not resolve to a node — declare it at the top of the ${FLOWCHART_BLOCK} body`,
         id,
+        { code: "flow.node-unresolved", fixes },
       );
     }
   };

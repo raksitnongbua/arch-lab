@@ -60,6 +60,31 @@ export const FLOWCHART_HEADER_WORD = "flowchart";
 /** The single body block opener (`@flowchart`, no id: one diagram per file). */
 export const FLOWCHART_BLOCK = "@flowchart";
 
+/**
+ * Every word a flowchart header line may open with, in the order
+ * `parseHeaderLine`'s switch reads them.
+ *
+ * EQUAL TO `SEQUENCE_HEADER_KEYWORDS` TODAY AND DELIBERATELY NOT IMPORTED
+ * FROM IT — the same argument the header grammar in `./parse.ts` already
+ * makes about mirroring the sequence header line for line rather than sharing
+ * its private functions. The equality is a coincidence of two document types
+ * currently needing the same metadata, not a rule; importing would make a
+ * flowchart-only header line a change to the sequence grammar. What IS shared
+ * is the shape of the offer (`retypeChoices`) and the joining of the sentence,
+ * neither of which cares what is in the set.
+ */
+export const FLOWCHART_HEADER_KEYWORDS: readonly string[] = [
+  "archlab",
+  "schema",
+  "title",
+  "description",
+  "owner",
+  "tags",
+  "created",
+  "updated",
+  "reviewed",
+];
+
 /** The one edge token (see the essay above for why there is exactly one). */
 export const FLOWCHART_ARROW = "->";
 

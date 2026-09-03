@@ -83,6 +83,11 @@ import type {
   ExternalRef,
 } from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
+/* The one function that decides whether a declaration line carries a geometry
+   token, borrowed from the serializer rather than re-tested here: the panel
+   must not offer to release an element whose line the writer would leave
+   alone. See `hasAuthoredGeometry`. */
+import { hasAuthoredGeometry } from "@/features/archtext";
 
 import {
   getFloatingAnchors,
@@ -96,6 +101,7 @@ import type { SharePathRequest } from "../share/codec";
 import { ViewerPathPlayer } from "./viewer-path-player";
 import { ViewerPathsPill } from "./viewer-paths-pill";
 import {
+  archLabFileFrom,
   boundsOf,
   breadcrumbFor,
   climbAnchorNodeId,
@@ -194,6 +200,15 @@ export type NodeMoveHandler = (
  */
 export interface CanvasEditHandlers {
   onNodeMove: NodeMoveHandler;
+  /**
+   * Take the hand-written coordinates off ONE element's line and let the
+   * layout place it again — the inverse of `onNodeMove`, from the details
+   * panel. The host owns the verdict (`resetNodePositionEdit` refuses an
+   * element whose line carries none) and announces it; this canvas offers the
+   * button only beside an element it can see is placed, the same per-element
+   * presence rule `onNodeNest` follows.
+   */
+  onNodeResetPosition: (diagramId: string, nodeId: string) => void;
   /**
    * Rewrite the node's own fields — name, technology, description, icon and
    * colour — from the details panel's edit form. The host turns it into a
@@ -2581,6 +2596,15 @@ function ViewerCanvasInner({
       // The edit form's colour control reads these; the nodes already paint
       // with them (project-nodes), so the panel and the canvas see one map.
       tagColors: model.file.metadata.tagColors,
+      /* The author's own coordinates, when the line carries them — what the
+         panel's release row renders from. Measured through
+         `hasAuthoredGeometry` against the WHOLE file, because the direction
+         those coordinates are compared with can live on the file's own header
+         line: resolving it from the diagram alone here would be the second
+         opinion that function exists to prevent. */
+      placedAt: hasAuthoredGeometry(archLabFileFrom(model), diagram, node)
+        ? { x: node.position.x, y: node.position.y }
+        : null,
     };
   }, [model, diagram, selectedNodeId]);
 
@@ -2706,6 +2730,10 @@ function ViewerCanvasInner({
     if (edit === undefined || selectedNodeIdRef.current === null) return;
     edit.onNodeUnnest(diagramIdRef.current, selectedNodeIdRef.current);
   }, [edit]);
+  const releaseSelectedPosition = useCallback(() => {
+    if (edit === undefined || selectedNodeIdRef.current === null) return;
+    edit.onNodeResetPosition(diagramIdRef.current, selectedNodeIdRef.current);
+  }, [edit]);
   /* Plain booleans, not memos handing back the callbacks: a memo whose value
      IS a ref-reading function is a render-time read as far as
      `react-hooks/refs` is concerned. The presence test is pure derivation from
@@ -2719,6 +2747,10 @@ function ViewerCanvasInner({
     detailNode.childRef === undefined &&
     detailNode.externalRef === undefined;
   const canUnnest = edit !== undefined && nodeDetail?.emptyChild != null;
+  /* Per element, from the same fact `resetNodePositionEdit` refuses on: a
+     release button beside an element the layout already places is a button
+     whose press writes no bytes. */
+  const canRelease = edit !== undefined && nodeDetail?.placedAt != null;
 
   /**
    * The three tiers, as one stylesheet: everything off the path at the
@@ -3255,6 +3287,9 @@ function ViewerCanvasInner({
                   onRevise={handleDetailRevise}
                   onNest={canNest ? nestSelected : undefined}
                   onUnnest={canUnnest ? unnestSelected : undefined}
+                  onReleasePosition={
+                    canRelease ? releaseSelectedPosition : undefined
+                  }
                 />
               ) : frameDetail !== null ? (
                 /* Keyed by the frame so selecting ANOTHER boundary remounts

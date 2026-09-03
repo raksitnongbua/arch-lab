@@ -9,6 +9,40 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The layout direction says what it cannot move, and offers to release it.**
+  Dragging an element writes its coordinates into the document, and those
+  coordinates beat the layout for that element alone — so on a diagram you had
+  arranged by hand, `Top-down` and `Left-right` wrote a line to your file and
+  moved nothing. The direction menu now says so before you press it ("3 of 7
+  elements are placed by hand and won't move"), and carries a row —
+  **Let the layout place them** — that takes those coordinates off every
+  element in the layer in one undoable change. The element panel offers the
+  same for one element beside the coordinates it is sitting at, and `pin` on
+  an element line now means what it always looked like it meant: kept when the
+  rest of the layer is released. The whole-file section is deliberately
+  unchanged; nothing relays out diagrams you cannot see.
+- **A `.alab` parse error can now be fixed from the error panel.** Where there
+  is exactly one correct rewrite the panel offers it as a single button — close
+  the string, insert the missing `:`, put the indent on its rung, change a
+  Mermaid `-->` into the `->` a flowchart actually spells, quote the reserved
+  word the message already told you to quote — and where more than one rewrite
+  would parse, it lists up to three and waits for you to pick. Nothing is ever
+  applied by guessing: a keyword typo is offered, never taken. The edit goes
+  through the pane itself, so your cursor lands on the character that changed
+  and Cmd-Z puts it back. `Alt+Enter` takes the single safe fix without
+  leaving the keyboard. Working on all three surfaces that report a parse
+  error: the playground's source pane, the editor's text pane and `/validate`.
+  A misspelled header keyword is offered the keyword it was nearly — write
+  `tagcodlor` and the panel offers `tagcolor`, from that document type's own
+  closed list rather than a merged one. A header line that arrived with a
+  stray indent, which used to read as "indented like a diagram body, but no
+  `@` diagram is open above it", offers to put it back at column 1 — and only
+  when removing the indent is proved to make the whole document parse. And
+  text left over after a complete statement — the `s` on the end of
+  `tagcolor write-side "#e0524d"s` — now offers to delete exactly that, named
+  in the button so you can see what would go. Deleting your own text is never
+  a one-click fix and never swept up by anything: it is always shown and
+  always waits for you.
 - **A paste that came in with the wrong indentation can be fixed in one
   click.** `.alab` indentation is significant, so text copied out of somewhere
   that had its own — a chat window, a nested code block, a docs page — arrives
@@ -92,9 +126,44 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   "Don't show again" control and the per-browser flag behind it are gone; a
   browser that had dismissed the old tour is not treated differently from one
   that never saw it.
+- **An agent working over MCP now asks you instead of guessing.** When a call
+  reaches a fork the server can prove but cannot settle — text whose header
+  names a different notation than the tool that got it, a valid C4 model whose
+  relationships read as numbered steps, a link that has to open at one of
+  several diagrams, an `@icon` query matching several marks and none called
+  that, a model too big for a link — the result now opens
+  `ASK YOUR HUMAN BEFORE CONTINUING`, states why it stopped, and lists two to
+  five numbered choices with what each one costs and a free-text escape. The
+  server's own handshake tells connecting agents to stop on that line and put
+  the question to you. It is deliberately rare: every document arch-lab ships
+  as an example passes through its own validator with no question at all, an
+  explicit `diagram_id` or `format` is never second-guessed, and the review
+  notes stay review notes.
+- **Handing a gantt, ER schema, dictionary, timeline or lifecycle to the C4
+  tools is no longer an error.** All five used to come back as
+  "INVALID … line 1, column 13", which reads as a syntax problem when the
+  syntax was fine and only the tool choice was; flowcharts, use-case and
+  sequence documents were redirected in prose. All eight are now the same
+  question, naming the tool that reads the document — and saying not to "fix"
+  line 1, which was the repair an agent reached for and which destroys the
+  rest of the file. **For MCP clients this changes a result's `isError` flag
+  from true to unset on those calls** — a break on a beta surface, and the
+  reason it is worth it is that an error result teaches a model to retry with
+  a guess, which is the behaviour being removed.
+- **`get_syntax_reference` no longer implies it covers the whole format.** It
+  documents C4 and sequence grammar and says so, names the seven notations it
+  does not cover, and points at the bundled examples, which are
+  parser-verified and are the real reference for those. An agent told to "read
+  the grammar first" before writing a gantt used to get 22 KB of C4 with the
+  word `gantt` nowhere in it.
 
 ### Fixed
 
+- **A parse error no longer says where twice.** Every `validate_<kind>` and
+  `format_<kind>` tool over MCP, and every error example in the syntax
+  reference and the bundled `alab` skill, opened with
+  `line 5, column 7: line 5, column 7: …` — the location was printed, then
+  printed again by the parser's own message. One location, once.
 - **A boundary no longer draws one huge rectangle around half the diagram.** A
   boundary's box came from the bounding box of everything in it, which is right
   only while its members sit together — so a boundary holding an inbound

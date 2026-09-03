@@ -46,11 +46,27 @@ import type {
 } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { joinList } from "@/lib/prose";
 import { normalizeTint } from "@/lib/tint";
 
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { failAt } from "../errors";
+import type { IssueDetail } from "../errors";
+import {
+  arrowShapeAt,
+  closestMatches,
+  dedentProof,
+  deleteLine,
+  expandedIndent,
+  indentChoices,
+  INDENT_WIDTH,
+  insertLineBefore,
+  replaceOnLine,
+  retypeChoices,
+  setIndent,
+} from "../fix";
+import type { FixCandidate } from "../fix";
 import { FLOWCHART_HEADER_WORD } from "../flowchart/keywords";
 import { USECASE_HEADER_WORD } from "../usecase/keywords";
 import {
@@ -75,6 +91,7 @@ import {
   SEQUENCE_ARROW_MATCH_ORDER,
   SEQUENCE_ARROW_MENU,
   SEQUENCE_BLOCK,
+  SEQUENCE_HEADER_KEYWORDS,
   SEQUENCE_HEADER_WORD,
   TINT_ATTRIBUTE,
 } from "./keywords";
@@ -350,15 +367,34 @@ export function parseSequenceTextWithSpans(source: string): {
         indent + 1,
         "indentation must use spaces, not tabs",
         "\\t",
+        {
+          code: "alab.indent-tabs",
+          fixes: [
+            {
+              title: "Use spaces for this indent",
+              edits: [setIndent(lineNo, text, expandedIndent(text))],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
     if (text.trimStart().startsWith("//")) continue;
     if (indent % 2 !== 0) {
+      /* A CHOICE here and safe at the contextual gate below, and the reason
+         is which of them knows the answer: a sequence fragment can nest
+         arbitrarily deep, so an odd indent read before the context stack is
+         consulted could belong to any even rung. The gate below is holding
+         `top.itemIndent` and knows exactly one. */
       failAt(
         lineNo,
         indent + 1,
         `inconsistent indentation of ${indent} space${indent === 1 ? "" : "s"} — sequence documents indent 2 spaces per level (0 header, 2 body, +2 per open fragment, +2 for a continuation)`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.indent-ambiguous",
+          fixes: indentChoices(lineNo, text, indent, [indent - 1, indent + 1]),
+        },
       );
     }
 
@@ -461,6 +497,10 @@ export function parseSequenceTextWithSpans(source: string): {
         indent + 1,
         `this line is indented, but no "${SEQUENCE_BLOCK}" block is open above it`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.body-indent-orphan",
+          fixes: dedentProof(source, lineNo, text, parseSequenceTextWithSpans),
+        },
       );
     }
 
@@ -491,11 +531,26 @@ export function parseSequenceTextWithSpans(source: string): {
     }
     const top = contexts[contexts.length - 1];
     if (indent !== top.itemIndent) {
+      /* SAFE because `top.itemIndent` is in hand: after the dedent loop above
+         has popped every context this line has left, there is exactly one
+         depth it can be written at. This is the only kind of indent error in
+         the format that is provable, and it is the common one — a fragment
+         body pasted at its opener's depth. */
       failAt(
         lineNo,
         indent + 1,
         `inconsistent indentation of ${indent} spaces — expected ${top.itemIndent} here (2 per level; a fragment body is one level deeper than its opener)`,
         text.trim().slice(0, 40),
+        {
+          code: "seq.indent-expected",
+          fixes: [
+            {
+              title: `Indent ${top.itemIndent} spaces`,
+              edits: [setIndent(lineNo, text, top.itemIndent)],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
 
@@ -513,6 +568,7 @@ export function parseSequenceTextWithSpans(source: string): {
         autonumberLine = at.line;
       },
       rootHasSteps: () => rootBranch.items.length > 0,
+      bodyLine: () => bodyLine,
     });
   }
 
@@ -613,9 +669,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a sequence header keyword — expected archlab, schema, title, ` +
-          'description, owner, tags, created, updated or reviewed (other metadata rides "! meta.<key> : <json>")',
+        `"${keyword}" is not a sequence header keyword — expected ${joinList(SEQUENCE_HEADER_KEYWORDS, "or")} (other metadata rides "! meta.<key> : <json>")`,
         keyword,
+        {
+          code: "alab.header-keyword-unknown",
+          fixes: retypeChoices(loc, keyword, SEQUENCE_HEADER_KEYWORDS),
+        },
       );
   }
   cursor.expectEnd(`the "${keyword}" line`);
@@ -739,6 +798,15 @@ interface BodyHooks {
   openBox: (box: PendBox) => void;
   setAutonumber: (value: boolean, at: Loc) => void;
   rootHasSteps: () => boolean;
+  /**
+   * The line the `@sequence` opener sits on — where a misplaced participant
+   * or box declaration has to be moved back to.
+   *
+   * Passed rather than recomputed because the line loop already has it (it is
+   * the same value the span collector records), and a second scan for the
+   * opener would be the pair that can disagree.
+   */
+  bodyLine: () => number;
 }
 
 function parseBodyLine(
@@ -792,9 +860,33 @@ function parseBodyLine(
         cursor.skipSpaces();
         let value = true;
         if (!cursor.atEnd()) {
+          const wordLoc = { line: cursor.line, column: cursor.column };
           const word = cursor.readBare(/^[a-z]+/, '"true" or "false"');
           if (word !== "true" && word !== "false") {
-            cursor.fail(`autonumber takes "true" or "false", got "${word}"`);
+            /* `autonumber yes` is the case this exists for, and it is still a
+               choice: numbering every message is a presentation decision, and
+               a reader who wrote `no` meant the opposite of what `yes` reads
+               as. Both flags are offered. */
+            cursor.fail(
+              `autonumber takes "true" or "false", got "${word}"`,
+              undefined,
+              {
+                code: "seq.autonumber-invalid",
+                fixes: (["true", "false"] as const).map((flag, rank) => ({
+                  title: `Change "${word}" to "${flag}"`.slice(0, 40),
+                  edits: [
+                    replaceOnLine(
+                      wordLoc.line,
+                      wordLoc.column,
+                      wordLoc.column + word.length,
+                      flag,
+                    ),
+                  ],
+                  kind: "choice" as const,
+                  rank,
+                })),
+              },
+            );
           }
           value = word === "true";
         }
@@ -805,10 +897,32 @@ function parseBodyLine(
       case "note":
         return parseNoteLine(cursor, startLoc, top);
       case "desc":
+        /* SAFE, because the message states the whole repair and the depth is
+           not a guess: `desc` attaches to whatever declaration precedes it,
+           and a continuation sits exactly one level under its owner. The
+           owner is the line above by construction — nothing else can have
+           been the last item at this depth. */
         failAt(
           startLoc.line,
           startLoc.column,
           '"desc" is a continuation — indent it 2 spaces under the participant or message it describes',
+          undefined,
+          {
+            code: "seq.desc-indent",
+            fixes: [
+              {
+                title: "Indent it under the line above",
+                edits: [
+                  setIndent(
+                    startLoc.line,
+                    cursor.text,
+                    expandedIndent(cursor.text) + INDENT_WIDTH,
+                  ),
+                ],
+                kind: "safe",
+              },
+            ],
+          },
         );
         break;
       case BOX_KEYWORD:
@@ -825,11 +939,32 @@ function parseBodyLine(
           return null;
         }
         /* "null" — reserved so idToken quoting stays shared with C4. */
+        /* SAFE, and unusually so for a word-level failure: the message
+           already contains the exact rewrite, character for character. There
+           is nothing to rank and nothing to guess — the author wants the word
+           as an id, and quoting is the only way the grammar has to say so. */
         failAt(
           startLoc.line,
           startLoc.column,
           `"${first}" is reserved — quote it ("${first}") to use it as an id`,
           first,
+          {
+            code: "seq.reserved-word",
+            fixes: [
+              {
+                title: `Quote "${first}"`.slice(0, 40),
+                edits: [
+                  replaceOnLine(
+                    startLoc.line,
+                    startLoc.column,
+                    startLoc.column + first.length,
+                    JSON.stringify(first),
+                  ),
+                ],
+                kind: "safe",
+              },
+            ],
+          },
         );
       }
     }
@@ -851,6 +986,28 @@ function parseBodyLine(
         kindLoc.column,
         `"${kindWord}" is not a participant kind — expected participant or actor`,
         kindWord,
+        {
+          code: "seq.participant-kind-unknown",
+          /* Both members of the closed pair, not the near matches: with a set
+             this small edit distance says nothing, and the two draw
+             differently (a stick figure against a box), so the reader has to
+             see the choice they are making. */
+          fixes: Object.keys(PARTICIPANT_KIND_BY_KEYWORD).map(
+            (keyword, rank) => ({
+              title: `Change "${kindWord}" to "${keyword}"`.slice(0, 40),
+              edits: [
+                replaceOnLine(
+                  kindLoc.line,
+                  kindLoc.column,
+                  kindLoc.column + kindWord.length,
+                  keyword,
+                ),
+              ],
+              kind: "choice" as const,
+              rank,
+            }),
+          ),
+        },
       );
     }
     return parseParticipantLine(
@@ -901,12 +1058,35 @@ function parseParticipantLine(
      separate ordered array, so text that interleaved them with steps could
      not round-trip byte-identically — reject it rather than silently
      regroup. */
+  /* ONE FIX FOR TWO SITES: inside a fragment and after the first message are
+     the same mistake seen from two states, and the same relocation answers
+     both — lift the declaration to just under the opener.
+
+     A CHOICE, NOT SAFE, and the reason is presentation rather than syntax.
+     Participant order IS lifeline order left to right on the canvas, so
+     dropping the declaration at the top of the list moves a lifeline the
+     author positioned. The rewrite makes the document parse; whether it draws
+     what they meant is theirs to say. It also carries the declaration line
+     alone — any `desc` under it stays behind and fails next, loudly, which is
+     the direction to err in. */
+  const relocateAbove = (): IssueDetail["fixes"] => [
+    {
+      title: `Move "${id}" above the first message`.slice(0, 40),
+      edits: [
+        insertLineBefore(hooks.bodyLine() + 1, cursor.text.trimEnd()),
+        deleteLine(loc.line),
+      ],
+      kind: "choice",
+      rank: 0,
+    },
+  ];
   if (top.fragment !== null) {
     failAt(
       loc.line,
       loc.column,
       `participant "${id}" is declared inside a fragment — declare every participant at the top of the ${SEQUENCE_BLOCK} body, before the first message`,
       id,
+      { code: "seq.participant-late", fixes: relocateAbove() },
     );
   }
   if (hooks.rootHasSteps()) {
@@ -915,6 +1095,7 @@ function parseParticipantLine(
       loc.column,
       `participant "${id}" is declared after the first message — participants come first, so the text order matches the model's participants array`,
       id,
+      { code: "seq.participant-late", fixes: relocateAbove() },
     );
   }
   const existing = participantById.get(id);
@@ -924,6 +1105,7 @@ function parseParticipantLine(
       loc.column,
       `duplicate participant id "${id}" — already declared on line ${existing.line}`,
       id,
+      { code: "seq.duplicate-id" },
     );
   }
   cursor.skipSpaces();
@@ -1013,9 +1195,44 @@ function parseMessageLine(
     }
   }
   if (arrow === undefined) {
+    /* THE HIGHEST-VALUE NEAR-MATCH IN THE FORMAT, and the one place the
+       flowchart's structural certainty does not transfer. `->>`, `-->`, `-x`,
+       `--x` and `-)` are all Mermaid spellings, and sequence has TEN arrows
+       whose differences are exactly what the notation is for — solid against
+       dashed, arrowhead against cross against open. Mapping `-->` to one of
+       them would silently turn a reply into a call or an async into a sync,
+       which the canvas draws differently and the reader has no reason to
+       re-check. So the near matches are ranked and none is applied. */
+    const shape = arrowShapeAt(cursor.text.slice(cursor.pos));
     cursor.fail(
       `expected an arrow (${SEQUENCE_ARROW_MENU}) — or, for a participant, a quoted "Name" after the id`,
       cursor.foundHere(),
+      shape === ""
+        ? undefined
+        : {
+            code: "seq.arrow-unknown",
+            /* Read off `SEQUENCE_ARROW_MATCH_ORDER` rather than
+               `SEQUENCE_ARROW_TOKENS`, which is a nested line-style ×
+               head-style table: the match order is already the flat list of
+               every legal token, so an arrow added to the grammar joins the
+               offer without a second place to remember. */
+            fixes: closestMatches(
+              shape,
+              SEQUENCE_ARROW_MATCH_ORDER.map(([token]) => token),
+            ).map((token, rank) => ({
+              title: `Change "${shape}" to "${token}"`.slice(0, 40),
+              edits: [
+                replaceOnLine(
+                  cursor.line,
+                  cursor.column,
+                  cursor.column + shape.length,
+                  token,
+                ),
+              ],
+              kind: "choice" as const,
+              rank,
+            })),
+          },
     );
   }
   cursor.pos += arrow[0].length;
@@ -1029,15 +1246,41 @@ function parseMessageLine(
   let deactivate = false;
   for (;;) {
     const at = { line: cursor.line, column: cursor.column };
+    /* Deleting the SECOND of two identical suffixes is safe in a way almost
+       no deletion is: the two characters are indistinguishable, so there is
+       no question of which the author meant to keep, and the model after the
+       fix is the one the first suffix already asked for. */
+    const dropSuffix = (suffix: string): IssueDetail => ({
+      code: "seq.activation-duplicate",
+      fixes: [
+        {
+          title: `Remove the extra "${suffix}"`,
+          edits: [replaceOnLine(at.line, at.column, at.column + 1, "")],
+          kind: "safe",
+        },
+      ],
+    });
     if (cursor.eat("+")) {
       if (activate)
-        failAt(at.line, at.column, 'duplicate "+" activation suffix');
+        failAt(
+          at.line,
+          at.column,
+          'duplicate "+" activation suffix',
+          undefined,
+          dropSuffix("+"),
+        );
       activate = true;
       continue;
     }
     if (cursor.eat("-")) {
       if (deactivate) {
-        failAt(at.line, at.column, 'duplicate "-" deactivation suffix');
+        failAt(
+          at.line,
+          at.column,
+          'duplicate "-" deactivation suffix',
+          undefined,
+          dropSuffix("-"),
+        );
       }
       deactivate = true;
       continue;
@@ -1103,6 +1346,28 @@ function parseNoteLine(
       placementLoc.column,
       `"${placement}" is not a note placement — expected left, right or over`,
       placement,
+      {
+        code: "seq.note-placement-unknown",
+        /* All three, in the order the message names them, rather than the
+           near matches: the words are short and unlike each other, so edit
+           distance adds nothing, and the three place the note in three
+           visibly different spots. `over` also takes a different number of
+           participants, so a wrong pick fails again rather than drawing
+           quietly. */
+        fixes: (["left", "right", "over"] as const).map((word, rank) => ({
+          title: `Change "${placement}" to "${word}"`.slice(0, 40),
+          edits: [
+            replaceOnLine(
+              placementLoc.line,
+              placementLoc.column,
+              placementLoc.column + placement.length,
+              word,
+            ),
+          ],
+          kind: "choice" as const,
+          rank,
+        })),
+      },
     );
   }
   const ids: { id: string; loc: Loc }[] = [];
@@ -1167,6 +1432,12 @@ function parseBoxOpener(
       loc.column,
       `"${BOX_KEYWORD}" groups lifelines — it belongs at the top of the ${SEQUENCE_BLOCK} body, not inside another block`,
       BOX_KEYWORD,
+      /* NO FIX, unlike the participant relocation next door, and the reason
+         is that a box OWNS a body: lifting the opener alone strands its
+         members at a depth nothing explains, so the "fix" would trade one
+         error for a worse-located one. Moving the block means finding where
+         it ends, which is a dedent the line pass has not reached yet. */
+      { code: "seq.box-late" },
     );
   }
   if (hooks.rootHasSteps()) {
@@ -1175,6 +1446,7 @@ function parseBoxOpener(
       loc.column,
       `"${BOX_KEYWORD}" declares participants, so it comes before the first message`,
       BOX_KEYWORD,
+      { code: "seq.box-late" },
     );
   }
   cursor.skipSpaces();
@@ -1671,11 +1943,44 @@ function resolve(
   /* -------------------------------- items -------------------------------- */
   const requireParticipant = (id: string, at: Loc, what: string): void => {
     if (!participantById.has(id)) {
+      /* A DECLARE CANDIDATE IS OFFERED HERE AND NOT IN C4, and the asymmetry
+         is the point: a sequence participant needs no type the parser would
+         have to guess — bare `id "Name"` is the plain form — where a C4 node
+         needs one of eight types whose legality depends on the diagram's
+         level. Declaring is ranked first for the same reason it is in the
+         flowchart: it ADDS rather than redirects, so the worst case is a
+         lifeline the author renames, not a message silently rerouted. */
+      const fixes: FixCandidate[] = [
+        {
+          title: `Declare "${id}" above the messages`.slice(0, 40),
+          edits: [
+            insertLineBefore(
+              spans.bodyLine + 1,
+              `  ${id} ${JSON.stringify(id)}`,
+            ),
+          ],
+          kind: "choice",
+          rank: 0,
+        },
+      ];
+      for (const [rank, near] of closestMatches(id, [
+        ...participantById.keys(),
+      ]).entries()) {
+        fixes.push({
+          title: `Change "${id}" to "${near}"`.slice(0, 40),
+          edits: [
+            replaceOnLine(at.line, at.column, at.column + id.length, near),
+          ],
+          kind: "choice",
+          rank: rank + 1,
+        });
+      }
       failAt(
         at.line,
         at.column,
         `the ${what} "${id}" does not resolve to a participant — declare it at the top of the ${SEQUENCE_BLOCK} body`,
         id,
+        { code: "seq.participant-unresolved", fixes },
       );
     }
   };

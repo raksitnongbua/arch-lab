@@ -1,5 +1,6 @@
 /**
- * The two helpers that turn derived DATA into a sentence a reader can read.
+ * The helpers that turn derived DATA into a sentence a reader can read, plus
+ * the one control name three features' prose has to spell the same way.
  *
  * Both lived privately in `playground/input/canvas-edit.ts`, where the first
  * assembled passage needed them; the themes passage in `lib/theme-copy.ts`
@@ -44,15 +45,40 @@ export const inWords = (count: number): string =>
   NUMBER_WORD[count] ?? String(count);
 
 /**
- * "C4 diagrams and sequence diagrams", or a comma list ending in "and" once
- * there are three.
+ * "C4 diagrams and sequence diagrams", or a comma list ending in the
+ * conjunction once there are three.
  *
  * No serial comma, which is a choice and not an oversight: every list this
  * joins is a run of short names, and the site's prose does not use one
  * elsewhere.
+ *
+ * `conjunction` is "or" for the one family of callers that is not copy: the
+ * three `.alab` header grammars name their closed keyword set in the refusal
+ * that rejects a word outside it, and each of those sentences used to be a
+ * hand-typed list sitting a screen below the switch that enforced it. Same
+ * body, one definition, the difference a default — `dry.md` on `slugify`.
  */
-export function joinList(items: readonly string[]): string {
+export function joinList(
+  items: readonly string[],
+  conjunction: "and" | "or" = "and",
+): string {
   return items.length <= 2
-    ? items.join(" and ")
-    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+    ? items.join(` ${conjunction} `)
+    : `${items.slice(0, -1).join(", ")} ${conjunction} ${items[items.length - 1]}`;
+}
+
+/**
+ * What the direction menu's release row is called, for `count` elements.
+ *
+ * HERE, NOT IN THE GESTURE MODULE, because three features say it and two of
+ * them may not import the third: the playground's menu renders the row, the
+ * playground's announcement points a reader at it after a direction moved
+ * nothing, and the validator's `column-layout` advice names it from
+ * `/validate` and the MCP `validate_model`. A hand-typed copy in any of them
+ * is the stale claim `canvas-editing.md` records three times over — prose that
+ * was correct when it was typed, naming a control that has since been
+ * reworded, with every check green.
+ */
+export function resetLayerLabel(count: number): string {
+  return count === 1 ? "Let the layout place it" : "Let the layout place them";
 }
