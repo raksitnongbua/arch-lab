@@ -82,12 +82,7 @@ import type {
   C4NodeType,
   ExternalRef,
 } from "@/types";
-import { childLevelOf, hasChildDiagram } from "@/types";
-/* The one function that decides whether a declaration line carries a geometry
-   token, borrowed from the serializer rather than re-tested here: the panel
-   must not offer to release an element whose line the writer would leave
-   alone. See `hasAuthoredGeometry`. */
-import { hasAuthoredGeometry } from "@/features/archtext";
+import { childLevelOf, hasChildDiagram, placedByHand } from "@/types";
 
 import {
   getFloatingAnchors,
@@ -101,7 +96,6 @@ import type { SharePathRequest } from "../share/codec";
 import { ViewerPathPlayer } from "./viewer-path-player";
 import { ViewerPathsPill } from "./viewer-paths-pill";
 import {
-  archLabFileFrom,
   boundsOf,
   breadcrumbFor,
   climbAnchorNodeId,
@@ -2596,13 +2590,13 @@ function ViewerCanvasInner({
       // The edit form's colour control reads these; the nodes already paint
       // with them (project-nodes), so the panel and the canvas see one map.
       tagColors: model.file.metadata.tagColors,
-      /* The author's own coordinates, when the line carries them — what the
-         panel's release row renders from. Measured through
-         `hasAuthoredGeometry` against the WHOLE file, because the direction
-         those coordinates are compared with can live on the file's own header
-         line: resolving it from the diagram alone here would be the second
-         opinion that function exists to prevent. */
-      placedAt: hasAuthoredGeometry(archLabFileFrom(model), diagram, node)
+      /* The source's own coordinates, when it states them — what the panel's
+         release row renders from. `placedByHand` is token presence, recorded
+         by whichever reader loaded the document, NOT a comparison against the
+         default layout: an author who writes the default coordinates out has
+         still placed the element, and the row that offers to release it has to
+         appear. */
+      placedAt: placedByHand(node)
         ? { x: node.position.x, y: node.position.y }
         : null,
     };

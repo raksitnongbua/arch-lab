@@ -53,11 +53,25 @@
  * direction per element, so on a diagram somebody has arranged by hand this
  * menu's rows write a line and move nothing — which read as a broken control
  * for as long as the only place that fact was written down was `/validate`, a
- * page nobody visits with a diagram in front of them. So the layer's section
- * carries a one-line note when elements are placed, and a row that releases
- * them. The counts come from `layerPlacement`, which asks the SERIALIZER
- * whether a line carries geometry; counting `(` here would be a second
- * opinion about the thing the note is asserting.
+ * page nobody visits with a diagram in front of them. So the menu carries a
+ * one-line note when elements are placed, and a row that releases them. The
+ * counts come from `layerPlacement`, which reads the fact the PARSER recorded
+ * about the source; counting `(` here would be a second opinion about the
+ * thing the note is asserting.
+ *
+ * THE NOTE IS ABOVE EVERY ROW IT QUALIFIES, which is why it is not inside a
+ * section. It sat in the layer section for a release, so a reader pressing
+ * `Whole file` — the same press, the same evidence, the same diagram sitting
+ * still — was warned only afterwards, by the toast, while the reader pressing
+ * `This layer` was warned both times. One note at the top says it once and
+ * says it before all four rows; repeating it under each heading would say the
+ * same sentence twice in a menu two sentences tall.
+ *
+ * THE RELEASE ROW STAYS UNDER `This layer`, alone, because it releases exactly
+ * one layer — `resetLayerPositionsEdit` argues why there is no file-wide one.
+ * A second copy under `Whole file` would be one act offered twice under one
+ * label, leaving the reader to guess which of the two reached further. It sits
+ * in the first section, so it is already on screen when the note is read.
  *
  * THE NOTE IS ONLY HALF OF IT, and knowing which half matters when editing
  * this file: the note is read BEFORE the press and this menu closes on the
@@ -169,7 +183,7 @@ const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
 };
 
 /**
- * The note above the layer's direction rows: what a direction will not move.
+ * The note above every direction row: what a direction will not move.
  *
  * WORDED FROM THE COUNTS rather than chosen from three fixed strings, because
  * the mixed case is the one that has to be exact. "3 of 7 elements are placed
@@ -177,8 +191,14 @@ const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
  * told only that "some elements are placed" has learned nothing they can act
  * on, and a reader told nothing concludes the control is broken.
  *
+ * WORDED FOR THE LAYER ON SCREEN AT BOTH SCOPES, and deliberately so. There is
+ * no file-wide release, so a sentence promising anything about the diagrams
+ * nobody is looking at would promise more than any row here delivers. "These
+ * elements are placed by hand" is true of the diagram in front of the reader
+ * whichever scope they press, and the remedy offered releases exactly that.
+ *
  * `null` when the layout places everything — then there is nothing to warn
- * about and the section is the two rows it always was.
+ * about and the menu is the four rows it always was.
  */
 function placementNote(placement: LayerPlacement): string | null {
   const held = placement.placed + placement.pinned;
@@ -299,6 +319,16 @@ export function LayoutDirectionMenu({
              and none above. */
           className="af-glass absolute top-full right-0 z-20 mt-1.5 min-w-44 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
+          {/* ABOVE EVERY ROW, AT BOTH SCOPES: it is the reason any of them may
+              do nothing, and a caveat read after the press arrived too late.
+              Outside the sections, because gating it on the layer section
+              warned the reader who pressed "This layer" twice and the one who
+              pressed "Whole file" only afterwards, from the toast. */}
+          {note !== null ? (
+            <p className="mb-1 max-w-56 border-b border-border px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug text-muted-foreground">
+              {note}
+            </p>
+          ) : null}
           {SECTIONS.map((section, index) => {
             const set =
               section.scope === "layer" ? layerDirection : fileDirection;
@@ -310,16 +340,6 @@ export function LayoutDirectionMenu({
                 <p className="px-2.5 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
                   {section.heading}
                 </p>
-                {/* ABOVE the rows, not below them: it is the reason the rows
-                    may do nothing, and a caveat read after the press is a
-                    caveat that arrived too late. Layer scope only — the file
-                    section writes a default this menu cannot count the
-                    consequences of across diagrams nobody is looking at. */}
-                {section.scope === "layer" && note !== null ? (
-                  <p className="max-w-56 px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug text-muted-foreground">
-                    {note}
-                  </p>
-                ) : null}
                 {DIRECTIONS.map((direction) => {
                   const inForce = set === direction.value;
                   return (
@@ -370,7 +390,10 @@ export function LayoutDirectionMenu({
                 {/* ABSENT, not disabled, when nothing is placed — this menu's
                     founding rule: no row whose press does nothing. Same
                     anatomy as the clearing row above it, because it is the
-                    same kind of act: taking a line out of the document. */}
+                    same kind of act: taking a line out of the document. Under
+                    "This layer" only: it releases one layer, and a second copy
+                    under the file heading would be one act offered twice under
+                    one label. */}
                 {section.scope === "layer" &&
                 placement !== null &&
                 placement.placed > 0 ? (
