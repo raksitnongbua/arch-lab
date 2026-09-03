@@ -46,6 +46,7 @@ import {
   detectAlabKind,
   parseLifecycleText,
 } from "@/features/archtext";
+import type { ArchTextIssue } from "@/features/archtext";
 import { sourceLineAt } from "@/lib/source-text";
 
 /**
@@ -79,6 +80,10 @@ export interface LifecycleParseErrorDetail {
   line: number;
   column: number;
   lineText: string | null;
+  /** The `.alab` issue this was flattened from — carried whole, for the
+   *  reasons `SequenceParseErrorDetail.issue` states. Absent for a Mermaid
+   *  failure, which has its own error type and no fix candidates. */
+  issue?: ArchTextIssue;
 }
 
 /** The first meaningful line is not a lifecycle header. */
@@ -116,6 +121,7 @@ export function parseLifecycleInput(text: string): LifecycleParseResult {
             line: error.line,
             column: error.column,
             lineText: sourceLineAt(text, error.line),
+            issue: error.issues[0],
           },
         };
       }

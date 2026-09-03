@@ -37,6 +37,7 @@ import {
   detectAlabKind,
   parseTimelineText,
 } from "@/features/archtext";
+import type { ArchTextIssue } from "@/features/archtext";
 import {
   MERMAID_TIMELINE_CAVEAT,
   MERMAID_TIMELINE_EXPORT_CAVEAT,
@@ -71,6 +72,10 @@ export interface TimelineParseErrorDetail {
   line: number;
   column: number;
   lineText: string | null;
+  /** The `.alab` issue this was flattened from — carried whole, for the
+   *  reasons `SequenceParseErrorDetail.issue` states. Absent for a Mermaid
+   *  failure, which has its own error type and no fix candidates. */
+  issue?: ArchTextIssue;
 }
 
 /** Neither timeline dialect plausibly matches the first meaningful line. */
@@ -108,6 +113,7 @@ export function parseTimelineInput(text: string): TimelineParseResult {
             line: error.line,
             column: error.column,
             lineText: sourceLineAt(text, error.line),
+            issue: error.issues[0],
           },
         };
       }

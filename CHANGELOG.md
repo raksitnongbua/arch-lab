@@ -21,6 +21,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   an element line now means what it always looked like it meant: kept when the
   rest of the layer is released. The whole-file section is deliberately
   unchanged; nothing relays out diagrams you cannot see.
+- **A `.alab` parse error can now be fixed from the error panel.** Where there
+  is exactly one correct rewrite the panel offers it as a single button — close
+  the string, insert the missing `:`, put the indent on its rung, change a
+  Mermaid `-->` into the `->` a flowchart actually spells, quote the reserved
+  word the message already told you to quote — and where more than one rewrite
+  would parse, it lists up to three and waits for you to pick. Nothing is ever
+  applied by guessing: a keyword typo is offered, never taken. The edit goes
+  through the pane itself, so your cursor lands on the character that changed
+  and Cmd-Z puts it back. `Alt+Enter` takes the single safe fix without
+  leaving the keyboard. Working on all three surfaces that report a parse
+  error: the playground's source pane, the editor's text pane and `/validate`.
 - **A paste that came in with the wrong indentation can be fixed in one
   click.** `.alab` indentation is significant, so text copied out of somewhere
   that had its own — a chat window, a nested code block, a docs page — arrives
@@ -104,9 +115,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   "Don't show again" control and the per-browser flag behind it are gone; a
   browser that had dismissed the old tour is not treated differently from one
   that never saw it.
-
-### Changed
-
 - **An agent working over MCP now asks you instead of guessing.** When a call
   reaches a fork the server can prove but cannot settle — text whose header
   names a different notation than the tool that got it, a valid C4 model whose

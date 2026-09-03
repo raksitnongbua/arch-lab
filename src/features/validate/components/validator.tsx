@@ -14,7 +14,13 @@
  * hears "Valid …" / "1 problem …" without having to hunt for the panel.
  */
 
-import { useDeferredValue, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import Link from "next/link";
 
@@ -23,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { HandoffLink } from "@/components/share/handoff-link";
 import { Select } from "@/components/ui/select";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
+import { applyFixToTextarea, FixOffer } from "@/components/ui/fix-offer";
 import { cn } from "@/lib/utils";
 
 import {
@@ -42,10 +49,29 @@ import {
   type CheckResult,
 } from "../lib/check";
 import { SAMPLES } from "../content/samples";
+import type { FixCandidate } from "@/features/archtext";
 
 export function Validator(): React.JSX.Element {
   const [source, setSource] = useState("");
   const [choice, setChoice] = useState<CheckChoice>("auto");
+
+  /**
+   * Apply one fix candidate to the pane.
+   *
+   * Through the real `<textarea>` like the other two surfaces, so the caret
+   * lands on what changed and Cmd-Z reaches it. The ref goes down to
+   * `SourcePane` rather than the state going up: this page already keeps its
+   * text in one place, and lifting a second copy of it would be two
+   * self-consistent halves of one document.
+   */
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleFix = useCallback((fix: FixCandidate) => {
+    const el = textareaRef.current;
+    if (el === null) return;
+    applyFixToTextarea(el, fix.edits);
+    setSource(el.value);
+    el.focus();
+  }, []);
 
   // The verdict trails the keystrokes rather than blocking them.
   const deferredSource = useDeferredValue(source);
@@ -78,8 +104,9 @@ export function Validator(): React.JSX.Element {
           onSourceChange={setSource}
           choice={choice}
           onChoiceChange={setChoice}
+          textareaRef={textareaRef}
         />
-        <ResultPane result={result} />
+        <ResultPane result={result} onFix={handleFix} />
       </div>
     </div>
   );
@@ -94,11 +121,13 @@ function SourcePane({
   onSourceChange,
   choice,
   onChoiceChange,
+  textareaRef,
 }: {
   source: string;
   onSourceChange: (value: string) => void;
   choice: CheckChoice;
   onChoiceChange: (value: CheckChoice) => void;
+  textareaRef: React.Ref<HTMLTextAreaElement>;
 }): React.JSX.Element {
   return (
     <section className="min-w-0">
@@ -153,6 +182,7 @@ function SourcePane({
           clips its overflow. */}
       <NumberedTextarea
         id="validate-source"
+        textareaRef={textareaRef}
         value={source}
         onChange={(event) => onSourceChange(event.target.value)}
         placeholder={
@@ -187,7 +217,13 @@ function SourcePane({
 /* Verdict                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function ResultPane({ result }: { result: CheckResult }): React.JSX.Element {
+function ResultPane({
+  result,
+  onFix,
+}: {
+  result: CheckResult;
+  onFix: (fix: FixCandidate) => void;
+}): React.JSX.Element {
   return (
     <section
       role="status"
@@ -195,12 +231,18 @@ function ResultPane({ result }: { result: CheckResult }): React.JSX.Element {
       aria-label="Validation result"
       className="min-w-0"
     >
-      <ResultCard result={result} />
+      <ResultCard result={result} onFix={onFix} />
     </section>
   );
 }
 
-function ResultCard({ result }: { result: CheckResult }): React.JSX.Element {
+function ResultCard({
+  result,
+  onFix,
+}: {
+  result: CheckResult;
+  onFix: (fix: FixCandidate) => void;
+}): React.JSX.Element {
   switch (result.status) {
     case "empty":
       return <IdleCard message={result.message} tone="muted" />;
@@ -209,7 +251,7 @@ function ResultCard({ result }: { result: CheckResult }): React.JSX.Element {
     case "ok":
       return <ValidCard result={result} />;
     case "error":
-      return <InvalidCard result={result} />;
+      return <InvalidCard result={result} onFix={onFix} />;
   }
 }
 
@@ -411,7 +453,13 @@ function Stat({
   );
 }
 
-function InvalidCard({ result }: { result: CheckFailed }): React.JSX.Element {
+function InvalidCard({
+  result,
+  onFix,
+}: {
+  result: CheckFailed;
+  onFix: (fix: FixCandidate) => void;
+}): React.JSX.Element {
   const count = result.issues.length;
   return (
     <div className="overflow-hidden rounded-lg border border-destructive/40 bg-card">
@@ -427,7 +475,11 @@ function InvalidCard({ result }: { result: CheckFailed }): React.JSX.Element {
       </header>
       <ul className="divide-y divide-border/60">
         {result.issues.map((issue, index) => (
-          <IssueRow key={`${issue.line ?? 0}-${index}`} issue={issue} />
+          <IssueRow
+            key={`${issue.line ?? 0}-${index}`}
+            issue={issue}
+            onFix={onFix}
+          />
         ))}
       </ul>
     </div>
@@ -439,7 +491,13 @@ function InvalidCard({ result }: { result: CheckFailed }): React.JSX.Element {
  * under the exact column — the whole point of the page is not having to
  * count characters yourself.
  */
-function IssueRow({ issue }: { issue: CheckIssue }): React.JSX.Element {
+function IssueRow({
+  issue,
+  onFix,
+}: {
+  issue: CheckIssue;
+  onFix: (fix: FixCandidate) => void;
+}): React.JSX.Element {
   return (
     <li className="px-4 py-3">
       <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-foreground">
@@ -470,6 +528,24 @@ function IssueRow({ issue }: { issue: CheckIssue }): React.JSX.Element {
           </code>
         </pre>
       )}
+      {/* Under the caret quote, inside the row — this page lists SEVERAL
+          issues, and an offer that floated to the bottom of the card would
+          leave the reader working out which line it was for. `fixes` are only
+          ever present on the `.alab` grammar's rows, so the JSON and Mermaid
+          rows render exactly as before. */}
+      <FixOffer
+        issue={
+          issue.fixes === undefined
+            ? undefined
+            : {
+                line: issue.line ?? 1,
+                column: issue.column ?? 1,
+                message: issue.message,
+                fixes: issue.fixes,
+              }
+        }
+        onApply={onFix}
+      />
     </li>
   );
 }

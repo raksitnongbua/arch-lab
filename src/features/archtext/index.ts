@@ -95,6 +95,18 @@ export {
 } from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";
 export type { ArchTextIssue } from "./lib/errors";
+/*
+ * The quick-fix contract. An issue carries a CODE the UI may branch on and,
+ * where the parser can prove a rewrite, the `TextEdit`s that perform it —
+ * ranges rather than a rewritten document, so a surface can apply one through
+ * `setRangeText` and keep the caret and the native undo entry. `ISSUE_CODES`
+ * is the registry `scripts/quickfix-check.mjs` reads to decide what it is
+ * allowed to assert.
+ */
+export { applyTextEdit, closestMatches, offsetOf } from "./lib/fix";
+export type { FixCandidate, SourcePos, TextEdit } from "./lib/fix";
+export { ISSUE_CODES, fixabilityOf, isIssueCode } from "./lib/issue-codes";
+export type { Fixability, IssueCode } from "./lib/issue-codes";
 export {
   ARCHTEXT_EXTENSION,
   KEYWORD_BY_NODE_TYPE,

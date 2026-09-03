@@ -31,6 +31,18 @@ import { LineCursor } from "./cursor";
 import { compareStrings, defaultEdgeId, DEFAULT_TIMESTAMP } from "./defaults";
 import { defaultPositions, defaultSizeFor } from "./defaults";
 import { failAt } from "./errors";
+import type { IssueDetail } from "./errors";
+import {
+  arrowShapeAt,
+  bareTail,
+  closestMatches,
+  expandedIndent,
+  indentChoices,
+  insertLineBefore,
+  replaceOnLine,
+  setIndent,
+} from "./fix";
+import type { FixCandidate } from "./fix";
 import { ARROWS, NODE_TYPE_BY_KEYWORD } from "./keywords";
 import {
   DIAGRAM_KEYS,
@@ -42,6 +54,17 @@ import {
   NODE_KEYS,
   NODE_RAW,
 } from "./schema";
+
+/**
+ * The rungs of the C4 indent ladder — 0 header or `@` diagram, 2 diagram
+ * body, 4 a node/edge continuation or a `beat`, 6 a beat's chain line.
+ *
+ * Named so the gate and the fix candidates it offers read the same list. They
+ * were two literals — a four-way `!==` chain and, before this, a hand-typed
+ * set of rungs in the repair — and two halves of one ladder is the pair
+ * `codebase.md` §4 says to make derive from each other.
+ */
+const C4_INDENTS = [0, 2, 4, 6] as const;
 
 /* -------------------------------------------------------------------------- */
 /* Pending structures collected during the line pass                          */
@@ -500,15 +523,29 @@ export function parseArchTextWithSpans(source: string): {
         indent + 1,
         "indentation must use spaces, not tabs",
         "\\t",
+        {
+          code: "alab.indent-tabs",
+          fixes: [
+            {
+              title: "Use spaces for this indent",
+              edits: [setIndent(lineNo, text, expandedIndent(text))],
+              kind: "safe",
+            },
+          ],
+        },
       );
     }
     if (text.trimStart().startsWith("//")) continue;
-    if (indent !== 0 && indent !== 2 && indent !== 4 && indent !== 6) {
+    if (!(C4_INDENTS as readonly number[]).includes(indent)) {
       failAt(
         lineNo,
         indent + 1,
         `inconsistent indentation of ${indent} space${indent === 1 ? "" : "s"} — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat's chain line)`,
         text.trim().slice(0, 40),
+        {
+          code: "alab.indent-ambiguous",
+          fixes: indentChoices(lineNo, text, indent, C4_INDENTS),
+        },
       );
     }
 
@@ -960,6 +997,26 @@ function parseDiagramHeader(
       loc.column,
       `"@${levelWord}" is not a C4 level — expected @context, @container, @component or @code`,
       `@${levelWord}`,
+      {
+        code: "c4.level-unknown",
+        /* The level is what every node type on the diagram is checked
+           against, so a wrong guess here does not fail at this line — it
+           fails on the node lines below it, with a message about types. A
+           choice, therefore, however near the match. */
+        fixes: closestMatches(levelWord, C4_LEVELS).map((level, rank) => ({
+          title: `Change "@${levelWord}" to "@${level}"`.slice(0, 40),
+          edits: [
+            replaceOnLine(
+              loc.line,
+              loc.column + 1,
+              loc.column + 1 + levelWord.length,
+              level,
+            ),
+          ],
+          kind: "choice" as const,
+          rank,
+        })),
+      },
     );
   }
   cursor.skipSpaces();
@@ -1435,26 +1492,64 @@ function parseNodeLine(
   const typeLoc = { line: cursor.line, column: cursor.column };
   const typeWord = cursor.readBare(/^[a-z]+/, "a node type");
   const type = NODE_TYPE_BY_KEYWORD[typeWord];
+  /* RANKED AGAINST THE LEVEL-FILTERED SET, not the whole eight, and this is
+     the single clearest argument for the parser owning quick fixes rather
+     than the UI. `shop:sytem` inside an `@container` diagram must rank
+     `container` first: `system` is a nearer word but an ILLEGAL one there, so
+     offering it would hand the reader a fix that fails again on the same
+     line. Only the parser holds the level. */
+  const validHere = VALID_NODE_TYPES_BY_LEVEL[
+    diagram.level
+  ] as readonly C4NodeType[];
+  const keywordsHere = Object.entries(NODE_TYPE_BY_KEYWORD)
+    .filter(([, candidate]) => validHere.includes(candidate))
+    .map(([keyword]) => keyword);
+  const retypeTo = (keyword: string, rank: number): FixCandidate => ({
+    title: `Change "${typeWord}" to "${keyword}"`.slice(0, 40),
+    edits: [
+      replaceOnLine(
+        typeLoc.line,
+        typeLoc.column,
+        typeLoc.column + typeWord.length,
+        keyword,
+      ),
+    ],
+    /* ALWAYS A CHOICE. A closed-set near-match is not provable even when one
+       candidate is a single letter away — `sistem` is probably `system`, and
+       "probably" must not be one click from the author's text. The tempting
+       exception is a level admitting exactly one type, where nothing is left
+       to be wrong about; it is refused because fixability is declared in
+       `ISSUE_CODES` and a code whose kind depends on the document is not a
+       contract a check script can hold. One extra click in a rare case is the
+       cheaper half of that trade. */
+    kind: "choice",
+    rank,
+  });
   if (type === undefined) {
     failAt(
       typeLoc.line,
       typeLoc.column,
       `"${typeWord}" is not a node type — expected person, system, external, container, database, queue, component or code`,
       typeWord,
+      {
+        code: "c4.node-type-unknown",
+        fixes: closestMatches(typeWord, keywordsHere).map(retypeTo),
+      },
     );
   }
-  const valid = VALID_NODE_TYPES_BY_LEVEL[
-    diagram.level
-  ] as readonly C4NodeType[];
-  if (!valid.includes(type)) {
-    const keywords = Object.entries(NODE_TYPE_BY_KEYWORD)
-      .filter(([, t]) => valid.includes(t))
-      .map(([k]) => k);
+  if (!validHere.includes(type)) {
     failAt(
       typeLoc.line,
       typeLoc.column,
-      `"${typeWord}" is not valid at level "${diagram.level}" — valid types here: ${keywords.join(", ")}`,
+      `"${typeWord}" is not valid at level "${diagram.level}" — valid types here: ${keywordsHere.join(", ")}`,
       typeWord,
+      {
+        code: "c4.node-type-illegal-at-level",
+        /* The whole legal list rather than the near matches: the author wrote
+           a real keyword, so this is not a typo and edit distance says
+           nothing useful about which of the legal ones they wanted. */
+        fixes: keywordsHere.slice(0, 3).map(retypeTo),
+      },
     );
   }
   if (id === "") {
@@ -1467,6 +1562,9 @@ function parseNodeLine(
       loc.column,
       `duplicate node id "${id}" — already declared in diagram "${home.diagram.id}" on line ${home.node.line}; node ids must be unique across the whole file`,
       id,
+      /* No fix: which declaration wins, and what the loser should be renamed
+         to, are both questions about the model. */
+      { code: "c4.duplicate-id" },
     );
   }
   cursor.skipSpaces();
@@ -1608,9 +1706,18 @@ function parseNodeLine(
     }
     if (word === "pin") {
       if (node.pinned !== undefined) {
-        failAt(attrLoc.line, attrLoc.column, 'duplicate "pin" attribute');
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          'duplicate "pin" attribute',
+          undefined,
+          {
+            code: "c4.duplicate-attribute",
+          },
+        );
       }
       if (cursor.eat("=")) {
+        const valueLoc = { line: cursor.line, column: cursor.column };
         const value = cursor.readBare(/^[a-z]+/, '"true" or "false"');
         if (value !== "true" && value !== "false") {
           failAt(
@@ -1618,6 +1725,15 @@ function parseNodeLine(
             attrLoc.column,
             `pin= must be "true" or "false", got "${value}"`,
             value,
+            {
+              code: "c4.attribute-not-boolean",
+              /* A CHOICE, though the set has only two members and one of them
+                 is what the author probably meant. `pin=yes` almost certainly
+                 means `true`, but pinning a node freezes its geometry against
+                 the auto-layout, and guessing wrong silently locks a node the
+                 author wanted free. Both are offered. */
+              fixes: flagCandidates(valueLoc, value, ["true", "false"]),
+            },
           );
         }
         node.pinned = value === "true";
@@ -1631,6 +1747,7 @@ function parseNodeLine(
       attrLoc.column,
       `"${word}" is not a node attribute — expected pin, in=<frame>, @icon, [technology], #tag, >child, >>"file", ^diagram/node or (x,y w×h)`,
       word,
+      { code: "c4.attribute-unknown" },
     );
   }
 
@@ -1643,6 +1760,10 @@ function parseNodeLine(
       loc.column,
       `node "${id}" has no name — only a node with a ^diagram/node reference may omit it, because there it is derived from the node being referenced`,
       id,
+      /* No fix: the name is the one field on a node that nothing can be
+         derived from. Filling it with the id would ship a diagram whose boxes
+         read `api-gw`, which is a presentation defect rather than a repair. */
+      { code: "c4.node-name-missing" },
     );
   }
 
@@ -1660,9 +1781,33 @@ export function readTechnology(cursor: LineCursor): string {
   }
   const close = cursor.text.indexOf("]", cursor.pos);
   if (close === -1) {
+    /* Closed at the first following attribute token, by the same `bareTail`
+       boundary an unclosed STRING uses — and for the same reason. End of line
+       looks right and is wrong the moment anything follows: `[Go 1.22
+       (400,320 320x120)` would close after the geometry and swallow it into
+       the technology field, which parses and draws a node whose stack reads
+       `Go 1.22 (400,320 320x120)`. */
+    const body = bareTail(cursor.text.slice(cursor.pos));
     cursor.fail(
       'the technology bracket opened here is never closed — expected "]"',
       cursor.foundHere(),
+      {
+        code: "c4.technology-unclosed",
+        fixes: [
+          {
+            title: 'Close the bracket with "]"',
+            edits: [
+              replaceOnLine(
+                cursor.line,
+                cursor.pos + body.length + 1,
+                cursor.pos + body.length + 1,
+                "]",
+              ),
+            ],
+            kind: "safe",
+          },
+        ],
+      },
     );
   }
   const value = cursor.text.slice(cursor.pos, close);
@@ -1673,6 +1818,141 @@ export function readTechnology(cursor: LineCursor): string {
 /* -------------------------------------------------------------------------- */
 /* Edge lines                                                                 */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * The fix for the one site that answers two questions at once.
+ *
+ * `id <something>` reaches the arrow production, and the something is either a
+ * mis-spelled arrow or a node type the author separated from its id with
+ * spaces. The MESSAGE already covers both cases in one sentence, so the code
+ * has to tell them apart — which it can, and provably:
+ *
+ *   - A `:` at the cursor means `id : type`. Closing the gap is the one
+ *     rewrite there is, so it is safe. The colon is not an arrow in this
+ *     grammar and no other production puts one here.
+ *   - An arrow-shaped token is a Mermaid or PlantUML spelling, and arch-lab
+ *     has SIX arrows with different meanings. `-->` is dashed-directed in
+ *     Mermaid, which is `..>` here, and `->>` is just `->`; neither mapping is
+ *     provable from the token alone, so both arch-lab arrows are offered and
+ *     the author picks the one they meant. Guessing would silently change a
+ *     relationship from synchronous to asynchronous, which the canvas draws
+ *     differently and the reader has no reason to re-check.
+ */
+function spacedTypeOrArrowFix(cursor: LineCursor): IssueDetail | undefined {
+  const rest = cursor.text.slice(cursor.pos);
+  if (rest.startsWith(":")) {
+    let from = cursor.pos;
+    while (from > 0 && cursor.text.charAt(from - 1) === " ") from -= 1;
+    const after = /^:\s*/.exec(rest)?.[0].length ?? 1;
+    return {
+      code: "c4.node-type-spaced",
+      fixes: [
+        {
+          title: 'Remove the spaces around ":"',
+          edits: [
+            replaceOnLine(cursor.line, from + 1, cursor.pos + after + 1, ":"),
+          ],
+          kind: "safe",
+        },
+      ],
+    };
+  }
+  const shape = arrowShapeAt(rest);
+  if (shape === "") return undefined;
+  return {
+    code: "c4.arrow-unknown",
+    fixes: C4_ARROW_SUGGESTIONS.map((token, rank) => ({
+      title: `Change "${shape}" to "${token}"`.slice(0, 40),
+      edits: [
+        replaceOnLine(
+          cursor.line,
+          cursor.column,
+          cursor.column + shape.length,
+          token,
+        ),
+      ],
+      kind: "choice" as const,
+      rank,
+    })),
+  };
+}
+
+/**
+ * Candidates for an `in=` that names no frame: declare it, then rename it.
+ *
+ * The declaration goes above the node that referenced it rather than at the
+ * top of the diagram body, because `frame` lines and node lines share indent 2
+ * and the grammar accepts them in any order — so the nearest legal position is
+ * also the one whose diff is easiest to read.
+ */
+function frameFixesFor(
+  diagram: PendingDiagram,
+  node: PendingNode,
+  at: Loc,
+): FixCandidate[] {
+  const frameId = node.frameId ?? "";
+  const candidates: FixCandidate[] = [
+    {
+      title: `Declare frame "${frameId}"`.slice(0, 40),
+      edits: [
+        insertLineBefore(
+          node.line,
+          `  frame ${frameId} ${JSON.stringify(frameId)}`,
+        ),
+      ],
+      kind: "choice",
+      rank: 0,
+    },
+  ];
+  for (const [rank, near] of closestMatches(
+    frameId,
+    diagram.frames.map((frame) => frame.id),
+  ).entries()) {
+    candidates.push({
+      title: `Change "in=${frameId}" to "in=${near}"`.slice(0, 40),
+      edits: [
+        replaceOnLine(at.line, at.column, at.column + frameId.length, near),
+      ],
+      kind: "choice",
+      rank: rank + 1,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * One candidate per member of a two-word flag set, in declared order.
+ *
+ * Shared by `pin=` and `style=` because they are the same failure twice — a
+ * closed pair, a word that is neither, and a rewrite per member. Neither is
+ * `safe`: both flags change what the canvas DRAWS, and a wrong guess is
+ * invisible in the text and visible in the diagram.
+ */
+function flagCandidates(
+  at: Loc,
+  value: string,
+  flags: readonly string[],
+): FixCandidate[] {
+  return flags.map((flag, rank) => ({
+    title: `Change "${value}" to "${flag}"`.slice(0, 40),
+    edits: [replaceOnLine(at.line, at.column, at.column + value.length, flag)],
+    kind: "choice" as const,
+    rank,
+  }));
+}
+
+/**
+ * The two arrows offered for an unrecognised one, solid first.
+ *
+ * Derived from `ARROWS` rather than typed, so an arrow added to the grammar
+ * cannot be missing from the offer — but narrowed to the two FORWARD ones: a
+ * reader who wrote something arrow-shaped meant a direction, and offering
+ * `--`, `..` and the bidirectional pair as well would make a three-item radio
+ * list into a six-item quiz about a token they already got wrong.
+ */
+const C4_ARROW_SUGGESTIONS = ARROWS.map(([token]) => token).filter(
+  (token) => token === "->" || token === "..>",
+);
 
 function parseEdgeLine(
   cursor: LineCursor,
@@ -1692,6 +1972,7 @@ function parseEdgeLine(
     cursor.fail(
       "expected an arrow (->, <->, --, ..>, <..>, ..) — or, for a node, the type must follow the id with no space (id:type)",
       cursor.foundHere(),
+      spacedTypeOrArrowFix(cursor),
     );
   }
   cursor.pos += arrow[0].length;
@@ -1754,7 +2035,13 @@ function parseEdgeLine(
     const word = cursor.readBare(/^[a-z]+/, "an edge attribute");
     if (word === "id") {
       if (edge.explicitId !== undefined) {
-        failAt(attrLoc.line, attrLoc.column, 'duplicate "id=" attribute');
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          'duplicate "id=" attribute',
+          undefined,
+          { code: "c4.duplicate-attribute" },
+        );
       }
       cursor.expect("=", '"=" after "id"');
       edge.explicitId = cursor.readIdToken("the edge id");
@@ -1762,6 +2049,7 @@ function parseEdgeLine(
     }
     if (word === "style") {
       cursor.expect("=", '"=" after "style"');
+      const valueLoc = { line: cursor.line, column: cursor.column };
       const value = cursor.readBare(/^[a-z]+/, '"solid" or "dashed"');
       if (value !== "solid" && value !== "dashed") {
         failAt(
@@ -1769,6 +2057,10 @@ function parseEdgeLine(
           attrLoc.column,
           `style= must be "solid" or "dashed", got "${value}"`,
           value,
+          {
+            code: "c4.attribute-not-boolean",
+            fixes: flagCandidates(valueLoc, value, ["solid", "dashed"]),
+          },
         );
       }
       if (value === "solid" && edge.style === "dashed") {
@@ -1776,6 +2068,42 @@ function parseEdgeLine(
           attrLoc.line,
           attrLoc.column,
           "style=solid contradicts the dashed arrow on this line",
+          undefined,
+          {
+            code: "c4.style-contradicts-direction",
+            /* TWO CANDIDATES AND NEITHER IS RANKED. The author wrote two
+               things that disagree and both are legible intentions: the
+               attribute is the correction, or the attribute is the leftover.
+               A rank here would be the parser claiming to know which half of
+               a contradiction the author still believes, so the radio list
+               opens with nothing preselected. */
+            fixes: [
+              {
+                title: "Change to style=dashed",
+                edits: [
+                  replaceOnLine(
+                    valueLoc.line,
+                    valueLoc.column,
+                    valueLoc.column + value.length,
+                    "dashed",
+                  ),
+                ],
+                kind: "choice",
+              },
+              {
+                title: "Remove style=solid",
+                edits: [
+                  replaceOnLine(
+                    attrLoc.line,
+                    attrLoc.column,
+                    valueLoc.column + value.length,
+                    "",
+                  ),
+                ],
+                kind: "choice",
+              },
+            ],
+          },
         );
       }
       edge.style = value;
@@ -1783,7 +2111,13 @@ function parseEdgeLine(
     }
     if (word === "via") {
       if (edge.waypoints !== undefined) {
-        failAt(attrLoc.line, attrLoc.column, 'duplicate "via" attribute');
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          'duplicate "via" attribute',
+          undefined,
+          { code: "c4.duplicate-attribute" },
+        );
       }
       const points: { x: number; y: number }[] = [];
       cursor.skipSpaces();
@@ -1815,6 +2149,7 @@ function parseEdgeLine(
       attrLoc.column,
       `"${word}" is not an edge attribute — expected : "label", [technology], #tag, ~realizes, id=, style= or via`,
       word,
+      { code: "c4.attribute-unknown" },
     );
   }
 
@@ -2239,6 +2574,11 @@ function resolve(
               at.column,
               `the ${endpoint} "${value}" is declared in diagram "${elsewhere.diagram.id}", not "${diagram.id}" — relationships must connect two nodes in the same diagram`,
               value,
+              /* No fix. The right repair is a `^D/node` cross-diagram
+                 reference on a node in THIS diagram, which is a modelling
+                 decision about what the diagram is claiming — not a rewrite
+                 of the line that failed. */
+              { code: "c4.endpoint-other-diagram" },
             );
           }
           failAt(
@@ -2246,6 +2586,30 @@ function resolve(
             at.column,
             `the ${endpoint} "${value}" does not resolve to a node in this diagram`,
             value,
+            {
+              code: "c4.endpoint-unresolved",
+              /* RENAME CANDIDATES ONLY — no "declare it" candidate, unlike
+                 the flowchart's equivalent. A flowchart node has one
+                 semantically empty shape to fall back on; a C4 node needs a
+                 TYPE, and which of the eight is legal depends on this
+                 diagram's level, so the parser would be guessing at the
+                 model rather than at the spelling. */
+              fixes: closestMatches(value, [...nodeIdSet]).map(
+                (near, rank) => ({
+                  title: `Change "${value}" to "${near}"`.slice(0, 40),
+                  edits: [
+                    replaceOnLine(
+                      at.line,
+                      at.column,
+                      at.column + value.length,
+                      near,
+                    ),
+                  ],
+                  kind: "choice" as const,
+                  rank,
+                }),
+              ),
+            },
           );
         }
       }
@@ -2391,6 +2755,16 @@ function resolve(
           at.column,
           `in=${node.frameId} does not name a frame in diagram "${diagram.id}" — declare it with a "frame ${node.frameId} \"…\"" line`,
           node.frameId,
+          {
+            code: "c4.frame-unresolved",
+            /* Declaring the frame is offered FIRST here where the C4 endpoint
+               fix offers no declare candidate at all, and the difference is
+               that a frame has nothing to guess: it takes an id and a label,
+               and the label can be the id. A node would have needed a type.
+               Both candidates are still choices — a frame is a grouping the
+               reader can SEE, so inventing one silently changes the drawing. */
+            fixes: frameFixesFor(diagram, node, at),
+          },
         );
       }
     }
@@ -2582,6 +2956,11 @@ function resolve(
         1,
         1,
         'the file has no root Context diagram — add an "@context" diagram without in=, or a "root <id>" header line',
+        undefined,
+        /* No fix. Both repairs the message names invent a diagram or nominate
+           one that does not exist yet; there is nothing on any line to
+           rewrite. */
+        { code: "c4.root-missing" },
       );
     } else {
       const second = candidates[1];
@@ -2589,6 +2968,24 @@ function resolve(
         second.line,
         second.column,
         `two parentless @context diagrams ("${candidates[0].id}" and "${second.id}") — add a "root <id>" header line to pick the entry point`,
+        undefined,
+        {
+          code: "c4.root-ambiguous",
+          /* One candidate per parentless diagram, declared order first —
+             which is a tiebreak and not a verdict: the file's entry point is
+             the author's decision about what the model IS, so neither is
+             applied without a person choosing. The `root` line goes above the
+             first diagram because it is a header line and header lines must
+             precede the body. */
+          fixes: candidates.slice(0, 3).map((candidate, rank) => ({
+            title: `Make "${candidate.id}" the root`.slice(0, 40),
+            edits: [
+              insertLineBefore(candidates[0].line, `root ${candidate.id}`),
+            ],
+            kind: "choice" as const,
+            rank,
+          })),
+        },
       );
     }
   }

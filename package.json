@@ -2,7 +2,7 @@
   "name": "arch-lab",
   "version": "2.0.0",
   "private": true,
-  "description": "Architecture diagrams as plain text \u2014 C4 models and UML-style sequence diagrams, written in a small text format and rendered live in the browser.",
+  "description": "Architecture diagrams as plain text — C4 models and UML-style sequence diagrams, written in a small text format and rendered live in the browser.",
   "keywords": [
     "architecture",
     "diagrams",
@@ -40,6 +40,7 @@
     "check:mermaid": "node scripts/mermaid-check.mjs",
     "check:archtext": "node scripts/archtext-check.mjs",
     "check:paths": "node scripts/paths-check.mjs",
+    "check:quickfix": "node scripts/quickfix-check.mjs",
     "check:canvas-edit": "node scripts/canvas-edit-check.mjs",
     "check:layout-reset": "node scripts/layout-reset-check.mjs",
     "check:sequence": "node scripts/sequence-check.mjs",

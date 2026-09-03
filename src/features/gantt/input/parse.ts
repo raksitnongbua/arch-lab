@@ -40,6 +40,7 @@ import {
   detectAlabKind,
   parseGanttText,
 } from "@/features/archtext";
+import type { ArchTextIssue } from "@/features/archtext";
 import {
   MERMAID_GANTT_CAVEAT,
   MERMAID_GANTT_EXPORT_CAVEAT,
@@ -82,6 +83,10 @@ export interface GanttParseErrorDetail {
   line: number;
   column: number;
   lineText: string | null;
+  /** The `.alab` issue this was flattened from — carried whole, for the
+   *  reasons `SequenceParseErrorDetail.issue` states. Absent for a Mermaid
+   *  failure, which has its own error type and no fix candidates. */
+  issue?: ArchTextIssue;
 }
 
 /** Neither gantt dialect plausibly matches the first meaningful line. */
@@ -118,6 +123,7 @@ export function parseGanttInput(text: string): GanttParseResult {
             line: error.line,
             column: error.column,
             lineText: sourceLineAt(text, error.line),
+            issue: error.issues[0],
           },
         };
       }
