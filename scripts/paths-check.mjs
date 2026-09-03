@@ -397,6 +397,75 @@ check("the player exists only while a walk is on", () => {
   );
 });
 
+check(
+  "the beat's elements are lit from behind, without repainting them",
+  () => {
+    const aura = canvas.match(/const BEAT_AURA =([\s\S]*?);\n/)?.[1] ?? "";
+    assert.ok(aura !== "", "BEAT_AURA is no longer a constant this can read");
+    assert.match(
+      aura,
+      /var\(--primary\)/,
+      "the aura no longer takes its colour from the theme's own token",
+    );
+    assert.doesNotMatch(
+      aura,
+      /#[0-9a-fA-F]{3,8}\b|rgba?\(/,
+      "the aura carries a colour literal — nine themes, and a literal is " +
+        "outside all of them",
+    );
+    const body = memoBody(canvas, "pathFocusCss");
+    assert.ok(
+      body.includes("${BEAT_AURA}"),
+      "the beat's elements are no longer lit from behind — dimming alone tells " +
+        "a reader which elements are NOT being shown, and never makes the ones " +
+        "that are reach forward",
+    );
+    /* An SVG filter near this canvas is forbidden outright: a percentage filter
+     region on a flat path painted bands across a whole diagram, and three
+     commits went into chasing them. A box-shadow has no region to collapse. */
+    assert.doesNotMatch(
+      body,
+      /filter:/,
+      "the overlay reached for a filter — this canvas draws its soft edges with " +
+        "shadows for a reason that cost three commits to learn",
+    );
+    /* Focus dims and lights; it does not repaint the notation. */
+    assert.doesNotMatch(
+      body,
+      /\b(stroke|fill|border-width|stroke-width):/,
+      "the overlay repaints a node — focus may dim and light, but a focused " +
+        "element that restyles is a new border appearing where one already was",
+    );
+  },
+);
+
+check("the walk's control and the walk itself share one place", () => {
+  const panel = canvas.match(
+    /<Panel[^>]*position="bottom-center"[\s\S]*?<\/Panel>/,
+  )?.[0];
+  assert.ok(panel, "the bottom-centre panel is gone");
+  for (const name of ["ViewerPathPlayer", "ViewerPathsPill"]) {
+    assert.ok(
+      panel.includes(name),
+      `${name} left the bottom-centre panel — entering a path should expand a ` +
+        "control in place, not send a reader hunting for a new one somewhere " +
+        "else on the canvas",
+    );
+  }
+  /* And it must NOT be back in the top-left stack, which already carries the
+     breadcrumb and, on an unlocked canvas, the node palette. */
+  const topLeft = canvas.match(
+    /<Panel position="top-left"[\s\S]*?<\/Panel>/,
+  )?.[0];
+  assert.ok(topLeft, "the top-left panel is gone");
+  assert.doesNotMatch(
+    topLeft,
+    /ViewerPathsPill/,
+    "the paths control is back under the breadcrumb, where it stacks with the " +
+      "node palette and answers a different question from the corner it is in",
+  );
+});
+
 check("a diagram with no paths shows no path chrome at all", () => {
   assert.match(
     pill,

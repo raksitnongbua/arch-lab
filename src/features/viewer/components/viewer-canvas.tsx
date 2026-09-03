@@ -388,6 +388,26 @@ const HOVER_DIM_EDGE_OPACITY = 0.35;
 const DIM_EDGE_OPACITY = 0.2;
 
 /**
+ * The light behind an element the current beat is about.
+ *
+ * Dimming alone told a reader which elements were NOT being shown; it did not
+ * make the ones that were reach forward. This does — a soft primary halo on
+ * the ring the beat already lights, so the walk reads as a set standing out of
+ * the drawing rather than as the drawing behind a veil.
+ *
+ * A `box-shadow` on the ring's own span, which already carries the node's
+ * rounding. Not an SVG `filter`, which this codebase forbids near the canvas
+ * after a percentage filter region on a flat path painted bands across a whole
+ * diagram — and not a change of the node's stroke, fill or width, which the
+ * focus rules forbid outright: focus dims and lights, it does not repaint the
+ * notation. Colour is `--primary` mixed with transparency, so every theme
+ * carries its own halo and no tenth palette is introduced.
+ */
+const BEAT_AURA =
+  "0 0 0 1px var(--primary), " +
+  "0 0 22px 3px color-mix(in oklch, var(--primary) 42%, transparent)";
+
+/**
  * An element and everything one relationship away from it — the set both the
  * selection focus and the hover reveal keep at full strength.
  *
@@ -2791,7 +2811,7 @@ function ViewerCanvasInner({
      * from becoming the noise the selection focus is careful to avoid. */
     for (const id of current.nodeIds) {
       rest.push(
-        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; box-shadow: ${BEAT_AURA}; }`,
       );
     }
 
@@ -2801,14 +2821,7 @@ function ViewerCanvasInner({
       `.viewer-canvas .viewer-edge-chip${offPathChips} { opacity: ${DIM_EDGE_OPACITY}; }` +
       (rest.length > 0 ? `\n${rest.join("\n")}` : "")
     );
-  }, [
-    activeMultiIds,
-    detail,
-    diagram,
-    selectedFrameId,
-    selectedNodeId,
-    walk,
-  ]);
+  }, [activeMultiIds, detail, diagram, selectedFrameId, selectedNodeId, walk]);
 
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
@@ -3195,14 +3208,6 @@ function ViewerCanvasInner({
               {/* No `currentLevel`: the last crumb already carries it, and two
                   sources for one fact can disagree. */}
               <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
-              {/* Under the breadcrumb for the palette's reason — the crumb
-                  trail grows with the drill depth — and rendering nothing at
-                  all on a diagram with no paths, never a disabled control. */}
-              <ViewerPathsPill
-                paths={pathsOf(diagram)}
-                activePathId={walk?.resolved.id ?? null}
-                onEnter={enterPath}
-              />
               {/* Under the breadcrumb, not beside it: the crumb trail grows
                   with the drill depth and would push the palette off a narrow
                   canvas. Presence-gated like every edit control — a read-only
@@ -3299,12 +3304,21 @@ function ViewerCanvasInner({
               sit in opposite corners, so answering it took a trip across the
               whole canvas. `CanvasMinimap` is `!static` now precisely so this
               column owns the corner instead of the map pinning itself. */}
-          {/* Centre-bottom, and mounted inside the flow so it rides into
-              immersive and native fullscreen the way the zoom cluster does —
-              which is the point: a path is walked in front of an audience.
-              `pointer-events-none` on the panel with the player itself
-              re-enabling them keeps the empty space either side of a short
-              caption from swallowing a drag of the canvas underneath. */}
+          {/* ONE HOME FOR THE WALK, centre-bottom: the pill that offers the
+              paths and the player that walks one occupy the same spot, so
+              entering expands a control in place rather than making a reader
+              find a new one somewhere else on the canvas.
+
+              It started under the breadcrumb, which was wrong twice over — it
+              stacked with the node palette on an unlocked canvas, and it put
+              "would you like to be shown around" in the corner that answers
+              "where am I".
+
+              Mounted inside the flow so it rides into immersive and native
+              fullscreen the way the zoom cluster does, which is the point: a
+              path is walked in front of an audience. `pointer-events-none` on
+              the panel, re-enabled on the control itself, keeps the empty
+              space either side from swallowing a drag of the canvas. */}
           <Panel
             position="bottom-center"
             className="pointer-events-none max-w-full"
@@ -3321,7 +3335,11 @@ function ViewerCanvasInner({
                   onLeave={leavePath}
                 />
               </div>
-            ) : null}
+            ) : (
+              <div className="pointer-events-auto">
+                <ViewerPathsPill paths={pathsOf(diagram)} onEnter={enterPath} />
+              </div>
+            )}
           </Panel>
           <Panel position="bottom-right">
             <div className="flex flex-col items-end gap-2">
