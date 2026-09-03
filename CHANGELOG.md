@@ -16,7 +16,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   moved nothing. The direction menu now says so before you press it ("3 of 7
   elements are placed by hand and won't move"), and carries a row —
   **Let the layout place them** — that takes those coordinates off every
-  element in the layer in one undoable change. The element panel offers the
+  element in the layer in one undoable change. Press a direction anyway and
+  the press itself says what happened, on screen rather than only to a screen
+  reader — "Nothing in this layer moved" or "3 of 7 elements … stayed where
+  they were" — with that same release offered as a button beside it. The
+  element panel offers the
   same for one element beside the coordinates it is sitting at, and `pin` on
   an element line now means what it always looked like it meant: kept when the
   rest of the layer is released. The whole-file section is deliberately

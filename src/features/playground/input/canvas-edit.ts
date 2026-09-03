@@ -112,7 +112,7 @@ import {
   referenceableNodes,
 } from "@/features/viewer/lib/node-palette";
 import { APP_NAME } from "@/lib/constants";
-import { inWords, joinList } from "@/lib/prose";
+import { inWords, joinList, resetLayerLabel } from "@/lib/prose";
 import { slugify } from "@/lib/slug";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
@@ -1246,6 +1246,76 @@ export function layerPlacement(
     total: diagram.nodes.length,
     placed: authored.length - pinned,
     pinned,
+  };
+}
+
+/**
+ * What to tell a reader who has just pressed a direction on a layer the
+ * layout is not allowed to place — or `null` when it was free to place
+ * everything, which is the working case and says nothing.
+ *
+ * WHY THIS EXISTS AT ALL, given the menu already carries a note. The note is
+ * INSIDE the menu, and the menu closes on the press: it warns before, and the
+ * reader who needs the fact is the one who has already pressed, watched the
+ * diagram sit still, and is deciding whether the control is broken. The
+ * announcement that shipped beside it is `sr-only`, so it reached assistive
+ * tech and nobody else. This is the sentence a sighted reader gets, at the
+ * moment the picture disagrees with the press.
+ *
+ * HERE RATHER THAN IN THE HOOK THAT RAISES IT, for `layerPlacement`'s reason:
+ * the counts and the sentence made from them belong to one module, so the
+ * menu's note, the release row's label and this cannot come to three
+ * different conclusions about the same layer. It also puts the wording where
+ * `check:layout-reset` can CALL it — the hook is a React module the check can
+ * only read as text, and a message only ever regex-matched is a message
+ * nothing has proved the shape of.
+ *
+ * TWO CASES, KEPT APART. "Nothing moved" and "some of it moved" are different
+ * facts, and blurring them into "some elements are placed" leaves a reader
+ * with nothing to act on — which is the state that read as a broken control
+ * in the first place. The partly-applied sentence names the count, because
+ * that is the only thing that explains a diagram which half-turned.
+ *
+ * IT MAKES NO CLAIM ABOUT THE FILE. Worded for the layer on screen at both
+ * scopes, so a file-wide press — which does change what other diagrams
+ * inherit — is reported honestly by a sentence that only ever talks about the
+ * one diagram the reader can see, and whose remedy releases exactly that.
+ */
+export interface DirectionInertWarning {
+  message: string;
+  /**
+   * Label for the release that would let the direction take effect, or `null`
+   * when there is nothing to release — a layer whose every placed element is
+   * `pin`ned offers no row, and naming one sends the reader looking for a
+   * control that is not there.
+   */
+  releaseLabel: string | null;
+}
+
+export function directionInertWarning(
+  placement: LayerPlacement | null,
+): DirectionInertWarning | null {
+  if (placement === null) return null;
+  const held = placement.placed + placement.pinned;
+  if (held === 0) return null;
+
+  /* The pinned count is said whenever a release is on offer, never folded
+     into the total: those are the elements the release will LEAVE, so a
+     reader who presses it and finds a box unmoved was told beforehand. */
+  const pinnedClause =
+    placement.pinned === 0 || placement.placed === 0
+      ? ""
+      : ` The ${placement.pinned} pinned ${placement.pinned === 1 ? "one" : "ones"} stay in place either way.`;
+
+  const message =
+    held === placement.total
+      ? `Nothing in this layer moved — ${held === 1 ? "its only element is" : `all ${held} of its elements are`} placed by hand${placement.placed === 0 ? " and pinned" : ""}.${pinnedClause}`
+      : `${held} of ${placement.total} elements in this layer are placed by hand and stayed where they were — the rest took the new direction.${pinnedClause}`;
+
+  return {
+    message,
+    releaseLabel:
+      placement.placed === 0 ? null : resetLayerLabel(placement.placed),
   };
 }
 

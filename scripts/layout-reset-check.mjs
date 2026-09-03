@@ -66,11 +66,24 @@
  *      Asked for BY NAME it still releases — the exemption is from the sweep,
  *      not from the author.
  *  10. THE CONTROL IS REACHABLE AND HONEST. The note and the row exist in the
- *      menu that gates them, the "nothing moved" branch exists in the
- *      announcement, and the reset announcement names the undo key. A past
- *      release shipped a correct module behind a control nobody could reach
- *      (`67b35ae`) with every assertion green, because they all asked whether
- *      the MODULE agreed and none asked whether the CONTROL did.
+ *      menu that gates them, and the reset announcement names the undo key. A
+ *      past release shipped a correct module behind a control nobody could
+ *      reach (`67b35ae`) with every assertion green, because they all asked
+ *      whether the MODULE agreed and none asked whether the CONTROL did.
+ *  11. A SIGHTED READER IS TOLD, AT THE MOMENT OF THE PRESS. The menu's note
+ *      is read BEFORE the press and the menu closes on it; the announcement
+ *      beside it is `sr-only`. So the press itself raises a toast, and this
+ *      section proves the sentence for all four shapes a layer can be in
+ *      (nothing placed — silent; some placed; all placed; all pinned), that
+ *      the toast's action is labelled from `resetLayerLabel` so it cannot
+ *      drift from the menu row it runs, and that the path is reachable from
+ *      the direction handler rather than a correct module behind nothing.
+ *      It also pins the four judgements the wording rests on: the file-scope
+ *      press warns with a layer-scoped sentence, `clearDirection` does not
+ *      warn, the placement prose lives in ONE channel (the toast is itself a
+ *      live region, so leaving it in the announcement too would say it twice),
+ *      and a repeated press raises no second toast because the edit refuses
+ *      first.
  *
  * Exits non-zero on any failure. Run with: pnpm check:layout-reset
  */
@@ -141,6 +154,7 @@ const {
 } = await load("src/features/archtext/index.ts");
 const {
   canvasEditability,
+  directionInertWarning,
   layerPlacement,
   movedNodeEdit,
   resetLayerPositionsEdit,
@@ -918,21 +932,6 @@ console.log("\nThe menu offers the release, and the announcement is honest");
 
   const hook = read("src/features/playground/lib/use-canvas-editing.ts");
   check(
-    "the direction announcement has a branch for a layer that cannot move",
-    /so nothing moved/.test(hook) && /placed by hand/.test(hook),
-    "the announcement would claim the layer turned when it did not",
-  );
-  check(
-    "and it points at the row by its shared label rather than a typed copy",
-    /resetLayerLabel\(/.test(hook),
-    "prose naming a control that can be reworded out from under it",
-  );
-  check(
-    "the mixed case is said too, not folded into the inert one",
-    /stayed where/.test(hook),
-    "a half-applied direction would be announced as a whole one",
-  );
-  check(
     "both reset announcements name the undo key",
     (
       hook.match(
@@ -986,6 +985,250 @@ console.log("\nThe menu offers the release, and the announcement is honest");
         canvas,
       ),
     "a second opinion about what counts as placed by hand",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11. The press tells a SIGHTED reader, and only once                      */
+/*                                                                          */
+/* The menu's note warns BEFORE the press and the menu closes on it, and    */
+/* the announcement beside it is `sr-only` — so the reader who pressed a    */
+/* direction, watched the diagram sit still and is deciding whether the      */
+/* control works was the one person told nothing. `directionInertWarning` is */
+/* that sentence. It is called here rather than regex-matched, because a     */
+/* message nothing ever evaluates is a message whose shape nothing proved.  */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nThe press says what did not move, to the reader who can see");
+
+{
+  /** The layer with `ids` dragged and the rest left to the layout. */
+  function dragged(text, ids) {
+    let doc = c4Document(text);
+    let current = text;
+    for (const id of ids) {
+      const node = nodesById(doc, DIAGRAM_ID).get(id);
+      const next = movedNodeEdit(doc, current, DIAGRAM_ID, id, {
+        x: node.position.x + 80,
+        y: node.position.y + 160,
+      });
+      if (next === null) throw new Error(`the drag of ${id} was refused`);
+      doc = next.doc;
+      current = next.text;
+    }
+    return doc;
+  }
+
+  /* THE SILENT HAPPY PATH FIRST. Everything below is a warning, and a warning
+     that also fires on the working case is noise — which is the state that
+     trains a reader to ignore the press that mattered. */
+  const free = layerPlacement(c4Document(FREE_TB), DIAGRAM_ID);
+  check(
+    "a layer the layout places freely raises nothing at all",
+    free.placed === 0 &&
+      free.pinned === 0 &&
+      directionInertWarning(free) === null,
+    JSON.stringify(free),
+  );
+  check(
+    "and a document this cannot be asked about raises nothing either",
+    directionInertWarning(null) === null,
+    "a null placement would have to be read as 'everything is placed'",
+  );
+
+  /* SOME PLACED. The count is the whole content of this sentence: a reader
+     told only that "some elements are placed" has learned nothing they can
+     act on, and a half-turned diagram is the case that needs explaining. */
+  const partly = layerPlacement(
+    dragged(FREE_TB, ["web", "api", "db"]),
+    DIAGRAM_ID,
+  );
+  const partlyWarning = directionInertWarning(partly);
+  check(
+    "the fixture really is partly placed, or the sentence below is the wrong one",
+    partly.placed === 3 && partly.total > 3 && partly.pinned === 0,
+    JSON.stringify(partly),
+  );
+  check(
+    "a partly placed layer is warned about, and the message names the count",
+    partlyWarning !== null &&
+      partlyWarning.message.includes(`3 of ${partly.total} elements`),
+    partlyWarning?.message,
+  );
+  check(
+    "it says the rest DID move, so it is not read as the inert case",
+    partlyWarning !== null &&
+      /the rest took the new direction/.test(partlyWarning.message) &&
+      !partlyWarning.message.includes("Nothing"),
+    partlyWarning?.message,
+  );
+
+  /* ALL PLACED — the press did nothing visible at all, which is a different
+     fact and gets a different sentence. */
+  const all = layerPlacement(everyElementDragged(FREE_TB).doc, DIAGRAM_ID);
+  const allWarning = directionInertWarning(all);
+  check(
+    "an entirely placed layer is told plainly that nothing moved",
+    allWarning !== null &&
+      allWarning.message.startsWith("Nothing in this layer moved") &&
+      allWarning.message.includes(`all ${all.total} of its elements`),
+    allWarning?.message,
+  );
+  check(
+    "and the two cases are not the same sentence with a number swapped",
+    allWarning.message !== partlyWarning.message &&
+      !/\d+ of \d+ elements/.test(allWarning.message) &&
+      !partlyWarning.message.startsWith("Nothing"),
+    "blurring 'nothing moved' into 'some moved' is the wording this forbids",
+  );
+
+  /* THE ACTION IS THE MENU'S ROW, under the menu's own label. Two spellings of
+     one control is the drift `resetLayerLabel` exists to prevent — and a
+     reader who read "Let the layout place them" in the menu must not be
+     offered "Release positions" by the toast. */
+  check(
+    "the release is offered under the shared row label, not a second spelling",
+    allWarning.releaseLabel === resetLayerLabel(all.placed) &&
+      partlyWarning.releaseLabel === resetLayerLabel(partly.placed),
+    `${allWarning.releaseLabel} / ${partlyWarning.releaseLabel}`,
+  );
+
+  /* ALL PINNED. There is no release row on a layer whose every placed element
+     is `pin`ned, so there must be no button either — naming a remedy that is
+     not there is the failure this whole feature exists to stop. */
+  const pinnedOnly = directionInertWarning({ total: 2, placed: 0, pinned: 2 });
+  check(
+    "an all-pinned layer is warned about with no action to press",
+    pinnedOnly !== null &&
+      pinnedOnly.releaseLabel === null &&
+      pinnedOnly.message.includes("pinned"),
+    JSON.stringify(pinnedOnly),
+  );
+  /* AND WHAT THE ACTION WILL LEAVE. The release skips pins, so a message
+     counting four while the button frees two would promise more than it does. */
+  const mixed = directionInertWarning({ total: 4, placed: 2, pinned: 2 });
+  check(
+    "a mix says what stays behind, so the action cannot over-promise",
+    mixed.message.includes("The 2 pinned ones stay in place either way") &&
+      mixed.releaseLabel === resetLayerLabel(2),
+    mixed.message,
+  );
+
+  /* JUDGEMENT 1 — THE FILE-SCOPE PRESS. It warns, because the reader's
+     evidence is identical: they pressed, and the diagram in front of them did
+     not move. What keeps that honest with no file-wide release to offer is
+     that the SENTENCE is layer-scoped — it never claims anything about the
+     diagrams nobody is looking at, so the layer-only action does exactly what
+     the message implies. */
+  check(
+    "the warning never talks about the file, so it is honest at both scopes",
+    [allWarning, partlyWarning, mixed, pinnedOnly].every(
+      (warning) =>
+        warning.message.includes("this layer") &&
+        !/\bfile\b|\bdiagrams\b/.test(warning.message),
+    ),
+    "a file-scope toast whose action can only release one layer",
+  );
+
+  /* JUDGEMENT 4 — A REPEATED PRESS. No dedupe is needed because the EDIT
+     refuses first: choosing the direction already in force returns null, and
+     the handler returns before the toast. Pinned here rather than reasoned
+     about, because "it cannot happen" is what a stacking bug looks like from
+     the inside. */
+  const placedDoc = everyElementDragged(FREE_TB).doc;
+  const turned = revisedDirectionEdit(
+    placedDoc,
+    serializeArchText(placedDoc.synced.file),
+    DIAGRAM_ID,
+    "lr",
+  );
+  check(
+    "pressing the direction already in force is refused, so no toast stacks",
+    turned !== null &&
+      revisedDirectionEdit(turned.doc, turned.text, DIAGRAM_ID, "lr") === null,
+    "a repeated press would raise a second toast for an edit that did nothing",
+  );
+
+  /* REACHABILITY. `67b35ae` again, and the branch has already spent one round
+     on it: a correct module behind a control nothing invokes is the same bug
+     as no module at all. Read from the source with comments stripped — the
+     prose above this handler names the toast, and a regex counting the comment
+     would report success for exactly the state this forbids. */
+  const hookCode = code("src/features/playground/lib/use-canvas-editing.ts");
+  check(
+    "the hook imports the toast from the one renderer the app mounts",
+    /import \{ toast \} from "@\/components\/ui\/toast"/.test(hookCode),
+    "a second toast implementation, or none",
+  );
+  const applyBody =
+    /const applyDirection = useCallback\(([\s\S]*?)\n {4}\[/.exec(hookCode);
+  check(
+    "the direction handler exists in the hook this reads",
+    applyBody !== null,
+    "applyDirection not found — the assertions below would be vacuous",
+  );
+  check(
+    "the direction press is what raises the toast",
+    applyBody !== null &&
+      /directionInertWarning\(placement\)/.test(applyBody[1]) &&
+      /toast\(\{/.test(applyBody[1]) &&
+      /tone: "warning"/.test(applyBody[1]),
+    "a warning nobody can trigger is a warning that does not exist",
+  );
+  check(
+    "its action is labelled from the module, not typed again in the handler",
+    applyBody !== null &&
+      /label: inert\.releaseLabel/.test(applyBody[1]) &&
+      !/Let the layout place/.test(applyBody[1]),
+    "the toast and the menu row could be reworded apart",
+  );
+  /* THE STALE-CLOSURE TRAP. A toast outlives the render that raised it, so a
+     release captured at raise time patches the PRE-EDIT bytes and drops the
+     `direction` line the reader just wrote. The ref is read at press time. */
+  check(
+    "the action runs the CURRENT release path, not the one captured at raise",
+    applyBody !== null &&
+      /releaseRef\.current\(diagramId\)/.test(applyBody[1]) &&
+      !/run: \(\) => resetLayerPositions\(/.test(applyBody[1]),
+    "pressing the toast would undo the direction it is warning about",
+  );
+
+  /* JUDGEMENT 3 — ONE CHANNEL PER FACT. `<Toaster />` is `aria-live` with a
+     `role="status"` per entry, so the placement prose in the announcement TOO
+     would tell a screen-reader user the same thing twice. The announcement
+     keeps what the FILE now says; the toast keeps what the picture did. */
+  const toaster = code("src/components/ui/toast.tsx");
+  check(
+    "the toast really is a live region, which is why the double had to go",
+    /aria-live="polite"/.test(toaster) && /role="status"/.test(toaster),
+    "if it were silent to assistive tech the announcement would have to keep the fact",
+  );
+  check(
+    "the announcement carries no placement prose of its own any more",
+    applyBody !== null &&
+      !/placed by hand|nothing moved|stayed where/.test(applyBody[1]),
+    "the same fact in two live regions — said twice to anyone listening",
+  );
+  check(
+    "and it says what the FILE says, not what the shape did, when inert",
+    applyBody !== null && /now says \$\{/.test(applyBody[1]),
+    "a live region claiming the layer turned beside a toast saying it did not",
+  );
+
+  /* JUDGEMENT 2 — CLEARING DOES NOT WARN. It asks for no shape, so there is
+     no expectation to falsify: the line leaves the document, which is exactly
+     what the reader asked for, and the menu's own tick answers it. */
+  const clearBody =
+    /const clearDirection = useCallback\(([\s\S]*?)\n {4}\[/.exec(hookCode);
+  check(
+    "the clearing handler exists in the hook this reads",
+    clearBody !== null,
+    "clearDirection not found — the assertion below would be vacuous",
+  );
+  check(
+    "clearing raises no toast, so the warning stays about a refused shape",
+    clearBody !== null && !/toast\(/.test(clearBody[1]),
+    "a toast on every direction press is one nobody reads on the press that matters",
   );
 }
 

@@ -72,9 +72,10 @@ export function joinList(
  *
  * HERE, NOT IN THE GESTURE MODULE, because three features say it and two of
  * them may not import the third: the playground's menu renders the row, the
- * playground's announcement points a reader at it after a direction moved
- * nothing, and the validator's `column-layout` advice names it from
- * `/validate` and the MCP `validate_model`. A hand-typed copy in any of them
+ * toast raised when a direction moved nothing labels its own release button
+ * with it (`directionInertWarning`), and the validator's `column-layout`
+ * advice names it from `/validate` and the MCP `validate_model`. A
+ * hand-typed copy in any of them
  * is the stale claim `canvas-editing.md` records three times over — prose that
  * was correct when it was typed, naming a control that has since been
  * reworded, with every check green.

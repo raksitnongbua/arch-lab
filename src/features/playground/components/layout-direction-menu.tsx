@@ -58,6 +58,13 @@
  * them. The counts come from `layerPlacement`, which asks the SERIALIZER
  * whether a line carries geometry; counting `(` here would be a second
  * opinion about the thing the note is asserting.
+ *
+ * THE NOTE IS ONLY HALF OF IT, and knowing which half matters when editing
+ * this file: the note is read BEFORE the press and this menu closes on the
+ * press, so a reader who pressed anyway is told again afterwards, by the
+ * toast `applyDirection` raises — whose action is this section's release row
+ * under the same label. Reword the row and both follow, because both take it
+ * from `resetLayerLabel`.
  */
 
 import { useCallback, useId, useRef, useState } from "react";
