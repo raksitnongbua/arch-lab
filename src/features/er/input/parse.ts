@@ -28,6 +28,7 @@ import {
   detectAlabKind,
   parseErText,
 } from "@/features/archtext";
+import type { ArchTextIssue } from "@/features/archtext";
 import {
   detectMermaidEr,
   MERMAID_ER_CAVEAT,
@@ -61,6 +62,10 @@ export interface ErParseErrorDetail {
   line: number;
   column: number;
   lineText: string | null;
+  /** The `.alab` issue this was flattened from — carried whole, for the
+   *  reasons `SequenceParseErrorDetail.issue` states. Absent for a Mermaid
+   *  failure, which has its own error type and no fix candidates. */
+  issue?: ArchTextIssue;
 }
 
 /** Neither reading matches: no `archlab 1.0 er` header and no `erDiagram`. */
@@ -97,6 +102,7 @@ export function parseErInput(text: string): ErParseResult {
             line: error.line,
             column: error.column,
             lineText: sourceLineAt(text, error.line),
+            issue: error.issues[0],
           },
         };
       }

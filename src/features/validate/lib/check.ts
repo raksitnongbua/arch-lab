@@ -19,6 +19,8 @@
 
 import type { ArchLabFile, C4Level } from "@/types";
 
+import type { FixCandidate, IssueCode } from "@/features/archtext";
+
 import { advise, type Advisory } from "./advisories";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
@@ -75,6 +77,18 @@ export interface CheckIssue {
   lineText?: string;
   /** JSON path (`diagrams[0].nodes[2].type`), for JSON failures. */
   path?: string;
+  /**
+   * Which `.alab` failure this is, and the rewrites that would resolve it.
+   *
+   * Only ever set for the `.alab` grammar — a Mermaid import and a JSON
+   * validation failure have their own error types and offer no candidates, and
+   * a `code` invented for either would be a promise the registry does not
+   * cover. `/validate` is the third surface to render these, after the
+   * playground and the editor's text pane; the same `FixOffer` draws all
+   * three.
+   */
+  code?: IssueCode;
+  fixes?: readonly FixCandidate[];
 }
 
 export interface DiagramSummary {
@@ -272,6 +286,13 @@ export function checkSource(source: string, choice: CheckChoice): CheckResult {
         ...(error.lineText !== null && issue.line === error.line
           ? { lineText: error.lineText }
           : {}),
+        /* Spread conditionally rather than assigned, so an issue with no code
+           carries no `code` key at all. `exactOptionalPropertyTypes` aside,
+           the distinction is real here: the page renders a fix affordance on
+           presence, and an explicit `undefined` would be a row that reserves
+           space for a button that never arrives. */
+        ...(issue.code === undefined ? {} : { code: issue.code }),
+        ...(issue.fixes === undefined ? {} : { fixes: issue.fixes }),
       })),
     };
   }

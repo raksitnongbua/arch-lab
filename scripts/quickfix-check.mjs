@@ -837,6 +837,68 @@ expect(
   deformations.join("\n      "),
 );
 
+/* ======================================================================= */
+/* 6. Every surface renders what the parser sent                            */
+/* ======================================================================= */
+
+console.log("\n6. Every surface renders what the parser sent");
+
+/* `/validate` is the one surface whose plumbing is a pure function, so it is
+   asserted for real rather than source-scanned: `checkSource` must carry the
+   code and the candidates through to the row the page renders. The broken
+   `.alab` sample shipped with the page is the fixture — that document is what
+   a reader lands on, so if anything is going to lose the fixes on the way it
+   will lose them here. */
+const { checkSource } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/validate/lib/check.ts")).href
+);
+const { SAMPLES } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/validate/content/samples.ts"))
+    .href
+);
+
+const brokenSample = SAMPLES.map((sample) => checkSource(sample.source, "auto"))
+  .filter((result) => result.status === "error")
+  .flatMap((result) => result.issues)
+  .find((issue) => issue.code !== undefined);
+expect(
+  brokenSample !== undefined,
+  "checkSource carries a code through to a /validate row",
+  `No sample on /validate produced a coded issue. Either the samples all parse now (fine — say so and drop this), or the code is being dropped between the parser and \`CheckIssue\`, in which case the page can only ever print prose.`,
+);
+if (brokenSample !== undefined) {
+  expect(
+    ISSUE_CODES[brokenSample.code] !== undefined,
+    `the /validate row's code (${brokenSample.code}) is registered`,
+  );
+}
+
+/* The other two surfaces are `.tsx`, which type stripping cannot load — so
+   they are SOURCE assertions, the tactic `check:shortcuts` and
+   `check:viewer-motion` already use for facts that live only in a component.
+   What is asserted is the affordance's presence, not its markup: a panel that
+   stops rendering `FixOffer` reports a parse error the reader cannot act on,
+   and nothing else in the suite would notice. */
+const SURFACES = [
+  [
+    "the playground's source error panel",
+    "src/features/playground/components/view-playground.tsx",
+  ],
+  [
+    "the editor's text pane error panel",
+    "src/features/editor/text-pane/model-text-pane.tsx",
+  ],
+  ["the /validate issue row", "src/features/validate/components/validator.tsx"],
+];
+for (const [label, file] of SURFACES) {
+  const source = readFileSync(path.join(ROOT, file), "utf8");
+  expect(
+    source.includes("<FixOffer") && source.includes("applyFixToTextarea"),
+    `${label} renders FixOffer and applies through the textarea`,
+    `${file} must render <FixOffer> and apply its candidates with applyFixToTextarea — assigning a new value instead loses the caret and the native undo entry, which is what makes clicking a fix low-stakes.`,
+  );
+}
+
 /* ----------------------------------------------------------------------- */
 
 console.log(
