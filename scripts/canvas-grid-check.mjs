@@ -27,9 +27,17 @@
  * Section 4 measures that the material layer scales with nothing.
  *
  * KEPT FROM THE PREVIOUS MODEL, unchanged in value: the per-theme visibility
- * floor (1.1:1), the ≤60%-of-`--edge` ceiling, the well-below-chrome assertion,
- * and the mount assertion derived from `KIND_BLURB`. No floor and no ceiling was
- * moved to make this change pass.
+ * floor (1.1:1), the ≤60%-of-`--edge` ceiling, the well-against-chrome
+ * assertion, and the mount assertion derived from `KIND_BLURB`. No floor and no
+ * ceiling was moved to make this change pass.
+ *
+ * SECTION 5 NOW HOLDS TWO RULES WHERE IT HELD ONE, and the reason is written
+ * out there: it measured "the well is a recess cut into the page" as if that
+ * were the only thing a well can be, and went stale the moment `paper`
+ * committed to the other metaphor — the well as the SHEET, above its chrome on
+ * purpose. Which metaphor a theme takes is declared in
+ * `CANVAS_GROUND_METAPHOR`, never inferred from the palette, and each metaphor
+ * carries its own obligation. Neither rule is looser than the one it replaced.
  *
  * RETIRED, and said out loud rather than quietly dropped: the 1.4:1 major/minor
  * SEPARATION floor. It was calibrated on two independently chosen colour
@@ -37,7 +45,7 @@
  * against itself by construction. Section 3 asserts the three channels that
  * replace it — alpha, stroke weight, and a 5× difference in pitch.
  *
- * THE THEME LIST IS READ FROM `THEMES`, never typed here. A ninth theme is
+ * THE THEME LIST IS READ FROM `THEMES`, never typed here. A tenth theme is
  * measured on the day it is declared, whether or not anyone remembers this file.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-grid
@@ -53,12 +61,12 @@ import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 const CSS = read("src/app/globals.css");
-const CONSTANTS = read("src/lib/constants.ts");
 
-/* THE REAL MODULE, loaded through Node's type stripping. `codebase.md`: a check
+/* THE REAL MODULES, loaded through Node's type stripping. `codebase.md`: a check
    loads the library code the app ships rather than a copy of it, or it measures
    a second implementation that agrees with nothing. */
 const ground = await import("../src/lib/canvas-ground.ts");
+const constants = await import("../src/lib/constants.ts");
 
 let failures = 0;
 let assertions = 0;
@@ -73,11 +81,13 @@ const check = (label, ok, detail) => {
   if (detail !== undefined) console.error(`    ${detail}`);
 };
 
-const THEMES = [
-  ...(/export const THEMES = \[([^\]]*)\]/.exec(CONSTANTS)?.[1] ?? "").matchAll(
-    /"([a-z-]+)"/g,
-  ),
-].map((m) => m[1]);
+/* READ, NOT RE-PARSED. This was a regex over the source of `constants.ts`,
+   which was enough while the only thing wanted was a list of names; section 5
+   now also needs `CANVAS_GROUND_METAPHOR`, and a regex that has to walk a
+   `Record` literal is exactly the second implementation `codebase.md` forbids.
+   The module is loadable — it is pure TypeScript with no `.tsx` in its import
+   chain — so both come from the app's own declaration. */
+const { THEMES, CANVAS_GROUND_METAPHOR } = constants;
 
 const baseline = tokensOf(CSS, "light");
 
@@ -1136,26 +1146,138 @@ for (const theme of THEMES) {
 /* 5. The well itself, in every theme                                       */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nthe well stays at or below the chrome it is set into");
+console.log("\nthe well keeps the promise its theme's ground metaphor makes");
 
-/* AT OR BELOW, not strictly below: `midnight` and `contrast` set the well to
-   their page colour exactly, which is those palettes' own argument rather than
-   a drift. Equality is the floor of the rule, not an exemption from it. */
+/* TWO RULES, BECAUSE THERE ARE TWO METAPHORS — and this section measured one of
+   them as if it were universal, which is how it went stale the moment a theme
+   committed to the other.
+
+   It held a single rule: `--canvas` at or below `--background`, the well as a
+   recess cut into the page. #104 lifted `paper`'s well ABOVE its chrome on
+   purpose — the sheet IS the material there, argued in the block beside the
+   token — and this assertion was left red on `main` for the entire life of that
+   change, naming a "recess `--canvas` exists to draw" that `paper` had stopped
+   drawing. The palette was right and the measurement was the stale artefact.
+
+   AN EXEMPTION WAS THE OTHER FIX AND WAS REJECTED. A theme skipping the rule
+   owes nothing, so nothing would then measure `paper`'s well in either
+   direction — and this section's own note already resists that shape ("equality
+   is the floor of the rule, not an exemption from it"). So the rule split into
+   the two obligations actually being protected, and every theme still faces one:
+
+     recessed — `--canvas` at or below `--background`, unchanged.
+     sheet     — `--canvas` at or above `--node`, which is the premise `paper`'s
+                 own comment names: nothing on the canvas is a raised panel any
+                 more, so the marks have to be found by their line work. A well
+                 that floats above the chrome and below the node surface is the
+                 one arrangement neither metaphor describes — a sheet with
+                 raised panels printed on it — and it is what lowering `--canvas`
+                 back towards 0.962 would produce.
+
+   AND THE METAPHOR IS DECLARED, NOT INFERRED. Reading it off the numbers would
+   make this section agree with whatever the palette happens to say, which is
+   the failure it just had: a check that cannot disagree with the thing it
+   measures passes forever. `CANVAS_GROUND_METAPHOR` in `lib/constants.ts` is
+   the declaration, beside `THEMES` and listed in its "adding a theme takes five
+   edits" note, so a tenth theme cannot arrive without one. */
+const metaphors = Object.keys(CANVAS_GROUND_METAPHOR);
+check(
+  `every theme declares a ground metaphor (${metaphors.length} of ${THEMES.length})`,
+  THEMES.every((t) => CANVAS_GROUND_METAPHOR[t] !== undefined),
+  `undeclared: ${THEMES.filter((t) => CANVAS_GROUND_METAPHOR[t] === undefined).join(", ")} — ` +
+    "a theme with no metaphor is a well nothing below measures in either direction",
+);
+check(
+  "and nothing is declared that is not a theme",
+  metaphors.every((t) => THEMES.includes(t)),
+  `not in THEMES: ${metaphors.filter((t) => !THEMES.includes(t)).join(", ")} — ` +
+    "a declaration for a palette that does not exist is a rule nothing runs",
+);
+
 for (const theme of THEMES) {
   const tokens = tokensOf(CSS, theme) ?? baseline;
   const well = parseOklch(resolveToken("--canvas", tokens, baseline));
   const chrome = parseOklch(resolveToken("--background", tokens, baseline));
-  if (well === null || chrome === null) {
-    check(`${theme}: --canvas and --background both resolve`, false);
+  const panel = parseOklch(resolveToken("--node", tokens, baseline));
+  if (well === null || chrome === null || panel === null) {
+    check(`${theme}: --canvas, --background and --node all resolve`, false);
     continue;
   }
+  /* The panel composited onto the well before it is measured — `glass` states
+     its surfaces at alpha 0.62, and the token alone is a panel no reader sees
+     (see `parseOklch`). */
+  const panelRgb = flatten(panel, well);
+
+  if (CANVAS_GROUND_METAPHOR[theme] === "sheet") {
+    /* AT OR ABOVE, symmetric with the recessed rule below: a sheet whose stock
+       and whose node surface are the same colour has still flattened the panel
+       away, which is what the obligation is about. */
+    const ok = luminance(well.rgb) >= luminance(panelRgb) - 1e-9;
+    check(
+      `${theme}: a sheet — the well is ${ok ? `${contrast(well.rgb, panelRgb).toFixed(3)}:1 over` : "BELOW"} its node surface`,
+      ok,
+      "this theme declares the well to BE the sheet, but a node drawn on it is " +
+        "lighter than the sheet — so the panel is raised after all, and the " +
+        "line-art tokens that assume it is not are drawing over a card",
+    );
+    continue;
+  }
+
+  /* AT OR BELOW, not strictly below: `midnight` and `contrast` set the well to
+     their page colour exactly, which is those palettes' own argument rather
+     than a drift. Equality is the floor of the rule, not an exemption from
+     it. */
   const ok = luminance(well.rgb) <= luminance(chrome.rgb) + 1e-9;
   check(
-    `${theme}: the well is ${ok ? `${contrast(chrome.rgb, well.rgb).toFixed(3)}:1 under` : "ABOVE"} its chrome`,
+    `${theme}: a recess — the well is ${ok ? `${contrast(chrome.rgb, well.rgb).toFixed(3)}:1 under` : "ABOVE"} its chrome`,
     ok,
-    "the diagram well is LIGHTER than the page it is set into, which inverts " +
-      "the recess `--canvas` exists to draw",
+    "this theme declares the well to be a recess cut into the page, and it is " +
+      "LIGHTER than the page instead — which inverts it. A well that belongs " +
+      "above its chrome is a `sheet`, and owes the --canvas ≥ --node premise " +
+      "that goes with it",
   );
+}
+
+/* `paper` BY NAME, because it is the one theme in the sheet family and the
+   numbers are the decision rather than a consequence of it. #104 moved
+   `--canvas` from 0.962 to 0.988 to put the ground above `--node` at 0.977;
+   the generic rules above would go green again on the day someone lowered it
+   back to 0.962 and re-declared the theme `recessed`, having "fixed" a red
+   check by reverting the argument that turned it red. This pins both ends of
+   the arrangement that change bought. */
+{
+  const tokens = tokensOf(CSS, "paper") ?? baseline;
+  const well = parseOklch(resolveToken("--canvas", tokens, baseline));
+  const chrome = parseOklch(resolveToken("--background", tokens, baseline));
+  const panel = parseOklch(resolveToken("--node", tokens, baseline));
+  if (well === null || chrome === null || panel === null) {
+    check("paper: --canvas, --background and --node all resolve", false);
+  } else {
+    const panelRgb = flatten(panel, well);
+    const overChrome = luminance(well.rgb) > luminance(chrome.rgb);
+    const overPanel = luminance(well.rgb) >= luminance(panelRgb) - 1e-9;
+    check(
+      "paper is the sheet theme, and says so",
+      CANVAS_GROUND_METAPHOR.paper === "sheet",
+      `it declares "${CANVAS_GROUND_METAPHOR.paper}" — declaring paper a recess ` +
+        "does not restore one, it just measures the sheet against the wrong rule",
+    );
+    /* The direction is in the WORDING, not only in the ratio: a contrast ratio
+       is symmetric, so "1.030:1 over its chrome" would read as a pass on the
+       exact reversion this assertion exists to catch. */
+    check(
+      `paper: its stock is ${contrast(well.rgb, chrome.rgb).toFixed(3)}:1 ` +
+        `${overChrome ? "over" : "UNDER"} its chrome and ` +
+        `${contrast(well.rgb, panelRgb).toFixed(3)}:1 ` +
+        `${overPanel ? "over" : "UNDER"} its node surface`,
+      overChrome && overPanel,
+      `over chrome: ${overChrome}, over node: ${overPanel} — #104 lifted this ` +
+        "well past both on purpose (0.962 → 0.988, node 0.977) because the " +
+        "recess is most of what made the theme read as yellowed. Moving it back " +
+        "reverts a shipped design decision; change the argument in globals.css " +
+        "first, or leave the colour alone",
+    );
+  }
 }
 
 console.log(
