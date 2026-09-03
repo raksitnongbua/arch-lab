@@ -133,3 +133,175 @@ describe("a document that does not parse", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Paths                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A path is authored text, so its failure modes are the grammar's problem, not
+ * the viewer's: a beat that names something absent would light the wrong thing
+ * in silence, and a diagram that lights the wrong thing is a presentation bug.
+ * Every refusal below is asserted by the id it names, because "it threw" would
+ * still pass if the parser threw for the wrong reason.
+ */
+const PATHS = `archlab 1.0
+title "Paths"
+
+@context d-ctx-root "Root"
+  a:person "A"
+  b:system "B"
+  c:external "C"
+
+  a -> b : "asks"
+  b -> a : "answers"
+  b -> c : "calls" id=e-bc
+
+  path send "The send path"
+    beat "A asks B, and B answers"
+      a -> b
+    beat "B calls C, and A is still in the picture"
+      b -> c ~e-bc
+      a -> b
+
+  path other "The other path"
+    beat "C is reached from B"
+      c -> b
+`;
+
+function refusal(text: string): string {
+  try {
+    parseArchText(text);
+  } catch (error) {
+    return (error as ArchTextParseError).message;
+  }
+  throw new Error("expected the parse to be refused, but it succeeded");
+}
+
+/** `PATHS` with its two path blocks replaced by `body`. */
+function withPaths(body: string): string {
+  return PATHS.slice(0, PATHS.indexOf("  path send")) + body;
+}
+
+describe("paths", () => {
+  it("reads a path into the model in author order", () => {
+    const diagram = parseArchText(PATHS).diagrams[0];
+    expect(diagram.paths?.map((p) => p.id)).toEqual(["send", "other"]);
+    expect(diagram.paths?.[0].title).toBe("The send path");
+    expect(diagram.paths?.[0].beats).toHaveLength(2);
+    expect(diagram.paths?.[0].beats[0].caption).toBe(
+      "A asks B, and B answers",
+    );
+  });
+
+  it("keeps several chain lines in one beat", () => {
+    const beat = parseArchText(PATHS).diagrams[0].paths?.[0].beats[1];
+    expect(beat?.chains).toHaveLength(2);
+    expect(beat?.chains[0].nodes).toEqual(["b", "c"]);
+    expect(beat?.chains[0].edgeId).toBe("e-bc");
+    expect(beat?.chains[1].edgeId).toBeUndefined();
+  });
+
+  /* The arrow orders the TELLING. A request and its response point opposite
+     ways, and a walk that could not go against an arrow is one authors fight. */
+  it("matches a hop against a relationship in either orientation", () => {
+    const other = parseArchText(PATHS).diagrams[0].paths?.[1];
+    expect(other?.beats[0].chains[0].nodes).toEqual(["c", "b"]);
+  });
+
+  it("round-trips byte-identically", () => {
+    expect(serializeArchText(parseArchText(PATHS))).toBe(PATHS);
+  });
+
+  /* Comments are dropped by this parser everywhere, paths included — they
+     survive only the line-patch route. What matters here is that one between
+     two paths does not end the first path or swallow the second. */
+  it("is not derailed by a comment between two paths", () => {
+    const commented = PATHS.replace(
+      "  path other",
+      "  // the webhook story\n  path other",
+    );
+    const diagram = parseArchText(commented).diagrams[0];
+    expect(diagram.paths?.map((p) => p.id)).toEqual(["send", "other"]);
+  });
+
+  it("leaves a document without paths untouched", () => {
+    const pathless = PATHS.slice(0, PATHS.indexOf("\n  path send"));
+    expect(serializeArchText(parseArchText(pathless))).toBe(pathless);
+    expect(parseArchText(pathless).diagrams[0].paths).toBeUndefined();
+  });
+
+  it("refuses a beat naming an element that is not on this canvas", () => {
+    expect(
+      refusal(withPaths('  path p "P"\n    beat "x"\n      a -> ghost\n')),
+    ).toContain("beat names 'ghost'");
+  });
+
+  it("refuses a hop no relationship joins", () => {
+    expect(
+      refusal(withPaths('  path p "P"\n    beat "x"\n      a -> c\n')),
+    ).toContain("no relationship joins 'a' and 'c'");
+  });
+
+  it("refuses an edge anchor that does not join its own hop", () => {
+    expect(
+      refusal(withPaths('  path p "P"\n    beat "x"\n      a -> b ~e-bc\n')),
+    ).toContain("~e-bc does not join 'a' and 'b'");
+  });
+
+  it("refuses a duplicate path id, naming the line the first one is on", () => {
+    const message = refusal(
+      withPaths(
+        '  path p "P"\n    beat "x"\n      a -> b\n' +
+          '  path p "Q"\n    beat "y"\n      a -> b\n',
+      ),
+    );
+    expect(message).toContain('duplicate path id "p"');
+    expect(message).toContain("already declared on line");
+  });
+
+  it("refuses a path with no beats", () => {
+    expect(refusal(withPaths('  path p "P"\n'))).toContain(
+      "a path needs at least one beat",
+    );
+  });
+
+  /* A beat with prose and no elements is a caption card, which is the thing
+     the design cuts — so the grammar does not let one be written. */
+  it("refuses a beat that names no relationship", () => {
+    expect(refusal(withPaths('  path p "P"\n    beat "x"\n'))).toContain(
+      "a beat must name at least one relationship",
+    );
+  });
+
+  it("refuses a chain of one element", () => {
+    expect(
+      refusal(withPaths('  path p "P"\n    beat "x"\n      a\n')),
+    ).toContain("a chain of one element names no relationship");
+  });
+
+  /* This is also what catches an edge line mis-indented into a path. */
+  it("refuses any arrow but ->, naming the one that was written", () => {
+    expect(
+      refusal(withPaths('  path p "P"\n    beat "x"\n      a <-> b\n')),
+    ).toContain('"<->" is not allowed in a beat');
+  });
+
+  it("refuses a chain line with no beat open above it", () => {
+    expect(refusal(withPaths('  path p "P"\n      a -> b\n'))).toContain(
+      'no "beat" line is open above it',
+    );
+  });
+
+  it("refuses a node line indented into a path, naming the word written", () => {
+    expect(refusal(withPaths('  path p "P"\n    d:person "D"\n'))).toContain(
+      "is not allowed inside a path",
+    );
+  });
+
+  it("still refuses an indent the grammar has no production for", () => {
+    expect(refusal(withPaths('  path p "P"\n   beat "x"\n'))).toContain(
+      "inconsistent indentation of 3 spaces",
+    );
+  });
+});

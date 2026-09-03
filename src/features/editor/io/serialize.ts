@@ -48,6 +48,9 @@ type SchemaKind =
   | "size"
   | "externalRef"
   | "edge"
+  | "path"
+  | "beat"
+  | "chain"
   | "unknown";
 
 interface KindSpec {
@@ -108,13 +111,28 @@ const SPECS: Readonly<Record<Exclude<SchemaKind, "unknown">, KindSpec>> = {
       "frames",
       "nodes",
       "edges",
+      "paths",
     ],
     child: { viewport: "viewport" },
-    element: { frames: "frame", nodes: "node", edges: "edge" },
+    element: { frames: "frame", nodes: "node", edges: "edge", paths: "path" },
+    /* `paths` is deliberately absent: a path's place in the list is the order
+       the author tells the story in and the order the reader's menu offers it,
+       so sorting by id would rewrite somebody's argument on every save. */
     sortById: ["frames", "nodes", "edges"],
   },
   viewport: { order: ["zoom", "x", "y"] },
   frame: { order: ["id", "label", "parentFrameId"] },
+  path: {
+    order: ["id", "title", "beats"],
+    element: { beats: "beat" },
+  },
+  beat: {
+    order: ["caption", "chains"],
+    element: { chains: "chain" },
+  },
+  /* `nodes` here is a chain of node ids in walking order — never sorted, for
+     the same reason `paths` is not: the order IS the content. */
+  chain: { order: ["nodes", "edgeId"] },
   node: {
     order: [
       "id",

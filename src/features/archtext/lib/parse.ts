@@ -33,6 +33,7 @@ import { defaultPositions, defaultSizeFor } from "./defaults";
 import { failAt } from "./errors";
 import { ARROWS, NODE_TYPE_BY_KEYWORD } from "./keywords";
 import {
+  DIAGRAM_KEYS,
   DIAGRAM_RAW,
   EDGE_RAW,
   FILE_KEYS,
@@ -136,6 +137,31 @@ interface PendingEdge extends PendingBlock {
   waypointUnknowns: Map<number, Pend[]>;
 }
 
+/** One chain line of a beat, with the source location of every token. */
+interface PendingChain extends Loc {
+  nodes: { id: string; loc: Loc }[];
+  edgeId?: string;
+  edgeIdLoc?: Loc;
+}
+
+interface PendingBeat extends Loc {
+  caption: string;
+  chains: PendingChain[];
+}
+
+/**
+ * `kind` exists only so the main loop can tell a `path` line from the node or
+ * edge `parseBodyLine` otherwise hands back — the two are grammatically
+ * unrelated, and a structural test ("does it have beats?") would be an
+ * implicit discriminant that a later field could break.
+ */
+interface PendingPath extends Loc {
+  kind: "path";
+  id: string;
+  title: string;
+  beats: PendingBeat[];
+}
+
 interface PendingDiagram extends Loc {
   id: string;
   level: C4Level;
@@ -151,6 +177,7 @@ interface PendingDiagram extends Loc {
   frames: PendingFrame[];
   nodes: PendingNode[];
   edges: PendingEdge[];
+  paths: PendingPath[];
   raw: Map<string, Pend>;
   unknowns: Pend[];
   viewportUnknowns: Pend[];
@@ -446,6 +473,10 @@ export function parseArchTextWithSpans(source: string): {
   let phase: "header" | "diagrams" = "header";
   let current: PendingDiagram | null = null;
   let member: PendingNode | PendingEdge | null = null;
+  // A path opens at indent 2 and owns everything deeper until the next indent-2
+  // line, so these two are cleared wherever `member` is.
+  let currentPath: PendingPath | null = null;
+  let currentBeat: PendingBeat | null = null;
   let seenContent = false;
   // The last header CONTENT line (comments and blanks between the header and
   // the first "@" belong to nobody, so an insertion after this line can never
@@ -472,11 +503,11 @@ export function parseArchTextWithSpans(source: string): {
       );
     }
     if (text.trimStart().startsWith("//")) continue;
-    if (indent !== 0 && indent !== 2 && indent !== 4) {
+    if (indent !== 0 && indent !== 2 && indent !== 4 && indent !== 6) {
       failAt(
         lineNo,
         indent + 1,
-        `inconsistent indentation of ${indent} space${indent === 1 ? "" : "s"} — expected 0 (header or "@" diagram), 2 (diagram body) or 4 (node/edge continuation)`,
+        `inconsistent indentation of ${indent} space${indent === 1 ? "" : "s"} — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat's chain line)`,
         text.trim().slice(0, 40),
       );
     }
@@ -521,6 +552,8 @@ export function parseArchTextWithSpans(source: string): {
     if (indent === 0) {
       current = null;
       member = null;
+      currentPath = null;
+      currentBeat = null;
       if (cursor.peek() === "@") {
         phase = "diagrams";
         current = parseDiagramHeader(cursor, diagramById);
@@ -555,24 +588,50 @@ export function parseArchTextWithSpans(source: string): {
           text.trim().slice(0, 40),
         );
       }
-      member = parseBodyLine(cursor, current, nodeHome);
+      const line = parseBodyLine(cursor, current, nodeHome);
+      currentBeat = null;
+      if (line !== null && "kind" in line) {
+        currentPath = line;
+        member = null;
+      } else {
+        currentPath = null;
+        member = line;
+      }
       continue;
     }
 
     /* ------------------------------- indent 4 ---------------------------- */
-    if (member === null) {
+    if (indent === 4) {
+      if (currentPath !== null) {
+        currentBeat = parseBeatLine(cursor, currentPath);
+        continue;
+      }
+      if (member === null) {
+        failAt(
+          lineNo,
+          5,
+          "this continuation line has no node or edge line above it",
+          text.trim().slice(0, 40),
+        );
+      }
+      parseContinuation(cursor, member);
+      // The block now reaches this line. Recorded here rather than inside
+      // `parseContinuation` because this loop is the only place that knows a
+      // line number without being handed one.
+      member.endLine = lineNo;
+      continue;
+    }
+
+    /* ------------------------------- indent 6 ---------------------------- */
+    if (currentBeat === null) {
       failAt(
         lineNo,
-        5,
-        "this continuation line has no node or edge line above it",
+        7,
+        'this line is indented like a beat\'s chain, but no "beat" line is open above it',
         text.trim().slice(0, 40),
       );
     }
-    parseContinuation(cursor, member);
-    // The block now reaches this line. Recorded here rather than inside
-    // `parseContinuation` because this loop is the only place that knows a
-    // line number without being handed one.
-    member.endLine = lineNo;
+    parseChainLine(cursor, currentBeat);
   }
 
   if (!seenContent || header.version === undefined) {
@@ -923,6 +982,7 @@ function parseDiagramHeader(
     frames: [],
     nodes: [],
     edges: [],
+    paths: [],
     raw: new Map(),
     unknowns: [],
     viewportUnknowns: [],
@@ -998,11 +1058,100 @@ function parseDiagramHeader(
 /* Diagram body: desc / view / ! / node / edge                                */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Paths                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Key for an UNORDERED pair of node ids. A hop matches a relationship in
+ * either orientation, so `a -> b` and `b -> a` must land on the same bucket.
+ */
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
+}
+
+/**
+ * One `beat` line, at indent 4 inside an open path. Only `beat` is legal
+ * there: an author who indents a node line into a path gets a sentence naming
+ * the word they wrote rather than a continuation error about a line that is
+ * not a continuation.
+ */
+function parseBeatLine(cursor: LineCursor, path: PendingPath): PendingBeat {
+  const startLoc = { line: cursor.line, column: cursor.column };
+  const word = cursor.readBare(/^[A-Za-z0-9_]+/, 'the "beat" keyword');
+  if (word !== "beat") {
+    failAt(
+      startLoc.line,
+      startLoc.column,
+      `"${word}" is not allowed inside a path — a path's body is "beat" lines`,
+      word,
+    );
+  }
+  cursor.skipSpaces();
+  const caption = cursor.readQuoted("the beat caption");
+  if (caption === "") {
+    cursor.fail("the beat caption must not be empty");
+  }
+  cursor.expectEnd('the "beat" line');
+  const beat: PendingBeat = { ...startLoc, caption, chains: [] };
+  path.beats.push(beat);
+  return beat;
+}
+
+/**
+ * One chain line of a beat: `a -> b -> c`, optionally anchored `… ~edge-id`.
+ *
+ * Only `->` is accepted, and the refusal says why: the arrow orders the
+ * TELLING, and a hop matches its pair in either orientation, so `<-` would be
+ * a distinction the reader never sees. Rejecting every other arrow is also
+ * what makes an edge line mis-indented into a path fail here, on the line the
+ * author wrote, rather than resolving into a walk nobody meant.
+ */
+function parseChainLine(cursor: LineCursor, beat: PendingBeat): void {
+  const startLoc = { line: cursor.line, column: cursor.column };
+  const nodes: { id: string; loc: Loc }[] = [];
+  for (;;) {
+    cursor.skipSpaces();
+    const loc = { line: cursor.line, column: cursor.column };
+    nodes.push({ id: cursor.readIdToken("an element id"), loc });
+    cursor.skipSpaces();
+    if (cursor.atEnd() || cursor.peek() === "~") break;
+    const arrowLoc = { line: cursor.line, column: cursor.column };
+    const arrow = cursor.readBare(/^[-<>.]+/, 'an arrow ("->")');
+    if (arrow !== "->") {
+      failAt(
+        arrowLoc.line,
+        arrowLoc.column,
+        `"${arrow}" is not allowed in a beat — a beat's chain uses "->" only, and the arrow orders the telling rather than asserting direction`,
+        arrow,
+      );
+    }
+  }
+  const chain: PendingChain = { ...startLoc, nodes };
+  if (cursor.peek() === "~") {
+    cursor.pos += 1;
+    const loc = { line: cursor.line, column: cursor.column };
+    chain.edgeId = cursor.readIdToken('an edge id after "~"');
+    chain.edgeIdLoc = loc;
+    cursor.skipSpaces();
+  }
+  cursor.expectEnd("the chain line");
+  if (nodes.length < 2) {
+    failAt(
+      startLoc.line,
+      startLoc.column,
+      'a chain of one element names no relationship — join at least two with "->"',
+      nodes[0]?.id,
+    );
+  }
+  beat.chains.push(chain);
+}
+
 function parseBodyLine(
   cursor: LineCursor,
   diagram: PendingDiagram,
   nodeHome: Map<string, { diagram: PendingDiagram; node: PendingNode }>,
-): PendingNode | PendingEdge | null {
+): PendingNode | PendingEdge | PendingPath | null {
   if (cursor.peek() === "!") {
     parseScopeBang(cursor, "diagram", {
       raw: diagram.raw,
@@ -1090,6 +1239,35 @@ function parseBodyLine(
     diagram.frames.push(frame);
     return null;
   }
+  if (first === "path" && cursor.peek() === " ") {
+    cursor.skipSpaces();
+    const idLoc = { line: cursor.line, column: cursor.column };
+    const id = cursor.readIdToken("the path id");
+    const duplicate = diagram.paths.find((p) => p.id === id);
+    if (duplicate !== undefined) {
+      failAt(
+        idLoc.line,
+        idLoc.column,
+        `duplicate path id "${id}" — already declared on line ${duplicate.line}; path ids must be unique within a diagram`,
+        id,
+      );
+    }
+    cursor.skipSpaces();
+    const title = cursor.readQuoted("the path title");
+    if (title === "") {
+      cursor.fail("the path title must not be empty");
+    }
+    cursor.expectEnd('the "path" line');
+    const path: PendingPath = {
+      kind: "path",
+      ...idLoc,
+      id,
+      title,
+      beats: [],
+    };
+    diagram.paths.push(path);
+    return path;
+  }
   if (first === "view" && cursor.peek() === " ") {
     if (diagram.viewport !== undefined) {
       failAt(
@@ -1111,19 +1289,10 @@ function parseBodyLine(
   return parseEdgeLine(cursor, startLoc, first, diagram);
 }
 
-const DIAGRAM_KEYS_SET: ReadonlySet<string> = new Set([
-  "id",
-  "level",
-  "title",
-  "description",
-  "ownerNodeId",
-  "parentDiagramId",
-  "viewport",
-  "direction",
-  "frames",
-  "nodes",
-  "edges",
-]);
+/* Derived, not respelled: this set and `DIAGRAM_KEYS` must name the same keys
+   or a key gains dedicated syntax in one direction and stays a `!` line in the
+   other. `NODE_KEYS_SET` below has always been derived; this one was a copy. */
+const DIAGRAM_KEYS_SET: ReadonlySet<string> = new Set(DIAGRAM_KEYS);
 const NODE_KEYS_SET: ReadonlySet<string> = new Set(NODE_KEYS);
 const EDGE_KEYS_SET: ReadonlySet<string> = new Set([
   "id",
@@ -2226,6 +2395,120 @@ function resolve(
       }
     }
 
+    /* paths — cross-checked here for the frames' reason: every node and edge
+       of this diagram is known, and a beat that names something absent would
+       otherwise light the wrong thing, or nothing, in silence. A path that
+       lights the wrong thing is a presentation bug, and presentation is the
+       product. */
+    const finalPaths: Record<string, unknown>[] = [];
+    if (diagram.paths.length > 0) {
+      const nodeIdSet = new Set(diagram.nodes.map((n) => n.id));
+      // Every edge of this diagram keyed by its unordered pair, because a hop
+      // matches in EITHER orientation — the arrow orders the telling.
+      const edgesByPair = new Map<string, { id: string }[]>();
+      const edgeById = new Map<string, { source: string; target: string }>();
+      for (const edge of finalEdges) {
+        const id = edge.id as string;
+        const source = edge.source as string;
+        const target = edge.target as string;
+        const key = pairKey(source, target);
+        const bucket = edgesByPair.get(key);
+        if (bucket === undefined) edgesByPair.set(key, [{ id }]);
+        else bucket.push({ id });
+        edgeById.set(id, { source, target });
+      }
+
+      for (const path of diagram.paths) {
+        if (path.beats.length === 0) {
+          failAt(
+            path.line,
+            path.column,
+            `path "${path.id}" has no beats — a path needs at least one beat`,
+            path.id,
+          );
+        }
+        const beats: Record<string, unknown>[] = [];
+        for (const beat of path.beats) {
+          if (beat.chains.length === 0) {
+            failAt(
+              beat.line,
+              beat.column,
+              "a beat must name at least one relationship — add a chain line like \"a -> b\" below it",
+            );
+          }
+          const chains: Record<string, unknown>[] = [];
+          for (const chain of beat.chains) {
+            for (const { id, loc } of chain.nodes) {
+              if (!nodeIdSet.has(id)) {
+                failAt(
+                  loc.line,
+                  loc.column,
+                  `beat names '${id}' — no element with that id in this diagram`,
+                  id,
+                );
+              }
+            }
+            for (let i = 0; i + 1 < chain.nodes.length; i += 1) {
+              const from = chain.nodes[i];
+              const to = chain.nodes[i + 1];
+              if (!edgesByPair.has(pairKey(from.id, to.id))) {
+                failAt(
+                  from.loc.line,
+                  from.loc.column,
+                  `no relationship joins '${from.id}' and '${to.id}' in this diagram`,
+                  from.id,
+                );
+              }
+            }
+            if (chain.edgeId !== undefined) {
+              const at = chain.edgeIdLoc ?? { line: chain.line, column: chain.column };
+              const anchored = edgeById.get(chain.edgeId);
+              const last = chain.nodes[chain.nodes.length - 2];
+              const end = chain.nodes[chain.nodes.length - 1];
+              if (
+                anchored === undefined ||
+                pairKey(anchored.source, anchored.target) !==
+                  pairKey(last.id, end.id)
+              ) {
+                failAt(
+                  at.line,
+                  at.column,
+                  `~${chain.edgeId} does not join '${last.id}' and '${end.id}' — an edge anchor must name a relationship between the two elements of its hop`,
+                  chain.edgeId,
+                );
+              }
+            }
+            const chainPairs: (readonly [string, unknown])[] = [
+              ["nodes", chain.nodes.map((n) => n.id)],
+            ];
+            if (chain.edgeId !== undefined) {
+              chainPairs.push(["edgeId", chain.edgeId]);
+            }
+            chains.push(assemble(chainPairs, []));
+          }
+          beats.push(
+            assemble(
+              [
+                ["caption", beat.caption],
+                ["chains", chains],
+              ],
+              [],
+            ),
+          );
+        }
+        finalPaths.push(
+          assemble(
+            [
+              ["id", path.id],
+              ["title", path.title],
+              ["beats", beats],
+            ],
+            [],
+          ),
+        );
+      }
+    }
+
     /* the diagram object */
     let viewport: Record<string, unknown> | undefined;
     if (diagram.viewport !== undefined) {
@@ -2261,6 +2544,7 @@ function resolve(
     if (finalFrames.length > 0) pairs.push(["frames", finalFrames]);
     pairs.push(["nodes", finalNodes]);
     pairs.push(["edges", finalEdges]);
+    if (finalPaths.length > 0) pairs.push(["paths", finalPaths]);
     finalDiagrams.push(assemble(pairs, diagram.unknowns));
     spans.diagramHeads.set(diagram.id, diagram.line);
   }

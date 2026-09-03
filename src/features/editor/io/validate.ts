@@ -556,6 +556,122 @@ export function validateArchLabFile(input: unknown): ArchLabFile {
         }
       });
     }
+
+    /* ------------------------------ paths ------------------------------- */
+
+    // A path is a READING of the relationships above it, so every id it names
+    // must resolve on this same canvas — and the two sets it resolves against
+    // are gathered here rather than reused from above, because the edge map is
+    // file-wide (edge ids are unique across the document) and a path may only
+    // name an edge drawn on its own diagram.
+    const diagramEdgeIds = new Set<string>();
+    if (Array.isArray(edges)) {
+      for (const edge of edges) {
+        if (isRecord(edge) && isNonEmptyString(edge.id)) {
+          diagramEdgeIds.add(edge.id);
+        }
+      }
+    }
+
+    if (diagram.paths !== undefined) {
+      const paths = diagram.paths;
+      if (!Array.isArray(paths)) {
+        problem(
+          `${dPath}.paths`,
+          `${describe(paths)} — expected an array of paths`,
+        );
+      } else {
+        const pathIds = new Set<string>();
+        paths.forEach((path: unknown, j: number) => {
+          const pPath = `${dPath}.paths[${j}]`;
+          if (!isRecord(path)) {
+            problem(pPath, `${describe(path)} — expected a path object`);
+            return;
+          }
+          if (!isNonEmptyString(path.id)) {
+            problem(
+              `${pPath}.id`,
+              `${describe(path.id)} — expected a non-empty string`,
+            );
+          } else if (pathIds.has(path.id)) {
+            problem(
+              `${pPath}.id`,
+              `duplicate path id "${path.id}" in this diagram — path ids must be unique within a diagram`,
+            );
+          } else {
+            pathIds.add(path.id);
+          }
+          if (!isNonEmptyString(path.title)) {
+            problem(
+              `${pPath}.title`,
+              `${describe(path.title)} — expected a non-empty string`,
+            );
+          }
+          if (!Array.isArray(path.beats) || path.beats.length === 0) {
+            problem(
+              `${pPath}.beats`,
+              `${describe(path.beats)} — a path needs at least one beat`,
+            );
+            return;
+          }
+          path.beats.forEach((beat: unknown, k: number) => {
+            const bPath = `${pPath}.beats[${k}]`;
+            if (!isRecord(beat)) {
+              problem(bPath, `${describe(beat)} — expected a beat object`);
+              return;
+            }
+            if (!isNonEmptyString(beat.caption)) {
+              problem(
+                `${bPath}.caption`,
+                `${describe(beat.caption)} — expected a non-empty sentence`,
+              );
+            }
+            if (!Array.isArray(beat.chains) || beat.chains.length === 0) {
+              problem(
+                `${bPath}.chains`,
+                `${describe(beat.chains)} — a beat must name at least one relationship`,
+              );
+              return;
+            }
+            beat.chains.forEach((chain: unknown, m: number) => {
+              const cPath = `${bPath}.chains[${m}]`;
+              if (!isRecord(chain)) {
+                problem(cPath, `${describe(chain)} — expected a chain object`);
+                return;
+              }
+              if (!isStringArray(chain.nodes) || chain.nodes.length < 2) {
+                problem(
+                  `${cPath}.nodes`,
+                  `${describe(chain.nodes)} — expected at least two node ids; a chain of one names no relationship`,
+                );
+              } else {
+                chain.nodes.forEach((id: string, n: number) => {
+                  if (!seen.nodeIds.has(id)) {
+                    problem(
+                      `${cPath}.nodes[${n}]`,
+                      `"${id}" does not resolve to a node in this diagram — a beat may only name elements drawn on its own canvas`,
+                    );
+                  }
+                });
+              }
+              if (chain.edgeId !== undefined) {
+                if (!isNonEmptyString(chain.edgeId)) {
+                  problem(
+                    `${cPath}.edgeId`,
+                    `${describe(chain.edgeId)} — expected an edge id or absent`,
+                  );
+                } else if (!diagramEdgeIds.has(chain.edgeId)) {
+                  problem(
+                    `${cPath}.edgeId`,
+                    `"${chain.edgeId}" does not resolve to a relationship in this diagram — an edge anchor may only name a relationship drawn on its own canvas`,
+                  );
+                }
+              }
+            });
+          });
+        });
+      }
+    }
   });
 
   /* -- Hard error 2: the root diagram. ----------------------------------- */

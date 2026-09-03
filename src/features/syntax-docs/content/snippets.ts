@@ -1253,7 +1253,7 @@ title "Broken"
       line: 5,
       column: 4,
       message:
-        'line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body) or 4 (node/edge continuation)',
+        'line 5, column 4: inconsistent indentation of 3 spaces — expected 0 (header or "@" diagram), 2 (diagram body), 4 (node/edge continuation or "beat") or 6 (a beat\'s chain line)',
     },
   },
   {

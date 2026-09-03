@@ -87,11 +87,13 @@ import {
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
 import {
+  boundsOf,
   breadcrumbFor,
   climbAnchorNodeId,
   findEdge,
   findNode,
   getDiagram,
+  type Rect,
   type ViewerModel,
 } from "../lib/model";
 import {} from "@/features/editor/lib/canvas-constants";
@@ -769,35 +771,13 @@ const EDGE_INTERACTION_CSS = `
 /* Pure helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function diagramBounds(diagram: C4Diagram): Rect {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const node of diagram.nodes) {
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + node.size.width);
-    maxY = Math.max(maxY, node.position.y + node.size.height);
-  }
-  if (minX === Infinity) return { x: 0, y: 0, width: 1, height: 1 };
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
-
 function fitViewportFor(
   diagram: C4Diagram,
   width: number,
   height: number,
 ): Viewport {
   return getViewportForBounds(
-    diagramBounds(diagram),
+    boundsOf(diagram.nodes),
     width,
     height,
     MIN_ZOOM,
