@@ -22,12 +22,7 @@
  * pane being written is never rewritten again from the model.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-
-/* The one surface the app already mounts for "something happened that you can
-   see" — `<Toaster />` sits in the root layout, so this is live on /live. The
-   direction press is its first playground caller; see `applyDirection`. */
-import { toast } from "@/components/ui/toast";
+import { useCallback, useMemo, useRef } from "react";
 
 import type { SequenceEditHandlers } from "@/features/sequence";
 import type { FlowchartEditHandlers } from "@/features/flowchart";
@@ -355,26 +350,6 @@ export function useCanvasEditing({
   );
 
   /**
-   * The CURRENT release path, for the toast below to call.
-   *
-   * A ref, and this one is load-bearing rather than an optimisation. A toast
-   * outlives the render that raised it: its button is pressed after the
-   * direction edit has already replaced `text`, and a `resetLayerPositions`
-   * captured at raise time is closed over the PRE-EDIT bytes — patching those
-   * would silently drop the `direction` line the reader had just written. Read
-   * at press time instead, so the toast's button and the menu's row run the
-   * same edit against the same text.
-   *
-   * Written in an effect, not during render — `react-hooks/refs` forbids the
-   * latter, and after-commit is the right moment anyway: the callback this
-   * stores must be the one built from the text the commit just adopted.
-   */
-  const releaseRef = useRef(resetLayerPositions);
-  useEffect(() => {
-    releaseRef.current = resetLayerPositions;
-  }, [resetLayerPositions]);
-
-  /**
    * Apply a direction at one scope, or clear it there.
    *
    * TWO GESTURES BEHIND ONE PAIR OF CALLBACKS, because the two scopes write
@@ -387,28 +362,35 @@ export function useCanvasEditing({
    * because the diagram was the wrong shape, not because they wanted a
    * particular word in their file.
    *
-   * AND IT SAYS WHEN THE PICTURE DID NOT CHANGE — IN A TOAST, not in the live
-   * region. Geometry beats the direction per element, so on a diagram somebody
-   * has arranged by hand this gesture writes a line and moves nothing. That
-   * fact was `sr-only`, which meant a dead control explained itself to
-   * assistive tech and to nobody else; the toast is the surface the app
-   * already mounts once for exactly this, and its action IS the release, so
-   * the reader is handed the remedy rather than sent to find it.
+   * AND IT SAYS WHEN THE PICTURE DID NOT CHANGE, IN THIS ANNOUNCEMENT.
+   * Geometry beats the direction per element, so on a diagram somebody has
+   * arranged by hand this gesture writes a line and moves nothing — and a
+   * control that does nothing and says nothing is the whole bug this feature
+   * exists to end.
    *
-   * THE FACT IS IN ONE CHANNEL, deliberately, and this is the half that was
-   * dropped. `<Toaster />` is itself a polite live region with a `role="status"`
-   * per entry, so leaving the placement prose in the announcement too would
-   * have told a screen-reader user the same thing twice — and the toast's
-   * subtree carries the release's LABEL, so hearing it is strictly more than
-   * the sentence it replaces. Hiding the toast from assistive tech instead was
-   * rejected: `toast()` has around twenty callers for which it is the only
-   * channel there is.
+   * A TOAST HELD THAT SENTENCE FOR ONE ROUND AND WAS REJECTED. It rendered in
+   * a screen corner, a whole canvas away from the row that had just been
+   * pressed, so it read as a notification about the app rather than as the
+   * answer to the press. The menu now stays open instead and says it in its
+   * own note, one line above the release row — see
+   * `layout-direction-menu.tsx`, which owns that decision and the roles that
+   * make it idiomatic.
    *
-   * The announcement therefore says what the FILE now says, and switches from
-   * "runs left to right" to "now says left to right" whenever the toast is
-   * about to report that the picture did not follow — a live region claiming
-   * the shape changed beside a toast saying it did not is worse than either
-   * alone.
+   * WHICH IS WHY THE PLACEMENT PROSE IS BACK IN THIS ANNOUNCEMENT. While the
+   * toast held the fact, this sentence deliberately did NOT carry it:
+   * `<Toaster />` is itself a polite live region with a `role="status"` per
+   * entry, so saying it here as well would have told a screen-reader user the
+   * same thing twice. The menu's note is a plain `<p>` and announces nothing,
+   * so with the toast gone this live region is the ONLY channel a screen
+   * reader has — and leaving the prose out would have left exactly those
+   * readers told nothing about a press that did nothing, which is the original
+   * defect aimed at the people who had it first. It carries the release row's
+   * LABEL too, so the remedy is named rather than left to be found.
+   *
+   * The announcement still switches from "runs left to right" to "now says
+   * left to right" when the shape did not follow: a live region claiming the
+   * layer turned, followed by a sentence saying nothing moved, is worse than
+   * either half alone.
    *
    * Counted BEFORE the edit, from the document being edited, the way the
    * boundary removal counts its members: afterwards the released elements are
@@ -429,32 +411,33 @@ export function useCanvasEditing({
           ? revisedDirectionEdit(doc, text, diagramId, direction)
           : revisedFileDirectionEdit(doc, text, direction);
       // null covers "nothing changed" as well as every refusal, so choosing
-      // what is already in force costs no text change, no undo entry — and no
-      // toast, which is what keeps a repeated press from stacking them.
+      // what is already in force costs no text change and no undo entry — and
+      // says nothing, which is what keeps a repeated press from repeating the
+      // sentence below.
       if (next === null) return;
       const where =
         scope === "layer" ? "This layer" : "Every diagram in the file";
       const inert = directionInertWarning(placement);
-      const told =
-        inert === null
-          ? `${where} ${direction === "lr" ? "runs left to right, folding a long flow into bands" : "runs top to bottom"}`
-          : `${where} now says ${direction === "lr" ? "left to right" : "top to bottom"}`;
+      if (inert === null) {
+        applyCanvasEdit(
+          next,
+          `${where} ${direction === "lr" ? "runs left to right, folding a long flow into bands" : "runs top to bottom"} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        );
+        return;
+      }
+      /* The release is NAMED, not merely implied — the menu is still open with
+         that row in it, and a reader who cannot see it needs the label to know
+         what to look for. Silent when every placed element is pinned, because
+         then there is no row: `directionInertWarning` returns `null` there
+         rather than let anything point at a control that is not rendered. */
+      const remedy =
+        inert.releaseLabel === null
+          ? ""
+          : ` The direction menu is still open, with “${inert.releaseLabel}” in it.`;
       applyCanvasEdit(
         next,
-        `${told} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        `${where} now says ${direction === "lr" ? "left to right" : "top to bottom"}. ${inert.message}${remedy} The source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
       );
-      if (inert === null) return;
-      toast({
-        message: inert.message,
-        tone: "warning",
-        action:
-          inert.releaseLabel === null
-            ? undefined
-            : {
-                label: inert.releaseLabel,
-                run: () => releaseRef.current(diagramId),
-              },
-      });
     },
     [doc, text, applyCanvasEdit],
   );
@@ -462,16 +445,16 @@ export function useCanvasEditing({
   /**
    * Clear the direction at one scope.
    *
-   * NO TOAST HERE, and that is a decision rather than an omission. The warning
-   * beside `applyDirection` exists because a reader asked for a SHAPE and the
-   * picture refused it — there is an expectation to falsify. Clearing asks for
-   * no shape: it takes a line out of the document, which is exactly what
-   * happens, and what the diagram falls back to is the file's default the
-   * reader has no picture of in advance. The menu's own state answers it too —
-   * the tick moves and the clearing row leaves. Warning here as well would
-   * spend the toast on a press that did what it said, and a warning that
-   * appears on every direction press is one nobody reads on the press that
-   * matters.
+   * NO PLACEMENT WARNING HERE, and that is a decision rather than an
+   * omission. The one beside `applyDirection` exists because a reader asked
+   * for a SHAPE and the picture refused it — there is an expectation to
+   * falsify. Clearing asks for no shape: it takes a line out of the document,
+   * which is exactly what happens, and what the diagram falls back to is the
+   * file's default the reader has no picture of in advance. So this closes the
+   * menu like any other row, and the menu's own state answers it — the tick
+   * moves and the clearing row leaves. Warning here as well would put the
+   * sentence on a press that did what it said, and a warning that appears on
+   * every direction press is one nobody reads on the press that matters.
    */
   const clearDirection = useCallback(
     (diagramId: string, scope: "layer" | "file") => {

@@ -17,10 +17,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   elements are placed by hand and won't move"), and carries a row —
   **Let the layout place them** — that takes those coordinates off every
   element in the layer in one undoable change. Press a direction anyway and
-  the press itself says what happened, on screen rather than only to a screen
-  reader — "Nothing in this layer moved" or "3 of 7 elements … stayed where
-  they were" — with that same release offered as a button beside it. The
-  element panel offers the
+  the menu stays open, its note switching from a caveat to what just happened
+  — "Nothing in this layer moved" or "3 of 7 elements … stayed where they
+  were" — with that release row still one line below the row you pressed, and
+  the same sentence read out to a screen reader. The element panel offers the
   same for one element beside the coordinates it is sitting at, and `pin` on
   an element line now means what it always looked like it meant: kept when the
   rest of the layer is released. The whole-file section is deliberately
@@ -174,8 +174,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   appears, and the release takes every coordinate off the layer.
 - **A whole-file direction now warns before the press, not only after it.** The
   note saying how much of the diagram a direction cannot move sat above the
-  layer rows only, so pressing `Whole file` moved nothing and said nothing
-  until the toast arrived. One note, above every row in the menu.
+  layer rows only, so pressing `Whole file` wrote a line, moved nothing and
+  said nothing at all. One note, above every row in the menu.
 - **A parse error no longer says where twice.** Every `validate_<kind>` and
   `format_<kind>` tool over MCP, and every error example in the syntax
   reference and the bundled `alab` skill, opened with
