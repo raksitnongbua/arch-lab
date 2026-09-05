@@ -87,7 +87,11 @@ export function readFlowchart(source: string): ReadFlowchartResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(FLOWCHART_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(
+              FLOWCHART_FORMAT_LABEL[error.format],
+              error,
+              source,
+            )
           : error.message,
     };
   }

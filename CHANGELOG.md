@@ -9,6 +9,62 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Connectors leaving the same element no longer start from the same point.**
+  Every connector used to meet its element at the midpoint of the side facing
+  the other end, so six relationships leaving one system began at one pixel and
+  left as a sheaf — each line correct, and the picture unreadable, because you
+  cannot tell which of six you are following back. They now fan along the side,
+  ordered by where they are going so the lines do not cross on the way out. An
+  element carrying one connector per side is exactly where it always was. The
+  SVG and PNG exports fan identically, from the same module the canvas uses.
+- **Where two connectors cross, one of them now steps over the other.** A
+  crossing used to read as four lines leaving a junction, and the eye joins the
+  wrong pair. The shorter of the two is interrupted by a small arc, so the
+  crossing reads as a bridge — the shorter one because the arc stays inside the
+  smaller visual span, and because deciding it from the geometry means nothing
+  about how the file is written can move the bridge. Never both lines; never
+  within a twelfth of a connector's end, where an arc would land on an
+  arrowhead; and a connector crossing more than three others keeps its straight
+  line rather than becoming a row of bumps. Exports draw the same bridges in
+  the same places as the canvas.
+- **`validate_model` says when a diagram is too crowded to present.** Past
+  about nine elements or twelve relationships, or when one element has more
+  connectors on a side than a reader can separate, the review notes say so and
+  name C4's own remedy — give an element a child diagram and let this one show
+  the shape. Advice, never an error: a dense diagram is a correct diagram, it
+  is just one nobody can present.
+
+- **The MCP validators now hand back the fix, not just the complaint.** A
+  `.alab` parse error reported over `/api/mcp` carries the same repair the
+  error panel offers as a button — its stable issue code, and the source line
+  as it would read once applied, so an agent retyping a line by hand is not
+  guessing the indent width. Where the parser cannot prove which rewrite was
+  meant, every candidate is listed with that admission rather than one being
+  picked. Working on all nine notations: the eight `validate_<kind>` tools
+  dropped the fix at the same boundary `validate_model` did.
+- **`get_syntax_reference` now teaches gantt charts, timelines and
+  lifecycles.** An agent that asked for the grammar before writing a plan
+  previously received the C4 reference and no mention of the notation it
+  wanted. Flowcharts, use-case diagrams, ER schemas and data dictionaries are
+  still taught by `get_example_model` instead, and the tool now says which
+  four rather than claiming to cover only two.
+- **A third ER example, and a rule that keeps the other three honest.**
+  `get_syntax_reference` does not teach the flowchart, use-case, ER or
+  dictionary grammar — it points at the bundled examples instead, on the
+  argument that one worked document teaches arrows and named rows faster than
+  a grammar would. That only holds while the examples spell the whole
+  notation, and ER's did not: nothing in them wrote `}|` on the left of a
+  line, or `||` or `o|` on the right, so "exactly one" and "zero or one" were
+  undiscoverable. **Parcel delivery** writes all three, and a check now proves
+  every notation without a syntax section is spelled in full by its own
+  examples — read off the parsed model, since `||` appears in every ER example
+  already, on the other side of the line.
+- **Every notation reports the size of what it just validated.** `validate_model`
+  gives each diagram's drawn extent beside its node and edge counts, so an
+  agent can tell whether the C4 model it just wrote will fit on a slide.
+  `validate_sequence` reported the same numbers under `Fit:`; it is `Size:`
+  now, as the other eight already spelled it.
+
 - **The layout direction says what it cannot move, and offers to release it.**
   Dragging an element writes its coordinates into the document, and those
   coordinates beat the layout for that element alone — so on a diagram you had

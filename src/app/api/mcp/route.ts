@@ -24,6 +24,7 @@ import { createMcpHandler } from "mcp-handler";
 import { registerArchLabMcp } from "@/features/mcp";
 import {
   DOCUMENT_KIND_COUNT,
+  KINDS_WITH_SYNTAX_SECTIONS,
   MCP_BETA_NOTICE_SHORT,
   MCP_SERVER_NAME,
   MCP_SERVER_VERSION,
@@ -60,7 +61,9 @@ const handler = createMcpHandler(
       "request could fit more than one of them. You already have file tools, " +
       "so read and write .alab files yourself and use this server for what " +
       "it knows that you cannot: the exact grammar (get_syntax_reference, " +
-      "which covers C4 and sequence only) and the real parser's verdict " +
+      `which covers ${KINDS_WITH_SYNTAX_SECTIONS.length} of the ` +
+      `${DOCUMENT_KIND_COUNT}; the rest are taught by get_example_model) ` +
+      "and the real parser's verdict " +
       "(validate_model and the eight validate_<kind> tools). Validate before " +
       "presenting any document you authored, and use create_share_link when " +
       "a human needs to actually see the diagram. " +

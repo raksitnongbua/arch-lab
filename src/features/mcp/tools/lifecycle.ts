@@ -106,7 +106,11 @@ export function readLifecycle(source: string): ReadLifecycleResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(LIFECYCLE_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(
+              LIFECYCLE_FORMAT_LABEL[error.format],
+              error,
+              source,
+            )
           : error.message,
     };
   }

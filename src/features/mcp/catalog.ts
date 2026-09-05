@@ -84,12 +84,28 @@ export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
  * section to `content/syntax-sections.ts` therefore fixes the tool's own
  * description in the same edit; `check:mcp` asserts the two agree.
  */
-const KINDS_WITHOUT_SYNTAX_SECTIONS = (
+export const KINDS_WITHOUT_SYNTAX_SECTIONS = (
   Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]
 ).filter(
   (kind) =>
     kind !== "c4" && !(SYNTAX_SECTION_IDS as readonly string[]).includes(kind),
 );
+
+/**
+ * The complement — what the reference DOES teach, for the same description.
+ *
+ * BOTH HALVES DERIVED, and the second one is here because the first alone was
+ * not enough. The description named its covered kinds in prose ("C4 AND
+ * SEQUENCE DIAGRAMS ONLY") and its uncovered count as a word ("the other seven
+ * notations") while interpolating the derived list beside them, so adding the
+ * gantt, timeline and lifecycle sections would have left a sentence that
+ * promised two notations, said seven were missing, and then listed four. A
+ * derived list next to a hand-typed count is the failure mode in a nicer
+ * costume.
+ */
+export const KINDS_WITH_SYNTAX_SECTIONS = (
+  Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]
+).filter((kind) => !KINDS_WITHOUT_SYNTAX_SECTIONS.includes(kind));
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -815,16 +831,18 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
   },
   {
     name: "get_syntax_reference",
-    title: "Get the C4 and sequence .alab grammar",
+    title: "Get the .alab grammar",
     description:
-      "The .alab grammar FOR C4 MODELS AND SEQUENCE DIAGRAMS ONLY, generated " +
-      "from examples verified against the real parser on every build. Read " +
-      "it BEFORE writing either of those by hand — significant indentation " +
-      "and order-free attributes are easy to guess wrong. It does NOT cover " +
-      `the other seven notations (${KINDS_WITHOUT_SYNTAX_SECTIONS.join(", ")}): ` +
-      "for those, fetch a bundled document with list_example_models and " +
-      "get_example_model, which is the parser-verified reference for their " +
-      "grammar. Also available as the resource archlab://syntax.",
+      `The .alab grammar for ${KINDS_WITH_SYNTAX_SECTIONS.join(", ")} ` +
+      "documents, generated from examples verified against the real parser " +
+      "on every build. Read it BEFORE writing one of those by hand — " +
+      "significant indentation and order-free attributes are easy to guess " +
+      `wrong. It does NOT cover the other ` +
+      `${KINDS_WITHOUT_SYNTAX_SECTIONS.length} notations ` +
+      `(${KINDS_WITHOUT_SYNTAX_SECTIONS.join(", ")}): for those, fetch a ` +
+      "bundled document with list_example_models and get_example_model, " +
+      "which is the parser-verified reference for their grammar. Also " +
+      "available as the resource archlab://syntax.",
     args: [
       {
         name: "section",

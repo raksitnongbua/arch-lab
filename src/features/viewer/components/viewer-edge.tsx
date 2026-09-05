@@ -46,8 +46,10 @@ import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import type { C4Edge } from "@/types";
 
+import { pathWithHops } from "@/lib/edge-crossings";
 import {
   getFloatingAnchors,
+  type EdgeFanSlots,
   getParallelEdgePath,
   type LabelBias,
   type NodeRect,
@@ -76,6 +78,24 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   parallelCount: number;
   /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
   labelBias: LabelBias;
+  /**
+   * Where this connector attaches on each of its two node sides, among the
+   * connectors sharing that side (`lib/edge-fan`).
+   *
+   * Handed down for the reason `obstacles` is: an edge would have to know
+   * every OTHER edge on both of its nodes to work its own slot out, and the
+   * answer only changes with the model. The canvas computes it once per
+   * diagram from the model rects, which is the same input the exporter uses —
+   * so a connector meets its node in the same place in the PNG as on screen.
+   */
+  fanSlots?: EdgeFanSlots;
+  /**
+   * Parameters along THIS connector's own curve at which it steps over another
+   * (`lib/edge-crossings`). Absent when it crosses nothing — which is most of
+   * them, and is why the field is optional rather than an empty array: "no
+   * crossings" and "the pass did not run" must not become the same thing.
+   */
+  hops?: readonly number[];
   /**
    * Where the chip actually sits, from the canvas's whole-diagram placement
    * pass (`lib/edge-label-placement`). Null when this relationship has nothing
@@ -158,16 +178,24 @@ function ViewerEdgeInner({
   const targetRect = internalNodeRect(targetNode);
   const anchors =
     sourceRect !== null && targetRect !== null
-      ? getFloatingAnchors(sourceRect, targetRect)
+      ? getFloatingAnchors(sourceRect, targetRect, data?.fanSlots)
       : { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
 
-  const { path, labelX, labelY } = getParallelEdgePath({
+  const {
+    path: straightPath,
+    labelX,
+    labelY,
+  } = getParallelEdgePath({
     ...anchors,
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
     labelBias: data?.labelBias ?? 0,
     obstacles: data?.obstacles,
   });
+  /* The bridge is cut INTO the curve rather than painted over it: an arc laid
+     on top still shows the straight-through line underneath at any zoom, and a
+     bridge that does not interrupt its own line is just a bump. */
+  const path = pathWithHops(straightPath, data?.hops ?? []);
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe
   // inside url(#…) references). Duplicate gradient/marker ids across edges
