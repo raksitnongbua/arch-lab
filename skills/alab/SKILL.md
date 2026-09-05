@@ -32,6 +32,9 @@ either connect the [arch-lab MCP server](https://arch-lab.dev/mcp) and call
 - [Paths (authored walks)](#paths-authored-walks)
 - [Unknown & forward-compatible fields (`!` lines)](#unknown-forward-compatible-fields-lines)
 - [Sequence diagrams (a second document kind)](#sequence-diagrams-a-second-document-kind)
+- [Gantt charts (`archlab 1.0 gantt`)](#gantt-charts-archlab-10-gantt)
+- [Timelines (`archlab 1.0 timeline`)](#timelines-archlab-10-timeline)
+- [Lifecycles (`archlab 1.0 lifecycle`)](#lifecycles-archlab-10-lifecycle)
 - [What errors look like](#what-errors-look-like)
 
 ## Overview
@@ -64,17 +67,21 @@ line 1 of a document whose header names another kind** — the header names
 the notation the rest of the document is written in, and changing it
 converts nothing.
 
-**This is the C4 and sequence grammar, not the whole format.** Everything
-in the sections below, unless a section says otherwise, describes the C4
-model grammar opened by `archlab 1.0`. A SEQUENCE diagram — participants
-and messages over time — is opened by `archlab 1.0 sequence`, has its own
-grammar and its own tools (`validate_sequence`, `format_sequence`); see
-the sequence section. arch-lab draws seven more notations that this
-reference does NOT cover — flowcharts, use-case diagrams, ER schemas,
-data dictionaries, gantt charts, milestone timelines and lifecycles. For
-those, fetch a bundled document with `list_example_models` and
-`get_example_model`: every one is parser-verified, which makes it the
-real reference for its grammar.
+**This is not the whole format.** Everything in the sections below,
+unless a section says otherwise, describes the C4 model grammar opened
+by `archlab 1.0`. Four more notations have a section of their own here,
+each opened by its own header word and read by its own parser:
+`archlab 1.0 sequence`, `… gantt`, `… timeline` and `… lifecycle`. Each
+has its own `validate_<kind>` tool; a document handed to the wrong one
+fails on line 1.
+
+arch-lab draws four more notations that this reference does NOT cover —
+flowcharts, use-case diagrams, ER schemas and data dictionaries. That is
+deliberate rather than a gap: their constructs are arrows and named
+rows, and one worked example teaches them faster than a grammar would.
+Fetch one with `list_example_models` and `get_example_model` — every
+bundled document is parser-verified, which makes it the real reference
+for its grammar.
 
 ## A complete example
 
@@ -610,6 +617,159 @@ Mermaid `sequenceDiagram` code can be imported instead of authored —
 pass it to `validate_sequence` or `format_sequence` and it is detected
 automatically. That import is ONE-WAY and lossy; the response names
 what was dropped.
+
+## Gantt charts (`archlab 1.0 gantt`)
+
+A plan: how long each piece takes and what cannot start until
+something else is done. Opened by **`archlab 1.0 gantt`**, read by its
+own parser, validated with `validate_gantt`.
+
+```
+archlab 1.0 gantt
+title "Order store migration"
+starts 2026-09-07
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d done at 0
+      desc "Read every column, write down what actually moves."
+    task shadow "Shadow writes" 13d active after audit
+    task verify "Verify parity" 6d at-risk after shadow
+    milestone parity "Parity signed off" after verify
+  section "Cut over"
+    task cutover "Point traffic over" 3d after parity
+```
+
+What is easy to get wrong:
+
+- **`starts <YYYY-MM-DD>` is the whole difference between a calendar
+  axis and a relative one.** With it, bars are dated; without it they
+  are numbered periods. Nothing else about the document changes:
+
+```
+archlab 1.0 gantt
+title "Order store migration"
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d done at 0
+    task shadow "Shadow writes" 13d active after audit
+    task backfill "Historical backfill" 12d after audit
+    milestone parity "Parity signed off" after shadow, backfill
+```
+
+- **There is no `crit` keyword.** The critical path is DERIVED — the
+  chain with no float, computed from the durations and the `after`
+  edges — so it cannot disagree with the plan. `validate_gantt` reports
+  it back to you; declaring it is not possible and would not be true.
+- `task` has a length, `milestone` is a point. A milestone with a
+  duration does not parse.
+- `after` takes a comma-separated list, and an item waits for all of
+  them. `at <n>` pins a start instead.
+
+## Timelines (`archlab 1.0 timeline`)
+
+What happened, when, and which period it happened in. Opened by
+**`archlab 1.0 timeline`**, validated with `validate_timeline`.
+
+```
+archlab 1.0 timeline
+title "How the platform grew"
+
+@timeline
+  period "2016"
+    event "Two people and a prototype"
+      desc "One Rails app on one box, deployed by hand on Friday afternoons."
+  period "2018"
+    event "First paying customer"
+    event "Split the monolith into an API and a web app"
+  period "2024"
+    event "Opened the public API" #platform
+    event "First region outside Europe"
+```
+
+The grammar is two keywords, `period` and `event`, and the one nested
+`desc`. What has to be learned is not what it has but what it REFUSES,
+because every refusal is something a reader arriving from a plan tool
+reaches for first — and an absence is invisible in a working example:
+
+```
+archlab 1.0 timeline
+title "What a timeline will not hold"
+
+@timeline
+  period "Any label — a year, a quarter, a phrase"
+    // An event is a POINT. It carries its label and "#tag"s, nothing else.
+    event "What happened"
+      desc "The one nested slot: a note, drawn under the label."
+    // Each of these is refused by name, and each points at the gantt:
+    //   event "Migration" 5d          — no duration; a point has no length
+    //   event "Cutover" after freeze  — no dependency; nothing waits here
+    //   event "Rewrite" at 12         — no start; nothing is measured
+    //   event "Rollout" active        — no state; this is what already happened
+    // If the work has lengths and prerequisites, write "archlab 1.0 gantt".
+    event "What happened next"
+```
+
+If the work has lengths and prerequisites, it is a gantt. The parser
+says so by name rather than failing generically.
+
+## Lifecycles (`archlab 1.0 lifecycle`)
+
+One thing, the states it passes through, and where it can stop.
+Opened by **`archlab 1.0 lifecycle`**, validated with
+`validate_lifecycle`.
+
+```
+archlab 1.0 lifecycle
+title "An order, from checkout to the doormat"
+
+@lifecycle
+  subject "Order"
+    desc "One customer order, followed from checkout until it stops."
+  state placed "Placed"
+    exit "Cancelled" ends
+      when "the customer changes their mind before paying"
+  state paid "Paid"
+  state packed "Packed"
+  state shipped "Shipped"
+    exit "Returned" rejoins packed
+      when "the parcel comes back unopened"
+  state delivered "Delivered" ends
+```
+
+**The thing to learn first is an absence: there is no line between two
+states.** Declaration order IS the track, and the only branches are
+`exit … ends` and `exit … rejoins <id>`. This notation overlaps the
+flowchart on purpose and is deliberately the smaller of the two, so
+the words that would draw an edge are refused by name:
+
+```
+archlab 1.0 lifecycle
+title "What a lifecycle will not hold"
+
+@lifecycle
+  subject "The thing"
+  state first "First"
+    // A branch belongs to the state it leaves, and lands in one of two
+    // places: it "ends", or it "rejoins" a state declared EARLIER.
+    exit "Gave up" ends
+      when "nothing happens for a week"
+  state second "Second"
+    // Each of these is refused by name, and each points at the flowchart:
+    //   state third "Third" to second   — no edge; the track IS the order
+    //   exit "Skip" rejoins last        — no forward rejoin; that is a shortcut
+    //   exit "Sent back" rejoins first  — this one is FINE: first comes earlier
+    //     exit "And then"               — no branch off a branch; depth is one
+    //   subject "Something else"        — one subject; two would be a graph
+    // If the picture is really steps that can go anywhere, write
+    // "archlab 1.0 flowchart".
+    exit "Sent back" rejoins first
+      when "it needs redoing"
+  state last "Last" ends
+```
+
+If the states need arbitrary edges between them, write a flowchart.
 
 ## What errors look like
 

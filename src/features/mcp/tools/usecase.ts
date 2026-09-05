@@ -70,7 +70,11 @@ export function readUseCase(source: string): ReadUseCaseResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(USECASE_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(
+              USECASE_FORMAT_LABEL[error.format],
+              error,
+              source,
+            )
           : error.message,
     };
   }

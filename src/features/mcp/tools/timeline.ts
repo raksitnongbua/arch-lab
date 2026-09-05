@@ -94,7 +94,11 @@ export function readTimeline(source: string): ReadTimelineResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(TIMELINE_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(
+              TIMELINE_FORMAT_LABEL[error.format],
+              error,
+              source,
+            )
           : error.message,
     };
   }

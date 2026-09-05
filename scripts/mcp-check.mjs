@@ -135,6 +135,7 @@ const {
   MCP_BETA_NOTICE,
   MCP_BETA_NOTICE_SHORT,
   CONNECT_RECIPES,
+  KINDS_WITHOUT_SYNTAX_SECTIONS,
   mcpEndpointUrl,
 } = await load("src/features/mcp/catalog.ts");
 const { registerArchLabMcp } = await load("src/features/mcp/server.ts");
@@ -168,6 +169,23 @@ const { createShareLink } = await load("src/features/mcp/tools/share.ts");
    needs every notation's validator, because the "no bundled example raises an
    ask" guarantee is driven from the registry rather than from a hand-listed
    set — a hardcoded list cannot notice the notation it has never heard of. */
+const { checkSource } = await load("src/features/validate/lib/check.ts");
+/* The vocabulary tables the four undocumented grammars are defined by. Imported
+   rather than restated: the assertion below is only worth anything if the set
+   it checks against is the parser's own. */
+const { NODE_SHAPE_BY_KEYWORD, GROUP_KEYWORD } = await load(
+  "src/features/archtext/lib/flowchart/keywords.ts",
+);
+const { ELEMENT_KIND_BY_KEYWORD, TOKEN_BY_EDGE_KIND, DEPENDENCY_STEREOTYPES } =
+  await load("src/features/archtext/lib/usecase/keywords.ts");
+const { ATTRIBUTE_KEYS, TOKEN_BY_CARDINALITY, KIND_BY_CONNECTOR } = await load(
+  "src/features/archtext/lib/er/keywords.ts",
+);
+const { FIELD_FLAGS, FIELD_DETAIL_KEYS } = await load(
+  "src/features/archtext/lib/dict/keywords.ts",
+);
+const { parseFlowchartText, parseUseCaseText, parseErText, parseDictText } =
+  await load("src/features/archtext/index.ts");
 const { validateEr } = await load("src/features/mcp/tools/er.ts");
 const { validateDict } = await load("src/features/mcp/tools/dict.ts");
 const { validateGantt } = await load("src/features/mcp/tools/gantt.ts");
@@ -558,6 +576,119 @@ check("validate_model locates a broken .alab file", () => {
   // The offending line must be quoted with a caret under the column.
   assert.match(text, /customer: "Customer"/);
   assert.match(text, /\^/);
+});
+
+/*
+ * The parser's repair must survive the trip to the agent.
+ *
+ * THE REGRESSION THIS EXISTS FOR. `checkSource` has attached `code` and
+ * `fixes` to every `.alab` issue since the quick-fix work, and three surfaces
+ * render them — but `lib/render.ts` printed only message/line/column/lineText,
+ * so the caller that cannot click a button was the one told nothing about the
+ * rewrite. It was invisible because nothing failed: the verdict was correct
+ * and the location was right, and only the repair was missing.
+ *
+ * DRIVEN FROM `checkSource`, never from a title written here. A candidate's
+ * `title` is a button label the parser is free to reword; asserting a literal
+ * would pin MCP's output to a string this file does not own. What is asserted
+ * is the FORWARDING — whatever the parser produced is what the agent reads.
+ */
+const TAB_INDENTED = `archlab 1.0
+title "Broken"
+
+@context ctx-root "Broken"
+\tcustomer: person "Customer"
+`;
+
+/** Three spaces: not a rung, so the parser offers the rung below AND above. */
+const ODD_INDENT = `archlab 1.0
+title "Broken"
+
+@context ctx-root "Broken"
+   customer: person "Customer"
+`;
+
+/** The same tab failure in a kind reader, which flattens the issue away. */
+const TAB_INDENTED_FLOWCHART = `archlab 1.0 flowchart
+title "Broken"
+
+\tstep a "A"
+`;
+
+/** The issue `checkSource` raises for `source`, for driving an assertion. */
+function firstAlabIssue(source) {
+  const result = checkSource(source, "auto");
+  assert.equal(result.status, "error", "fixture stopped being invalid");
+  return result.issues[0];
+}
+
+check("validate_model forwards the issue code the parser assigned", () => {
+  const issue = firstAlabIssue(TAB_INDENTED);
+  assert.ok(issue.code, "fixture stopped carrying a code");
+  const text = expectError(validateModel(TAB_INDENTED, "auto"));
+  assert.match(
+    text,
+    new RegExp(`\\[${issue.code.replace(/\./g, "\\.")}\\]`),
+    "the issue code never reached the caller",
+  );
+});
+
+check("validate_model shows a safe fix as the line it leaves behind", () => {
+  const issue = firstAlabIssue(TAB_INDENTED);
+  assert.equal(issue.fixes?.length, 1, "fixture stopped offering one fix");
+  assert.equal(issue.fixes[0].kind, "safe");
+
+  const text = expectError(validateModel(TAB_INDENTED, "auto"));
+  assert.match(text, /^Fix — one provable rewrite:$/m);
+  assert.ok(
+    text.includes(issue.fixes[0].title),
+    "the fix title never reached the caller",
+  );
+  // The point of the preview: the REPAIRED line, not a description of it.
+  // "Use spaces" leaves the width unsaid, and a guess of four fails again.
+  assert.match(text, /\n\s+5 \| {3}customer: person "Customer"$/m);
+  assert.doesNotMatch(
+    text.split("Fix —")[1],
+    /\t/,
+    "the preview still carries the tab it was supposed to remove",
+  );
+});
+
+check(
+  "a fix the parser cannot prove is offered as candidates, not applied",
+  () => {
+    const issue = firstAlabIssue(ODD_INDENT);
+    assert.ok(
+      (issue.fixes?.length ?? 0) > 1,
+      "fixture stopped being ambiguous — it must offer more than one rung",
+    );
+    const text = expectError(validateModel(ODD_INDENT, "auto"));
+    assert.match(text, /^Fixes — \d+ candidates; the parser cannot prove/m);
+    for (const [index, fix] of issue.fixes.entries()) {
+      assert.ok(
+        text.includes(`${index + 1}. ${fix.title}`),
+        `candidate ${index + 1} (${fix.title}) never reached the caller`,
+      );
+    }
+    // Each candidate must be distinguishable by its RESULT, or the list is a
+    // coin toss — the same reason an ask option's consequence may not repeat
+    // its label.
+    assert.match(text, /5 \| {3}customer: person "Customer"$/m);
+    assert.match(text, /5 \| {5}customer: person "Customer"$/m);
+  },
+);
+
+check("a kind reader's parse failure carries the fix too", () => {
+  /* THE BOUNDARY THAT DROPPED IT. All eight kind readers flatten an
+     `ArchTextIssue` into `{line, column, message, lineText}` for
+     `renderKindParseFailure`, which is where the code and the candidates were
+     lost — C4 could have been fixed alone and eight notations would still have
+     been silent. */
+  const text = expectError(validateFlowchart(TAB_INDENTED_FLOWCHART));
+  assert.match(text, /^INVALID as \.alab flowchart\./m);
+  assert.match(text, /\[alab\.indent-tabs\]/);
+  assert.match(text, /^Fix — one provable rewrite:$/m);
+  assert.match(text, /\n\s+4 \| {3}step a "A"$/m);
 });
 
 check("validate_model reads arch-lab JSON and Mermaid C4 too", () => {
@@ -2171,6 +2302,232 @@ check("no bundled example raises an ask through its own validator", () => {
   }
   assert.ok(checked >= EXAMPLE_KINDS.length, `only ${checked} examples read`);
 });
+
+check("every notation reports the size of what it just validated", () => {
+  /* WILL IT FIT ON A SLIDE — the question an agent authoring a diagram it
+     cannot see has no other way to ask, and the reason `purpose.md` calls
+     presentation the product.
+
+     THE GAP THIS CLOSES. Six kinds reported `Size: W x H px` by running their
+     own layout; gantt did too. C4 reported none at all — it has no layout
+     module, so the measurement is a box round the geometry the document
+     already carries and nobody had written it — and sequence reported the
+     numbers under `Fit:`, a key no other tool spells, which an agent scanning
+     for a size does not find. Both are failures of the same kind: the caller
+     asks one question and the surface answers it in nine dialects.
+
+     DRIVEN FROM THE SAME REGISTRY as the ask guarantee above, so a tenth
+     notation is covered here without an edit. `codebase.md` §4: a check written
+     from a hand-listed set cannot notice the kind it has never heard of. */
+  const validators = {
+    c4: (text) => validateModel(text, "auto"),
+    sequence: validateSequence,
+    flowchart: validateFlowchart,
+    usecase: validateUseCase,
+    er: validateEr,
+    dict: validateDict,
+    gantt: validateGantt,
+    timeline: validateTimeline,
+    lifecycle: validateLifecycle,
+  };
+  assert.deepEqual(
+    Object.keys(validators).sort(),
+    [...EXAMPLE_KINDS].sort(),
+    "a notation with no validator listed here would be skipped silently",
+  );
+
+  const seen = new Set();
+  for (const listing of listBundledExamples()) {
+    if (listing.status !== "ok") continue;
+    const { id, kind } = listing.example;
+    if (seen.has(kind)) continue;
+    const loaded = loadBundledExample(id);
+    const text = expectOk(validators[kind](loaded.document.alabText));
+    /* C4 is several pictures, so its sizes sit one per row of the diagram
+       table; the other eight draw one and report a line. Both must state a
+       real extent — a zero would mean the layout ran and found nothing. */
+    const sizes = [...text.matchAll(/(\d+) x (\d+) px/g)];
+    assert.ok(
+      sizes.length > 0,
+      `the bundled ${kind} \`${id}\` came back with no size — an agent ` +
+        "cannot tell whether it just wrote something presentable",
+    );
+    for (const [, width, height] of sizes) {
+      assert.ok(
+        Number(width) > 0 && Number(height) > 0,
+        `${kind} \`${id}\` reported a ${width} x ${height} px diagram`,
+      );
+    }
+    seen.add(kind);
+  }
+  assert.equal(
+    seen.size,
+    EXAMPLE_KINDS.length,
+    "a notation's examples were all unreadable, so its size went unproven",
+  );
+});
+
+/*
+ * WHAT THE UNDOCUMENTED FOUR PROMISE, AND WHAT HOLDS IT UP.
+ *
+ * `get_syntax_reference` teaches five notations and says outright that the
+ * other four — flowchart, use case, ER and dictionary — are taught by
+ * `get_example_model` instead. That is a real argument (their constructs are
+ * arrows and named rows, and one worked document teaches those faster than a
+ * grammar would) but it is CONDITIONAL: it holds exactly while the bundled
+ * examples spell the whole notation. Nothing checked that, and it was already
+ * false — across the eight relationships in the two ER examples, the left-hand
+ * `}|` and the right-hand `||` and `o|` never appeared, so an agent reading
+ * them could not learn to write "exactly one" or "zero or one" on the right of
+ * a line.
+ *
+ * READ OFF THE PARSED MODEL, NEVER BY SEARCHING THE TEXT. Substring matching
+ * is what hid this: `||` occurs in every one of those examples — on the LEFT of
+ * the line — so a grep for it reports the right-hand token covered when it has
+ * never once been written. `--` sits inside `--|>` in the same way. The two
+ * sides are not mirrors either (`er/keywords.ts`: reversing `o{` gives `{o`,
+ * which parses as nothing), so a token seen on one side teaches nothing about
+ * the other.
+ *
+ * DERIVED AT BOTH ENDS: the kinds come from `KINDS_WITHOUT_SYNTAX_SECTIONS`,
+ * the tokens from the parser's own tables. Writing a syntax section for one of
+ * these kinds retires its entry here automatically; adding a tenth notation to
+ * the undocumented list fails the totality assertion until its vocabulary is
+ * named.
+ */
+const UNDOCUMENTED_VOCABULARY = {
+  flowchart: (text) => {
+    const file = parseFlowchartText(text);
+    return {
+      "node shape": {
+        possible: Object.values(NODE_SHAPE_BY_KEYWORD),
+        used: file.nodes.map((node) => node.shape),
+      },
+      [GROUP_KEYWORD]: {
+        possible: ["used at least once"],
+        used: (file.groups ?? []).length > 0 ? ["used at least once"] : [],
+      },
+    };
+  },
+  usecase: (text) => {
+    const file = parseUseCaseText(text);
+    return {
+      "element kind": {
+        possible: Object.values(ELEMENT_KIND_BY_KEYWORD),
+        used: file.elements.map((element) => element.kind),
+      },
+      "edge kind": {
+        possible: Object.keys(TOKEN_BY_EDGE_KIND),
+        used: file.edges.map((edge) => edge.kind),
+      },
+      "dependency stereotype": {
+        possible: DEPENDENCY_STEREOTYPES,
+        used: file.edges
+          .filter((edge) => edge.kind === "dependency")
+          .map((edge) => edge.stereotype),
+      },
+    };
+  },
+  er: {
+    /* THE ONE THAT WAS ACTUALLY BROKEN, and the reason the sides are counted
+       separately rather than pooled. */
+    parse: (text) => parseErText(text),
+    groups: (file) => ({
+      "left-hand cardinality": {
+        possible: Object.keys(TOKEN_BY_CARDINALITY.from),
+        used: file.relationships.map((rel) => rel.fromCardinality),
+      },
+      "right-hand cardinality": {
+        possible: Object.keys(TOKEN_BY_CARDINALITY.to),
+        used: file.relationships.map((rel) => rel.toCardinality),
+      },
+      "relationship kind": {
+        possible: Object.values(KIND_BY_CONNECTOR),
+        used: file.relationships.map((rel) => rel.kind),
+      },
+      "attribute key": {
+        possible: ATTRIBUTE_KEYS,
+        used: file.entities.flatMap((entity) =>
+          (entity.attributes ?? []).flatMap((attr) => attr.keys ?? []),
+        ),
+      },
+    }),
+  },
+  dict: (text) => {
+    const file = parseDictText(text);
+    const fields = file.sections.flatMap((section) => section.fields);
+    return {
+      "field flag": {
+        possible: FIELD_FLAGS,
+        used: fields.flatMap((field) => field.flags ?? []),
+      },
+      "field detail": {
+        possible: Object.values(FIELD_DETAIL_KEYS),
+        used: fields.flatMap((field) =>
+          Object.values(FIELD_DETAIL_KEYS).filter(
+            (key) => field[key] !== undefined,
+          ),
+        ),
+      },
+    };
+  },
+};
+
+check(
+  "a notation with no syntax section is spelled in full by its examples",
+  () => {
+    assert.deepEqual(
+      Object.keys(UNDOCUMENTED_VOCABULARY).sort(),
+      [...KINDS_WITHOUT_SYNTAX_SECTIONS].sort(),
+      "a notation the syntax reference does not teach, and whose vocabulary is " +
+        "not named here, would be promised to agents with nothing holding it up",
+    );
+
+    const byKind = new Map();
+    for (const listing of listBundledExamples()) {
+      if (listing.status !== "ok") continue;
+      const { id, kind } = listing.example;
+      if (!(kind in UNDOCUMENTED_VOCABULARY)) continue;
+      if (!byKind.has(kind)) byKind.set(kind, []);
+      byKind
+        .get(kind)
+        .push({ id, text: loadBundledExample(id).document.alabText });
+    }
+
+    for (const kind of KINDS_WITHOUT_SYNTAX_SECTIONS) {
+      const examples = byKind.get(kind) ?? [];
+      assert.ok(
+        examples.length > 0,
+        `${kind} has no bundled example, and no syntax section either — it is ` +
+          "documented nowhere",
+      );
+
+      const entry = UNDOCUMENTED_VOCABULARY[kind];
+      const seen = new Map();
+      for (const example of examples) {
+        const groups =
+          typeof entry === "function"
+            ? entry(example.text)
+            : entry.groups(entry.parse(example.text));
+        for (const [label, { possible, used }] of Object.entries(groups)) {
+          if (!seen.has(label)) seen.set(label, { possible, used: new Set() });
+          for (const value of used) seen.get(label).used.add(value);
+        }
+      }
+
+      for (const [label, { possible, used }] of seen) {
+        const missing = possible.filter((value) => !used.has(value));
+        assert.deepEqual(
+          missing,
+          [],
+          `no bundled ${kind} example writes ${label} ` +
+            `${missing.map((value) => `\`${value}\``).join(", ")} — an agent ` +
+            "told the examples ARE the reference cannot discover it exists",
+        );
+      }
+    }
+  },
+);
 
 check("list_icons resolves a declared alias silently", () => {
   // `postgres` is an alias of `postgresql`, so the caller has already named

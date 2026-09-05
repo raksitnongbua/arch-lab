@@ -39,6 +39,12 @@ import {
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_MINIMAL_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
+  GANTT_MINIMAL_EXAMPLE,
+  GANTT_RELATIVE_EXAMPLE,
+  TIMELINE_MINIMAL_EXAMPLE,
+  TIMELINE_REFUSALS_EXAMPLE,
+  LIFECYCLE_MINIMAL_EXAMPLE,
+  LIFECYCLE_REFUSALS_EXAMPLE,
 } from "@/features/syntax-docs/content/snippets";
 
 /* -------------------------------------------------------------------------- */
@@ -81,6 +87,9 @@ export const SYNTAX_SECTION_IDS = [
   "paths",
   "unknown-fields",
   "sequence",
+  "gantt",
+  "timeline",
+  "lifecycle",
   "errors",
 ] as const;
 
@@ -123,17 +132,21 @@ function overview(): string {
     "the notation the rest of the document is written in, and changing it",
     "converts nothing.",
     "",
-    "**This is the C4 and sequence grammar, not the whole format.** Everything",
-    "in the sections below, unless a section says otherwise, describes the C4",
-    "model grammar opened by `archlab 1.0`. A SEQUENCE diagram — participants",
-    "and messages over time — is opened by `archlab 1.0 sequence`, has its own",
-    "grammar and its own tools (`validate_sequence`, `format_sequence`); see",
-    "the sequence section. arch-lab draws seven more notations that this",
-    "reference does NOT cover — flowcharts, use-case diagrams, ER schemas,",
-    "data dictionaries, gantt charts, milestone timelines and lifecycles. For",
-    "those, fetch a bundled document with `list_example_models` and",
-    "`get_example_model`: every one is parser-verified, which makes it the",
-    "real reference for its grammar.",
+    "**This is not the whole format.** Everything in the sections below,",
+    "unless a section says otherwise, describes the C4 model grammar opened",
+    "by `archlab 1.0`. Four more notations have a section of their own here,",
+    "each opened by its own header word and read by its own parser:",
+    "`archlab 1.0 sequence`, `… gantt`, `… timeline` and `… lifecycle`. Each",
+    "has its own `validate_<kind>` tool; a document handed to the wrong one",
+    "fails on line 1.",
+    "",
+    "arch-lab draws four more notations that this reference does NOT cover —",
+    "flowcharts, use-case diagrams, ER schemas and data dictionaries. That is",
+    "deliberate rather than a gap: their constructs are arrows and named",
+    "rows, and one worked example teaches them faster than a grammar would.",
+    "Fetch one with `list_example_models` and `get_example_model` — every",
+    "bundled document is parser-verified, which makes it the real reference",
+    "for its grammar.",
   ].join("\n");
 }
 
@@ -507,6 +520,103 @@ const SECTION_BUILDERS: Record<SyntaxSectionId, () => SyntaxSection> = {
       "pass it to `validate_sequence` or `format_sequence` and it is detected",
       "automatically. That import is ONE-WAY and lossy; the response names",
       "what was dropped.",
+    ].join("\n"),
+  }),
+
+  /*
+   * THE THREE SMALLER GRAMMARS, wired from the snippets `/syntax` already
+   * carries and `check:syntax-docs` already pushes through their own parsers.
+   *
+   * WHY THEY WERE MISSING AND WHY THE FIX IS THIS SMALL. The reference used to
+   * end at `sequence`, so an agent told "read the grammar before you write" and
+   * then asked for a gantt received ~22 KB of C4 with the word `gantt` nowhere
+   * in it — which reads as "arch-lab does not draw those".
+   * `KINDS_WITHOUT_SYNTAX_SECTIONS` in `catalog.ts` derives the tool's own
+   * confession from THIS array, so adding a section here retires that sentence
+   * in the same edit; `check:mcp` asserts the two agree.
+   *
+   * NOT ONE LINE OF SYNTAX IS WRITTEN HERE, exactly as this file's header
+   * requires. Every example below is the snippet the `/syntax` page renders,
+   * and a snippet that stopped parsing would fail `check:syntax-docs` before it
+   * ever reached an agent.
+   *
+   * THE FOUR REMAINING KINDS ARE STILL ABSENT, DELIBERATELY. `snippets.ts`
+   * argues that the flowchart, use case, ER and dictionary grammars are
+   * inferable from one example — their constructs are arrows and named rows —
+   * which is why that page does not document them either. Writing a reference
+   * for them here would put four hand-authored grammars in the one file whose
+   * whole premise is that it contains none, and the honest answer for those
+   * kinds is the one the tool already gives: call `get_example_model`.
+   */
+  gantt: () => ({
+    id: "gantt",
+    title: "Gantt charts (`archlab 1.0 gantt`)",
+    body: [
+      "A plan: how long each piece takes and what cannot start until",
+      "something else is done. Opened by **`archlab 1.0 gantt`**, read by its",
+      "own parser, validated with `validate_gantt`.",
+      "",
+      code(GANTT_MINIMAL_EXAMPLE.code),
+      "",
+      "What is easy to get wrong:",
+      "",
+      "- **`starts <YYYY-MM-DD>` is the whole difference between a calendar",
+      "  axis and a relative one.** With it, bars are dated; without it they",
+      "  are numbered periods. Nothing else about the document changes:",
+      "",
+      code(GANTT_RELATIVE_EXAMPLE.code),
+      "",
+      "- **There is no `crit` keyword.** The critical path is DERIVED — the",
+      "  chain with no float, computed from the durations and the `after`",
+      "  edges — so it cannot disagree with the plan. `validate_gantt` reports",
+      "  it back to you; declaring it is not possible and would not be true.",
+      "- `task` has a length, `milestone` is a point. A milestone with a",
+      "  duration does not parse.",
+      "- `after` takes a comma-separated list, and an item waits for all of",
+      "  them. `at <n>` pins a start instead.",
+    ].join("\n"),
+  }),
+
+  timeline: () => ({
+    id: "timeline",
+    title: "Timelines (`archlab 1.0 timeline`)",
+    body: [
+      "What happened, when, and which period it happened in. Opened by",
+      "**`archlab 1.0 timeline`**, validated with `validate_timeline`.",
+      "",
+      code(TIMELINE_MINIMAL_EXAMPLE.code),
+      "",
+      "The grammar is two keywords, `period` and `event`, and the one nested",
+      "`desc`. What has to be learned is not what it has but what it REFUSES,",
+      "because every refusal is something a reader arriving from a plan tool",
+      "reaches for first — and an absence is invisible in a working example:",
+      "",
+      code(TIMELINE_REFUSALS_EXAMPLE.code),
+      "",
+      "If the work has lengths and prerequisites, it is a gantt. The parser",
+      "says so by name rather than failing generically.",
+    ].join("\n"),
+  }),
+
+  lifecycle: () => ({
+    id: "lifecycle",
+    title: "Lifecycles (`archlab 1.0 lifecycle`)",
+    body: [
+      "One thing, the states it passes through, and where it can stop.",
+      "Opened by **`archlab 1.0 lifecycle`**, validated with",
+      "`validate_lifecycle`.",
+      "",
+      code(LIFECYCLE_MINIMAL_EXAMPLE.code),
+      "",
+      "**The thing to learn first is an absence: there is no line between two",
+      "states.** Declaration order IS the track, and the only branches are",
+      "`exit … ends` and `exit … rejoins <id>`. This notation overlaps the",
+      "flowchart on purpose and is deliberately the smaller of the two, so",
+      "the words that would draw an edge are refused by name:",
+      "",
+      code(LIFECYCLE_REFUSALS_EXAMPLE.code),
+      "",
+      "If the states need arbitrary edges between them, write a flowchart.",
     ].join("\n"),
   }),
 
