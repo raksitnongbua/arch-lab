@@ -256,12 +256,26 @@ check("both viewer surfaces hand it the obstacles", () => {
     "the exporter stopped telling a connector what it must avoid, so the PNG " +
       "routes differently from the screen",
   );
-  assert.equal(
-    (exporter.match(/obstacles: obstaclesFor\(edge, rectById\)/g) ?? []).length,
-    2,
-    "the exporter computes the path twice — once for the label anchor and " +
-      "once for the drawn line — and both have to see the same obstacles",
-  );
+  /* EVERY call, not a count of them. This asserted "exactly 2" — a proxy for
+     the exporter laying a connector out twice, once for the label anchor and
+     once for the drawn line, both of which had to see the same obstacles. The
+     proxy broke the moment the layout was consolidated into ONE call the
+     whole file shares, which is strictly better and which the old assertion
+     read as a regression. What actually matters is that no call escapes
+     without obstacles, so that is what is checked now — and it holds however
+     many call sites there are. */
+  for (const [index, call] of exporter
+    .split("getParallelEdgePath({")
+    .entries()) {
+    if (index === 0) continue;
+    const args = call.slice(0, call.indexOf("})"));
+    assert.match(
+      args,
+      /obstacles:/,
+      `a getParallelEdgePath call in the exporter passes no obstacles, so the ` +
+        "PNG routes that connector differently from the screen",
+    );
+  }
 });
 
 if (failures > 0) {

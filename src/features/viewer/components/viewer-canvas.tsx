@@ -66,6 +66,7 @@ import {
 } from "@xyflow/react";
 
 import { CanvasGroundLayers } from "@/components/ui/canvas-ground-layers";
+import { assignHops, parseCurve } from "@/lib/edge-crossings";
 import {
   edgeChipSize,
   placeEdgeLabels,
@@ -2388,28 +2389,67 @@ function ViewerCanvasInner({
        different place in the PNG than on screen would be the two-halves
        failure `codebase.md` §4 names. */
     const fans = assignFanSlots(diagram.edges, rectById);
+
+    /* THE WHOLE-DIAGRAM GEOMETRY PASS, computed once and read three times —
+       by the chip placement, by the crossing pass, and by each edge. It used
+       to be inlined in the chip placement, which meant the connectors WITHOUT
+       a chip were never laid out here at all; the crossing pass needs every
+       one of them, because an unlabelled connector crosses just as opaquely as
+       a labelled one. */
+    const geometry = new Map<
+      string,
+      {
+        path: string;
+        labelX: number;
+        labelY: number;
+        dirX: number;
+        dirY: number;
+      }
+    >();
+    for (const edge of diagram.edges) {
+      const source = rectById.get(edge.source);
+      const target = rectById.get(edge.target);
+      if (source === undefined || target === undefined) continue;
+      const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
+      const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+      const { path, labelX, labelY } = getParallelEdgePath({
+        ...anchors,
+        parallelIndex: group.index,
+        parallelCount: group.count,
+        labelBias: labelBias.get(edge.id) ?? 0,
+      });
+      geometry.set(edge.id, {
+        path,
+        labelX,
+        labelY,
+        dirX: anchors.targetX - anchors.sourceX,
+        dirY: anchors.targetY - anchors.sourceY,
+      });
+    }
+
+    /* Which connector steps over which, decided from the curves that will
+       actually be drawn — see `lib/edge-crossings.ts` for why the SHORTER one
+       hops and why the alternative was turned down. */
+    const hops = assignHops(
+      diagram.edges.flatMap((edge) => {
+        const curve = parseCurve(geometry.get(edge.id)?.path ?? "");
+        return curve === null ? [] : [{ id: edge.id, curve }];
+      }),
+    );
+
     const labelPlacements = placeEdgeLabels(
       diagram.edges.flatMap((edge) => {
-        const source = rectById.get(edge.source);
-        const target = rectById.get(edge.target);
-        if (source === undefined || target === undefined) return [];
+        const laid = geometry.get(edge.id);
+        if (laid === undefined) return [];
         const size = edgeChipSize(edge.label, edge.technology);
         if (size === null) return [];
-        const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
-        const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-        const anchor = getParallelEdgePath({
-          ...anchors,
-          parallelIndex: group.index,
-          parallelCount: group.count,
-          labelBias: labelBias.get(edge.id) ?? 0,
-        });
         return [
           {
             id: edge.id,
-            anchorX: anchor.labelX,
-            anchorY: anchor.labelY,
-            dirX: anchors.targetX - anchors.sourceX,
-            dirY: anchors.targetY - anchors.sourceY,
+            anchorX: laid.labelX,
+            anchorY: laid.labelY,
+            dirX: laid.dirX,
+            dirY: laid.dirY,
             width: size.width,
             height: size.height,
           },
@@ -2474,6 +2514,7 @@ function ViewerCanvasInner({
           parallelIndex: group.index,
           parallelCount: group.count,
           fanSlots: fans.get(edge.id),
+          hops: hops.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
           /* Every element except this connector's own two, so the curve can

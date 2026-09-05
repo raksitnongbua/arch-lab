@@ -17,6 +17,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   ordered by where they are going so the lines do not cross on the way out. An
   element carrying one connector per side is exactly where it always was. The
   SVG and PNG exports fan identically, from the same module the canvas uses.
+- **Where two connectors cross, one of them now steps over the other.** A
+  crossing used to read as four lines leaving a junction, and the eye joins the
+  wrong pair. The shorter of the two is interrupted by a small arc, so the
+  crossing reads as a bridge — the shorter one because the arc stays inside the
+  smaller visual span, and because deciding it from the geometry means nothing
+  about how the file is written can move the bridge. Never both lines; never
+  within a twelfth of a connector's end, where an arc would land on an
+  arrowhead; and a connector crossing more than three others keeps its straight
+  line rather than becoming a row of bumps. Exports draw the same bridges in
+  the same places as the canvas.
 - **`validate_model` says when a diagram is too crowded to present.** Past
   about nine elements or twelve relationships, or when one element has more
   connectors on a side than a reader can separate, the review notes say so and

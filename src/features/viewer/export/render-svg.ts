@@ -40,6 +40,7 @@ import {
 import type { C4Diagram, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
+import { assignHops, parseCurve, pathWithHops } from "@/lib/edge-crossings";
 import {
   assignFanSlots,
   getFloatingAnchors,
@@ -522,6 +523,37 @@ function edgeMarkup(
      two-halves failure `codebase.md` §4 names, and the exporter is where it
      would go unnoticed longest. */
   const fans = assignFanSlots(diagram.edges, rectById);
+
+  /* THE SAME CROSSING PASS THE CANVAS RUNS, over every connector rather than
+     only the labelled ones — an unlabelled connector crosses just as opaquely.
+     Computed here from the same inputs, so a bridge lands on the same crossing
+     in the PNG as on screen. */
+  const geometryFor = (edge: C4Diagram["edges"][number]) => {
+    const source = rectById.get(edge.source);
+    const target = rectById.get(edge.target);
+    if (source === undefined || target === undefined) return null;
+    const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
+    const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+    const laid = getParallelEdgePath({
+      ...anchors,
+      parallelIndex: group.index,
+      parallelCount: group.count,
+      labelBias: labelBias.get(edge.id) ?? 0,
+      obstacles: obstaclesFor(edge, rectById),
+    });
+    return {
+      ...laid,
+      dirX: anchors.targetX - anchors.sourceX,
+      dirY: anchors.targetY - anchors.sourceY,
+    };
+  };
+  const hops = assignHops(
+    diagram.edges.flatMap((edge) => {
+      const laid = geometryFor(edge);
+      const curve = laid === null ? null : parseCurve(laid.path);
+      return curve === null ? [] : [{ id: edge.id, curve }];
+    }),
+  );
   const parts: string[] = [];
 
   /* Where every chip goes, decided before any of them is painted.
@@ -533,27 +565,17 @@ function edgeMarkup(
    * PNG as it does on screen. */
   const labelPlacements = placeEdgeLabels(
     diagram.edges.flatMap((edge) => {
-      const source = rectById.get(edge.source);
-      const target = rectById.get(edge.target);
-      if (source === undefined || target === undefined) return [];
+      const laid = geometryFor(edge);
+      if (laid === null) return [];
       const size = edgeChipSize(edge.label, edge.technology);
       if (size === null) return [];
-      const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
-      const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-      const { labelX, labelY } = getParallelEdgePath({
-        ...anchors,
-        parallelIndex: group.index,
-        parallelCount: group.count,
-        labelBias: labelBias.get(edge.id) ?? 0,
-        obstacles: obstaclesFor(edge, rectById),
-      });
       return [
         {
           id: edge.id,
-          anchorX: labelX,
-          anchorY: labelY,
-          dirX: anchors.targetX - anchors.sourceX,
-          dirY: anchors.targetY - anchors.sourceY,
+          anchorX: laid.labelX,
+          anchorY: laid.labelY,
+          dirX: laid.dirX,
+          dirY: laid.dirY,
           width: size.width,
           height: size.height,
         },
@@ -567,15 +589,10 @@ function edgeMarkup(
     const target = rectById.get(edge.target);
     if (source === undefined || target === undefined) continue;
 
-    const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
-    const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-    const { path, labelX, labelY } = getParallelEdgePath({
-      ...anchors,
-      parallelIndex: group.index,
-      parallelCount: group.count,
-      labelBias: labelBias.get(edge.id) ?? 0,
-      obstacles: obstaclesFor(edge, rectById),
-    });
+    const laid = geometryFor(edge);
+    if (laid === null) continue;
+    const { labelX, labelY } = laid;
+    const path = pathWithHops(laid.path, hops.get(edge.id) ?? []);
 
     const dash =
       edge.style === "dashed" ? ` stroke-dasharray="${EDGE_BASE_DASH}"` : "";

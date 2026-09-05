@@ -52,6 +52,16 @@ const {
   pointOnSide,
   sideLength,
 } = await load("src/lib/edge-fan.ts");
+const {
+  HOP_RADIUS,
+  MAX_HOPS_PER_EDGE,
+  assignHops,
+  curveLength,
+  parseCurve,
+  pathWithHops,
+  pointAt,
+  splitAt,
+} = await load("src/lib/edge-crossings.ts");
 
 let assertions = 0;
 let failures = 0;
@@ -281,6 +291,183 @@ check("two edges between the same pair share a parallel group", () => {
   assert.notEqual(groups.get("a").index, groups.get("b").index);
 });
 
+console.log("\n4b. Where two connectors cross, the SHORTER one steps over");
+
+/* One long horizontal connector crossed by one short vertical one — the scene
+   the decision was drawn out on. */
+const LONG = "M 100,132 Q 228,132 356,132";
+const SHORT = "M 240,54 Q 240,125 240,196";
+
+check("the shorter connector is the one that hops", () => {
+  const hops = assignHops([
+    { id: "e-long", curve: parseCurve(LONG) },
+    { id: "e-short", curve: parseCurve(SHORT) },
+  ]);
+  assert.ok(
+    curveLength(parseCurve(SHORT)) < curveLength(parseCurve(LONG)),
+    "the fixture stopped having a shorter connector",
+  );
+  assert.deepEqual([...hops.keys()], ["e-short"], "the wrong line hopped");
+  assert.equal(hops.get("e-short").length, 1);
+});
+
+check("never both — one crossing is one bridge", () => {
+  /* Bridging both lines reads as two mistakes rather than as one going over,
+     which is the whole reason the rule names a single winner. */
+  const hops = assignHops([
+    { id: "e-long", curve: parseCurve(LONG) },
+    { id: "e-short", curve: parseCurve(SHORT) },
+  ]);
+  assert.equal(hops.has("e-long"), false, "the line underneath hopped too");
+});
+
+check("the winner does not change when the ids are swapped", () => {
+  /* THE PROPERTY THAT MADE THIS OPTION WORTH PICKING over letting the document
+     decide: nothing about how the file is written can move the bridge. */
+  const forward = assignHops([
+    { id: "aaa", curve: parseCurve(LONG) },
+    { id: "zzz", curve: parseCurve(SHORT) },
+  ]);
+  const swapped = assignHops([
+    { id: "zzz", curve: parseCurve(LONG) },
+    { id: "aaa", curve: parseCurve(SHORT) },
+  ]);
+  assert.deepEqual([...forward.keys()], ["zzz"]);
+  assert.deepEqual([...swapped.keys()], ["aaa"]);
+});
+
+check("two connectors of equal length settle it by id, not by chance", () => {
+  /* The one cost of deciding by geometry: near-equal lengths could trade the
+     bridge as a node moves. The tie-break has to be something that does not
+     move at all. */
+  const a = "M 0,100 Q 100,100 200,100";
+  const b = "M 100,0 Q 100,100 100,200";
+  assert.ok(
+    Math.abs(curveLength(parseCurve(a)) - curveLength(parseCurve(b))) <= 1,
+    "the fixture stopped being a tie",
+  );
+  const first = assignHops([
+    { id: "e-a", curve: parseCurve(a) },
+    { id: "e-b", curve: parseCurve(b) },
+  ]);
+  const reversed = assignHops([
+    { id: "e-b", curve: parseCurve(b) },
+    { id: "e-a", curve: parseCurve(a) },
+  ]);
+  assert.deepEqual(
+    [...first.keys()],
+    [...reversed.keys()],
+    "the tie was settled by which connector came first in the list",
+  );
+});
+
+check("a crossing near an end is declined", () => {
+  /* An arc there lands on the arrowhead or against the node the connector just
+     left, where a bridge does not read as one. Declined, like a centred
+     obstruction in `curve-clearance`. */
+  const long = "M 0,100 Q 200,100 400,100";
+  const nearEnd = "M 20,0 Q 20,100 20,200";
+  const hops = assignHops([
+    { id: "e-long", curve: parseCurve(long) },
+    { id: "e-near", curve: parseCurve(nearEnd) },
+  ]);
+  assert.equal(
+    hops.size,
+    0,
+    "a bridge was drawn within a twelfth of a connector's end",
+  );
+});
+
+console.log("\n4c. The bridge is cut into the line, not painted over it");
+
+check("the hopped path interrupts its own curve with an arc", () => {
+  const hops = assignHops([
+    { id: "e-long", curve: parseCurve(LONG) },
+    { id: "e-short", curve: parseCurve(SHORT) },
+  ]);
+  const drawn = pathWithHops(SHORT, hops.get("e-short"));
+  assert.match(drawn, /\bA /, "no arc — the line was left running straight");
+  assert.notEqual(drawn, SHORT);
+  /* An arc PAINTED OVER the line would leave the original path intact and add
+     a second one. Cutting means the curve command appears twice, once per
+     side of the bridge. */
+  assert.equal(
+    (drawn.match(/\bQ /g) ?? []).length,
+    2,
+    "the curve was not split — an arc laid on top still shows the line under it",
+  );
+});
+
+check("the bridge sits on the crossing, not near it", () => {
+  const hops = assignHops([
+    { id: "e-long", curve: parseCurve(LONG) },
+    { id: "e-short", curve: parseCurve(SHORT) },
+  ]);
+  const t = hops.get("e-short")[0];
+  const at = pointAt(parseCurve(SHORT), t);
+  assert.ok(
+    Math.abs(at.y - 132) < 2,
+    `the bridge is at y=${at.y.toFixed(1)}, the crossing is at y=132`,
+  );
+  const drawn = pathWithHops(SHORT, [t]);
+  const arc = /A [\d.]+ [\d.]+ 0 0 1 ([\d.-]+),([\d.-]+)/.exec(drawn);
+  assert.ok(arc !== null, "no arc to measure");
+  assert.ok(
+    Math.abs(Number(arc[2]) - 132) <= HOP_RADIUS + 1,
+    "the arc ends further than its own radius from the crossing",
+  );
+});
+
+check("a connector left alone is returned byte for byte", () => {
+  assert.equal(pathWithHops(LONG, []), LONG);
+  assert.equal(
+    pathWithHops("M 0,0 L 10,10", [0.5]),
+    "M 0,0 L 10,10",
+    "an unrecognised path shape was cut anyway — a connector with a gap in it",
+  );
+});
+
+check("a connector crossing too many others keeps its straight line", () => {
+  /* A line carrying six bumps has stopped being a line, so the honest report
+     is the diagram's crossing count — not a connector drawn as a dotted arc. */
+  const shortOne = {
+    id: "e-short",
+    curve: parseCurve("M 200,0 Q 200,200 200,400"),
+  };
+  const crossers = Array.from({ length: MAX_HOPS_PER_EDGE + 2 }, (_, i) => ({
+    id: `x${i}`,
+    curve: parseCurve(
+      `M 0,${60 + i * 60} Q 300,${60 + i * 60} 600,${60 + i * 60}`,
+    ),
+  }));
+  const hops = assignHops([shortOne, ...crossers]);
+  assert.equal(
+    hops.has("e-short"),
+    false,
+    `a connector was given more than ${MAX_HOPS_PER_EDGE} bridges`,
+  );
+});
+
+check("splitting a curve does not move it", () => {
+  /* De Casteljau is exact, and this is what says so: the halves must meet, and
+     a point on the original must still be on the piece it fell in. */
+  for (const path of [LONG, "M 0,0 C 50,0 50,100 100,100"]) {
+    const curve = parseCurve(path);
+    const [head, tail] = splitAt(curve, 0.4);
+    assert.deepEqual(
+      head.points[head.points.length - 1],
+      tail.points[0],
+      "the two halves do not meet",
+    );
+    const onOriginal = pointAt(curve, 0.2);
+    const onHead = pointAt(head, 0.5);
+    assert.ok(
+      Math.hypot(onOriginal.x - onHead.x, onOriginal.y - onHead.y) < 1e-6,
+      "the split moved the curve",
+    );
+  }
+});
+
 console.log("\n5. One definition — the canvas and the exporter cannot drift");
 
 const SHARED_READERS = [
@@ -324,12 +511,14 @@ check("the fan module stays loadable by a check script", () => {
   /* The whole reason it lives in `src/lib` rather than beside the curve maths.
      One import of React and this file cannot run at all — which is how the
      geometry stops being proved and starts being believed. */
-  const source = read("src/lib/edge-fan.ts");
-  assert.ok(
-    !/from ["']@?xyflow/.test(source) && !/from ["']react/.test(source),
-    "lib/edge-fan.ts imported React — Node's type stripping cannot follow it " +
-      "and this check would silently stop running",
-  );
+  for (const rel of ["src/lib/edge-fan.ts", "src/lib/edge-crossings.ts"]) {
+    const source = read(rel);
+    assert.ok(
+      !/from ["']@?xyflow/.test(source) && !/from ["']react/.test(source),
+      `${rel} imported React — Node's type stripping cannot follow it and ` +
+        "this check would silently stop running",
+    );
+  }
 });
 
 console.log(
