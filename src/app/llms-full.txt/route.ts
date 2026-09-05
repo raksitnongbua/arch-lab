@@ -2,6 +2,10 @@ import {
   MCP_ENDPOINT_PATH,
   MCP_STATUS_LABEL,
   MCP_TOOLS,
+  KINDS_WITH_SYNTAX_SECTIONS,
+  KINDS_WITHOUT_SYNTAX_SECTIONS,
+  SKILL_INSTALL,
+  SKILL_INSTALL_ALTERNATIVE,
 } from "@/features/mcp/catalog";
 import { syntaxReferenceMarkdown } from "@/features/mcp/content/syntax-sections";
 import { publicOrigin } from "@/features/mcp/lib/origin";
@@ -251,6 +255,26 @@ parser's verdict on what it just wrote.
 Tools:
 
 ${MCP_TOOLS.map((tool) => `- \`${tool.name}\` — ${tool.title}`).join("\n")}
+
+## Using it WITHOUT a server (the Agent Skill)
+
+The grammar below also ships as an Agent Skill — the same text, generated from
+the same source, installed as one markdown file:
+
+\`${SKILL_INSTALL}\`
+
+or, to copy the directory and nothing else:
+
+\`${SKILL_INSTALL_ALTERNATIVE}\`
+
+That is enough to WRITE \`.alab\`. It is not enough to know whether what you
+wrote parses: the skill carries the grammar, not the parser. For a verdict, use
+\`validate_model\` on the server above, or paste the file into ${origin}/validate.
+
+The skill teaches ${KINDS_WITH_SYNTAX_SECTIONS.length} of the
+${KINDS_WITH_SYNTAX_SECTIONS.length + KINDS_WITHOUT_SYNTAX_SECTIONS.length}
+notations; the other ${KINDS_WITHOUT_SYNTAX_SECTIONS.length} are taught by a
+worked example instead — \`get_example_model\`, or ${origin}/demo.
 
 ## ${syntaxRef()}
 `;

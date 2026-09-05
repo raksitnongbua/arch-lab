@@ -72,6 +72,40 @@ const { DEFAULT_PUBLIC_ORIGIN } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mcp/lib/origin.ts")).href
 );
 
+/*
+ * WHICH NOTATIONS THIS FILE ACTUALLY TEACHES, derived from the section list
+ * rather than typed out — the same pair of constants the MCP tool description
+ * reads, and for the same reason.
+ *
+ * The description below said "(C4 diagrams and sequence diagrams)" for as long
+ * as it took gantt, timeline and lifecycle sections to arrive, and the preamble
+ * called itself "the complete .alab grammar" while four notations had no
+ * section at all. That second one is the exact failure the MCP handshake was
+ * fixed for: an agent told to read the grammar before writing a flowchart found
+ * no mention of flowcharts and could reasonably conclude the format has none.
+ */
+const { KINDS_WITH_SYNTAX_SECTIONS, KINDS_WITHOUT_SYNTAX_SECTIONS } =
+  await import(
+    pathToFileURL(path.join(ROOT, "src/features/mcp/catalog.ts")).href
+  );
+const { EXAMPLE_NOTATION_LABEL } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/lib/kind-copy.ts"))
+    .href
+);
+
+/*
+ * The notations' READABLE names, from the table the demo index and the
+ * playground already read. The slugs are keys, not prose: "c4, usecase, er and
+ * dict" in a sentence written for a person is the shape of a set that leaked
+ * out of a Record.
+ */
+/** `a, b and c` — an English list, so a derived set reads as a sentence. */
+function sentenceList(kinds) {
+  const items = kinds.map((kind) => EXAMPLE_NOTATION_LABEL[kind] ?? kind);
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 export const SKILL_PATH = "skills/alab/SKILL.md";
 
 /**
@@ -83,14 +117,22 @@ export const SKILL_PATH = "skills/alab/SKILL.md";
  */
 const NAME = "alab";
 const DESCRIPTION =
-  "Write and edit arch-lab .alab architecture files (C4 diagrams and " +
-  "sequence diagrams). Use whenever creating or modifying a .alab file — " +
+  `Write and edit arch-lab .alab architecture files (${sentenceList(
+    KINDS_WITH_SYNTAX_SECTIONS,
+  )}). Use whenever creating or modifying a .alab file — ` +
   "the format has significant indentation and order-free attributes, so " +
   "writing it from memory produces plausible, invalid files.";
 
-const PREAMBLE = `This is the complete \`.alab\` grammar, generated from the same source the
-arch-lab MCP server serves and verified against the real parser on every
-build.
+const PREAMBLE = `The \`.alab\` grammar for the ${sentenceList(KINDS_WITH_SYNTAX_SECTIONS)},
+generated from the same source the arch-lab MCP server serves and verified
+against the real parser on every build.
+
+**arch-lab draws ${KINDS_WITHOUT_SYNTAX_SECTIONS.length} more notations this file does not cover** — the
+${sentenceList(KINDS_WITHOUT_SYNTAX_SECTIONS)}. That is deliberate rather than a
+gap: their constructs are arrows and named rows, and one worked example teaches
+them faster than a grammar would. Ask the MCP server's \`get_example_model\` for
+one, or read a bundled document at ${DEFAULT_PUBLIC_ORIGIN}/demo — every one is
+parser-verified, which makes it the real reference for its grammar.
 
 **Read the relevant section before writing \`.alab\`, not after.** The format
 has significant indentation and order-free attributes; both are easy to guess

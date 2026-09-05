@@ -1,13 +1,20 @@
 ---
 name: alab
-description: Write and edit arch-lab .alab architecture files (C4 diagrams and sequence diagrams). Use whenever creating or modifying a .alab file — the format has significant indentation and order-free attributes, so writing it from memory produces plausible, invalid files.
+description: Write and edit arch-lab .alab architecture files (C4 model, sequence diagram, gantt chart, milestone timeline and lifecycle). Use whenever creating or modifying a .alab file — the format has significant indentation and order-free attributes, so writing it from memory produces plausible, invalid files.
 ---
 
 # The .alab format
 
-This is the complete `.alab` grammar, generated from the same source the
-arch-lab MCP server serves and verified against the real parser on every
-build.
+The `.alab` grammar for the C4 model, sequence diagram, gantt chart, milestone timeline and lifecycle,
+generated from the same source the arch-lab MCP server serves and verified
+against the real parser on every build.
+
+**arch-lab draws 4 more notations this file does not cover** — the
+flowchart, use-case diagram, ER diagram and data dictionary. That is deliberate rather than a
+gap: their constructs are arrows and named rows, and one worked example teaches
+them faster than a grammar would. Ask the MCP server's `get_example_model` for
+one, or read a bundled document at https://arch-lab.dev/demo — every one is
+parser-verified, which makes it the real reference for its grammar.
 
 **Read the relevant section before writing `.alab`, not after.** The format
 has significant indentation and order-free attributes; both are easy to guess

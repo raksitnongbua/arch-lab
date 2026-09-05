@@ -2,6 +2,8 @@ import {
   MCP_ENDPOINT_PATH,
   MCP_STATUS_LABEL,
   MCP_TOOLS,
+  SKILL_INSTALL,
+  SKILL_INSTALL_ALTERNATIVE,
 } from "@/features/mcp/catalog";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
@@ -161,11 +163,18 @@ ${THEMES_PASSAGE}
 - Tools: ${MCP_TOOLS.map((tool) => tool.name).join(", ")}
 - How to connect: ${origin}/mcp
 - The grammar, with every example verified against the real parser: ${origin}/syntax
+- The same grammar as an Agent Skill, no server involved:
+  \`${SKILL_INSTALL}\` (or \`${SKILL_INSTALL_ALTERNATIVE}\`)
 
 Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote — there is a
 validate and a format tool for each of the nine document kinds. There is no
 mutation API — you edit \`.alab\` files yourself.
+
+If you only need to WRITE \`.alab\`, the skill is enough and costs nothing until
+it is opened: it carries the same grammar, generated from the same source. What
+it cannot give you is the parser's verdict on a file you have written — for that
+you need the server, or the validator at ${origin}/validate.
 
 ## Full reference
 

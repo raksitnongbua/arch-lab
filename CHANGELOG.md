@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The `.alab` skill installs with the skills CLI, and both routes are
+  offered.** `npx skills add raksitnongbua/arch-lab --skill alab` is the
+  recommended command — it brings a lockfile you can commit, `skills update`
+  and `skills remove`, and works for agents other than Claude Code. The old
+  `npx degit` command stays beside it for anyone who would rather copy one
+  directory and nothing else: no CLI, no telemetry, no symlinks into other
+  agents' folders. Both land the same file at the same path.
+- **The skill is findable without reading the MCP page.** It was named on
+  exactly one page — the one you reach by having already decided you want the
+  server — so an agent reading `llms.txt`, which is the audience that file is
+  for, learned only about the connector. Both `llms.txt` and `llms-full.txt`
+  now carry the install command and say plainly what the skill can and cannot
+  do without the server.
+
 - **Connectors leaving the same element no longer start from the same point.**
   Every connector used to meet its element at the midpoint of the side facing
   the other end, so six relationships leaving one system began at one pixel and
@@ -219,6 +233,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The skill no longer claims to be the complete `.alab` grammar.** It teaches
+  five of the nine notations; the flowchart, use-case diagram, ER diagram and
+  data dictionary have no section in it and are taught by a worked example
+  instead. It now says so, and names them, so an agent that reads it before
+  writing a flowchart does not conclude the format has none. Its frontmatter
+  said "C4 diagrams and sequence diagrams" long after gantt, timeline and
+  lifecycle were added; both lines are derived from the section list now.
 - **A layer whose coordinates happen to match the layout is no longer counted
   as unplaced.** An element line carrying `(40,40 176x88)` beats the layout
   whether or not those numbers are the ones the layout would have chosen — so a

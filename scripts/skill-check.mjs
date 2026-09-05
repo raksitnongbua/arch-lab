@@ -33,10 +33,22 @@ const { SYNTAX_SECTION_IDS, syntaxSection } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mcp/content/syntax-sections.ts"))
     .href
 );
-const { SKILL_INSTALL, SKILL_REPO, SKILL_SOURCE_DIR, SKILL_DESTINATION } =
-  await import(
-    pathToFileURL(path.join(ROOT, "src/features/mcp/catalog.ts")).href
-  );
+const {
+  KINDS_WITHOUT_SYNTAX_SECTIONS,
+  KINDS_WITH_SYNTAX_SECTIONS,
+  SKILL_DESTINATION,
+  SKILL_INSTALL,
+  SKILL_INSTALL_ALTERNATIVE,
+  SKILL_NAME,
+  SKILL_REPO,
+  SKILL_SOURCE_DIR,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/mcp/catalog.ts")).href
+);
+const { EXAMPLE_NOTATION_LABEL } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/lib/kind-copy.ts"))
+    .href
+);
 
 let assertions = 0;
 let failures = 0;
@@ -179,25 +191,128 @@ check("the install command points at the directory the skill lives in", () => {
   );
 });
 
-check("the command is npx-able as written, with no publish step", () => {
-  // `npx <name>` would need an npm package, and nothing here is published.
-  // degit reads the public GitHub repo directly, so the documented command is
-  // one that runs today rather than after a release nobody has scheduled.
-  assert.match(SKILL_INSTALL, /^npx degit /);
+check("both commands run today, with no publish step in the way", () => {
+  /* TWO COMMANDS, and the page is only honest if both work. The recommended
+     one runs somebody else's published CLI (`skills`, from vercel-labs) which
+     resolves a skill out of a public git repo; the alternative copies the
+     directory. Neither waits on a release of ours, which is the property that
+     matters — the module's own comment records that the ORIGINAL argument for
+     degit ("npx <name> needs something published to npm") was about a package
+     of ours and outlived its own premise. */
+  assert.match(
+    SKILL_INSTALL,
+    /^npx skills add /,
+    "the recommended command is no longer the skills CLI",
+  );
   assert.ok(
-    SKILL_INSTALL.includes(`${SKILL_REPO}/${SKILL_SOURCE_DIR}`),
-    `the command does not name ${SKILL_REPO}/${SKILL_SOURCE_DIR}`,
+    SKILL_INSTALL.includes(SKILL_REPO),
+    `the command does not name ${SKILL_REPO}`,
+  );
+  assert.ok(
+    SKILL_INSTALL.includes(`--skill ${SKILL_NAME}`),
+    "the command does not cherry-pick this skill, so a reader with one repo " +
+      "full of skills is offered all of them",
+  );
+
+  assert.match(SKILL_INSTALL_ALTERNATIVE, /^npx degit /);
+  assert.ok(
+    SKILL_INSTALL_ALTERNATIVE.includes(`${SKILL_REPO}/${SKILL_SOURCE_DIR}`),
+    `the alternative does not name ${SKILL_REPO}/${SKILL_SOURCE_DIR}`,
   );
 });
 
-check("the destination it advertises is where degit actually writes", () => {
+check("the skill's name is its directory, as the spec requires", () => {
+  /* The open Agent Skills spec requires `name` to equal the parent directory,
+     and both install commands depend on it separately: the CLI cherry-picks by
+     that name, and degit's destination path ends in it. Three things that must
+     agree, in one assertion, because they are one fact. */
+  assert.equal(
+    SKILL_SOURCE_DIR,
+    `skills/${SKILL_NAME}`,
+    "the skill's directory is not named after the skill",
+  );
+  assert.match(
+    generated,
+    new RegExp(`^name: ${SKILL_NAME}$`, "m"),
+    "the frontmatter name does not match the directory the CLI resolves it by",
+  );
+});
+
+check("the alternative writes where the page says it does", () => {
   // degit copies the CONTENTS of the source dir into the destination, so the
   // file lands at <dest>/SKILL.md — the page must not promise a different path.
-  const destinationDir = SKILL_INSTALL.trim().split(/\s+/).at(-1);
+  const destinationDir = SKILL_INSTALL_ALTERNATIVE.trim().split(/\s+/).at(-1);
   assert.equal(
     `${destinationDir}/SKILL.md`,
     SKILL_DESTINATION,
     `the command writes into ${destinationDir} but the page says ${SKILL_DESTINATION}`,
+  );
+});
+
+check("the skill does not claim notations it has no section for", () => {
+  /* IT CLAIMED TO BE "the complete .alab grammar" while four of the nine
+     notations had no section in it. That is the same failure the MCP handshake
+     was fixed for — an agent told to read the grammar before writing a
+     flowchart found no mention of flowcharts and could reasonably conclude the
+     format has none — and the skill did not get the fix at the time. Both ends
+     are derived from the section list, so neither can drift again. */
+  assert.doesNotMatch(
+    generated,
+    /complete `?\.alab`? grammar/i,
+    "the skill calls itself complete; it teaches " +
+      `${KINDS_WITH_SYNTAX_SECTIONS.length} of ` +
+      `${KINDS_WITH_SYNTAX_SECTIONS.length + KINDS_WITHOUT_SYNTAX_SECTIONS.length}`,
+  );
+  for (const kind of KINDS_WITHOUT_SYNTAX_SECTIONS) {
+    assert.ok(
+      generated.includes(EXAMPLE_NOTATION_LABEL[kind]),
+      `the skill never mentions the ${EXAMPLE_NOTATION_LABEL[kind]}, so an ` +
+        "agent cannot learn that arch-lab draws one",
+    );
+  }
+  assert.match(
+    generated,
+    /get_example_model/,
+    "the four notations it does not teach are named with nowhere to go",
+  );
+});
+
+check("an agent reading llms.txt is told the skill exists", () => {
+  /* THE GAP THIS EXISTS FOR. The skill was named on exactly one page — `/mcp`,
+     which a reader reaches by having already decided they want the server. An
+     agent crawling `llms.txt`, which is the audience that file is FOR, was told
+     only about the connector and never about the file that needs no connector.
+     Nothing failed; the cheaper option was simply undiscoverable. */
+  for (const rel of [
+    "src/app/llms.txt/route.ts",
+    "src/app/llms-full.txt/route.ts",
+  ]) {
+    const source = readFileSync(path.join(ROOT, rel), "utf8");
+    assert.match(
+      source,
+      /SKILL_INSTALL/,
+      `${rel} names the MCP endpoint and never the skill, so an agent reading ` +
+        "it cannot learn there is a way to get the grammar without connecting",
+    );
+    assert.match(
+      source,
+      /SKILL_INSTALL_ALTERNATIVE/,
+      `${rel} offers only one of the two install routes`,
+    );
+  }
+});
+
+check("the /mcp page offers both commands", () => {
+  const page = readFileSync(
+    path.join(ROOT, "src/features/mcp/components/mcp-guide.tsx"),
+    "utf8",
+  );
+  assert.match(page, /snippet=\{SKILL_INSTALL\}/);
+  assert.match(
+    page,
+    /snippet=\{SKILL_INSTALL_ALTERNATIVE\}/,
+    "the page recommends a CLI with telemetry on by default and gives the " +
+      "reader no way around it",
   );
 });
 

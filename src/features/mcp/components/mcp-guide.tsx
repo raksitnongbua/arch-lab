@@ -34,6 +34,7 @@ import {
   MCP_TOOLS,
   SKILL_DESTINATION,
   SKILL_INSTALL,
+  SKILL_INSTALL_ALTERNATIVE,
   mcpEndpointUrl,
 } from "../catalog";
 import type { McpToolDoc } from "../catalog";
@@ -283,6 +284,23 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           verified against the real parser on every build. Nothing runs, nothing
           connects, and it is a normal file you can read and diff.
         </P>
+
+        {/* THE SECOND COMMAND, offered rather than hidden. The CLI reports
+            installs to its own telemetry endpoint by default and links the
+            skill into every agent directory it recognises; both are reasonable
+            defaults and neither is something to hand a reader with no way out.
+            This is the same file by the plainest possible route. */}
+        <P className="mt-4">
+          Prefer to copy the directory and nothing else — no CLI, no telemetry,
+          no symlinks into other agents&rsquo; folders?
+        </P>
+        <div className="mt-3">
+          <CopySnippet
+            snippet={SKILL_INSTALL_ALTERNATIVE}
+            caption="bash"
+            label="Install it by copying the directory instead"
+          />
+        </div>
 
         {/* The honest boundary. Someone who thinks a skill replaces the server
             will trust an invalid file because "the skill said so" — which is a

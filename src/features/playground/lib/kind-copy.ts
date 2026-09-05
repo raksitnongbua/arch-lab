@@ -81,3 +81,23 @@ export const KIND_BLURB: Record<SeedKind, string> = {
      else. */
   lifecycle: "What one thing went through, and where it can end up",
 };
+
+/**
+ * What to CALL each notation in prose, singular.
+ *
+ * Singular and free of the word "diagram" where the noun already carries it,
+ * because these are read in a sentence ("Example gantt chart `store-migration`
+ * …") rather than as a section label. `/demo`'s jump bar has plural forms of
+ * its own; they are a UI legend beside a glyph and a colour, not this.
+ */
+export const EXAMPLE_NOTATION_LABEL: Record<SeedKind, string> = {
+  c4: "C4 model",
+  sequence: "sequence diagram",
+  flowchart: "flowchart",
+  usecase: "use-case diagram",
+  er: "ER diagram",
+  dict: "data dictionary",
+  gantt: "gantt chart",
+  timeline: "milestone timeline",
+  lifecycle: "lifecycle",
+};
