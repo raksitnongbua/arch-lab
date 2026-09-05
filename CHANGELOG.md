@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Connectors leaving the same element no longer start from the same point.**
+  Every connector used to meet its element at the midpoint of the side facing
+  the other end, so six relationships leaving one system began at one pixel and
+  left as a sheaf — each line correct, and the picture unreadable, because you
+  cannot tell which of six you are following back. They now fan along the side,
+  ordered by where they are going so the lines do not cross on the way out. An
+  element carrying one connector per side is exactly where it always was. The
+  SVG and PNG exports fan identically, from the same module the canvas uses.
+- **`validate_model` says when a diagram is too crowded to present.** Past
+  about nine elements or twelve relationships, or when one element has more
+  connectors on a side than a reader can separate, the review notes say so and
+  name C4's own remedy — give an element a child diagram and let this one show
+  the shape. Advice, never an error: a dense diagram is a correct diagram, it
+  is just one nobody can present.
+
 - **The MCP validators now hand back the fix, not just the complaint.** A
   `.alab` parse error reported over `/api/mcp` carries the same repair the
   error panel offers as a button — its stable issue code, and the source line

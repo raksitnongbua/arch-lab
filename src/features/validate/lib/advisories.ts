@@ -35,6 +35,12 @@
  */
 
 import { defaultPositions } from "@/features/archtext";
+import {
+  MIN_FAN_SPACING,
+  assignFanSlots,
+  fanSpacing,
+  isCrowded,
+} from "@/lib/edge-fan";
 /* The release row's own label. This advice used to end at "the shape is only
    changed by moving them", which was true when nothing offered to remove the
    coordinates and became a dead end the day something did — and naming the row
@@ -59,7 +65,9 @@ export type AdvisoryRule =
   | "long-title"
   | "column-layout"
   | "path-revisits-element"
-  | "path-teleports";
+  | "path-teleports"
+  | "crowded-diagram"
+  | "crowded-node";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
 export const ADVISORY_RULES: Record<
@@ -75,6 +83,27 @@ export const ADVISORY_RULES: Record<
       "document will be DRAWN rather than what it says, and it is advice " +
       "rather than a fix because the layout direction is the author's line to " +
       "write and nothing may write it for them.",
+  },
+  "crowded-diagram": {
+    title: "More on one picture than a reader will take in",
+    because:
+      "A diagram is drawn to be PRESENTED — shown in a review, put on a " +
+      "screen while someone talks through it — and past roughly a dozen " +
+      "elements a viewer stops reading it and starts searching it. The " +
+      "remedy is C4's own: push the detail down a level, so the crowded " +
+      "picture becomes an overview plus the diagram it drills into. Advice " +
+      "rather than an error because a dense diagram is a correct diagram; " +
+      "it is only one nobody can present.",
+  },
+  "crowded-node": {
+    title: "More connectors on one element than can be told apart",
+    because:
+      "Connectors leaving the same side of an element are fanned along it " +
+      "(`lib/edge-fan.ts`), and a side only has so much room: past a point " +
+      "the arrows are closer together than a reader can separate them, and " +
+      "one followed back arrives at the wrong element. The fan reports this " +
+      "rather than squeezing the gap, because a squeezed fan looks placed " +
+      "and is not.",
   },
   "missing-technology": {
     title: "Technology not stated",
@@ -323,6 +352,108 @@ function adviseColumnLayout(diagram: C4Diagram, out: Advisory[]): void {
 }
 
 /**
+ * How much one picture may carry before a reader stops reading it and starts
+ * searching it.
+ *
+ * NINE AND TWELVE, and they are borrowed rather than derived — the same budget
+ * `cathrynlavery/diagram-design` states, which is the only place this repo has
+ * found the number written down at all. They are advisory thresholds, not
+ * limits: nothing refuses a larger diagram, and the sentence names C4's own
+ * remedy (drill down a level) rather than telling an author to delete work.
+ *
+ * SEPARATE NUMBERS FOR NODES AND EDGES because they crowd a picture in
+ * different ways. Twelve boxes in a grid is busy; twelve lines through eight
+ * boxes is unreadable, and it is the second that a reader gives up on.
+ */
+const CROWDED_NODES = 9;
+const CROWDED_EDGES = 12;
+
+function adviseDiagramDensity(diagram: C4Diagram, out: Advisory[]): void {
+  const overNodes = diagram.nodes.length > CROWDED_NODES;
+  const overEdges = diagram.edges.length > CROWDED_EDGES;
+  if (!overNodes && !overEdges) return;
+
+  const parts = [
+    overNodes ? `${diagram.nodes.length} elements` : null,
+    overEdges ? `${diagram.edges.length} relationships` : null,
+  ].filter((part): part is string => part !== null);
+
+  out.push({
+    rule: "crowded-diagram",
+    where: diagram.id,
+    message:
+      `"${diagram.title}" carries ${parts.join(" and ")} — past about ` +
+      `${CROWDED_NODES} elements and ${CROWDED_EDGES} relationships a diagram ` +
+      "is searched rather than read. Consider giving one element a child " +
+      "diagram (`>child`) and letting this one show the shape.",
+  });
+}
+
+/**
+ * Elements carrying more connectors on one side than the side can separate.
+ *
+ * Asked of the geometry the document will actually be DRAWN with, through the
+ * same module the canvas and the exporter anchor from — so the advice fires
+ * exactly when a reader would see the arrows touch, and not when a count
+ * merely looks high. An element with eight connectors spread over four sides
+ * is fine and says nothing.
+ */
+function adviseNodeDensity(diagram: C4Diagram, out: Advisory[]): void {
+  const rects = new Map(
+    diagram.nodes.map((node) => [
+      node.id,
+      {
+        x: node.position.x,
+        y: node.position.y,
+        width: node.size.width,
+        height: node.size.height,
+      },
+    ]),
+  );
+  const slots = assignFanSlots(diagram.edges, rects);
+
+  /* One advisory per ELEMENT, not per connector: a node with six crowded
+     connectors has one problem, and six lines saying so is the noise the
+     per-rule cap in the renderer exists to stop — better not to make it. */
+  const worst = new Map<string, { count: number; length: number }>();
+  for (const edge of diagram.edges) {
+    const slot = slots.get(edge.id);
+    if (slot === undefined) continue;
+    for (const [nodeId, end] of [
+      [edge.source, slot.source],
+      [edge.target, slot.target],
+    ] as const) {
+      const rect = rects.get(nodeId);
+      if (rect === undefined) continue;
+      /* The SHORT side: a fan on a node's height is the one that runs out of
+         room first, and taking the larger would report a square node as
+         roomier than it is on two of its four sides. */
+      const length = Math.min(rect.width, rect.height);
+      if (!isCrowded(end.count, length)) continue;
+      const previous = worst.get(nodeId);
+      if (previous === undefined || end.count > previous.count) {
+        worst.set(nodeId, { count: end.count, length });
+      }
+    }
+  }
+
+  for (const node of diagram.nodes) {
+    const crowded = worst.get(node.id);
+    if (crowded === undefined) continue;
+    out.push({
+      rule: "crowded-node",
+      where: `${diagram.id}/${node.id}`,
+      message:
+        `"${node.name}" has ${crowded.count} connectors on one side, which ` +
+        `leaves ${fanSpacing(crowded.count, crowded.length).toFixed(1)}px ` +
+        `between them — under the ${MIN_FAN_SPACING}px a reader needs to tell ` +
+        "two arrows apart. Move some of them to a child diagram, or place the " +
+        "elements they reach on different sides of this one.",
+    });
+  }
+}
+
+/**
  * The two defects a PARSE cannot see. Every id resolves and every hop is
  * joined — the grammar guarantees that — so what is left is whether the walk
  * reads as one story, which is a judgement and therefore advice.
@@ -365,6 +496,8 @@ function advisePaths(diagram: C4Diagram, out: Advisory[]): void {
 
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
   adviseColumnLayout(diagram, out);
+  adviseDiagramDensity(diagram, out);
+  adviseNodeDensity(diagram, out);
   advisePaths(diagram, out);
   if (isBlank(diagram.title)) {
     out.push({

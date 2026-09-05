@@ -37,11 +37,13 @@ import {
   edgeChipSize,
   placeEdgeLabels,
 } from "@/features/viewer/lib/edge-label-placement";
-import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
+import type { C4Diagram, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
 import {
+  assignFanSlots,
   getFloatingAnchors,
+  parallelEdgeGroups,
   getParallelEdgePath,
   labelBiasByEdgeId,
   type NodeRect,
@@ -477,27 +479,6 @@ function nodeContent(
 /* Edges                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** Group parallel edges by unordered endpoint pair (mirrors the canvas). */
-function parallelGroups(
-  edges: readonly C4Edge[],
-): Map<string, { index: number; count: number }> {
-  const byPair = new Map<string, string[]>();
-  for (const edge of edges) {
-    const key =
-      edge.source < edge.target
-        ? `${edge.source}|${edge.target}`
-        : `${edge.target}|${edge.source}`;
-    const list = byPair.get(key);
-    if (list) list.push(edge.id);
-    else byPair.set(key, [edge.id]);
-  }
-  const out = new Map<string, { index: number; count: number }>();
-  for (const ids of byPair.values()) {
-    ids.forEach((id, index) => out.set(id, { index, count: ids.length }));
-  }
-  return out;
-}
-
 function nodeRectOf(node: C4Node): NodeRect {
   return {
     x: node.position.x,
@@ -531,11 +512,16 @@ function edgeMarkup(
   theme: ExportTheme,
   markerId: string,
 ): string {
-  const groups = parallelGroups(diagram.edges);
+  const groups = parallelEdgeGroups(diagram.edges);
   const labelBias = labelBiasByEdgeId(diagram.edges);
   const rectById = new Map(
     diagram.nodes.map((node) => [node.id, nodeRectOf(node)]),
   );
+  /* The SAME fan the canvas computes, from the same model rects — a connector
+     that met its node at a different point in the PNG than on screen is the
+     two-halves failure `codebase.md` §4 names, and the exporter is where it
+     would go unnoticed longest. */
+  const fans = assignFanSlots(diagram.edges, rectById);
   const parts: string[] = [];
 
   /* Where every chip goes, decided before any of them is painted.
@@ -552,7 +538,7 @@ function edgeMarkup(
       if (source === undefined || target === undefined) return [];
       const size = edgeChipSize(edge.label, edge.technology);
       if (size === null) return [];
-      const anchors = getFloatingAnchors(source, target);
+      const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
       const { labelX, labelY } = getParallelEdgePath({
         ...anchors,
@@ -581,7 +567,7 @@ function edgeMarkup(
     const target = rectById.get(edge.target);
     if (source === undefined || target === undefined) continue;
 
-    const anchors = getFloatingAnchors(source, target);
+    const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
     const group = groups.get(edge.id) ?? { index: 0, count: 1 };
     const { path, labelX, labelY } = getParallelEdgePath({
       ...anchors,

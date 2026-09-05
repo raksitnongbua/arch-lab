@@ -139,6 +139,72 @@ const PATH_BODY = `  db:database "Orders DB" [PostgreSQL 16]
 
 const CASES = [
   {
+    rule: "crowded-diagram",
+    why: "a context diagram carrying eleven elements",
+    expect: 1,
+    /* NODE COUNT ALONE, with no relationships at all: the two halves of the
+       budget are separate thresholds and a fixture that tripped both could
+       not tell which one had stopped working. */
+    source: `archlab 1.0
+title "T"
+
+@context ctx-root "T"
+  e0:system "Element 0"
+    desc "Does part of the work."
+  e1:system "Element 1"
+    desc "Does part of the work."
+  e2:system "Element 2"
+    desc "Does part of the work."
+  e3:system "Element 3"
+    desc "Does part of the work."
+  e4:system "Element 4"
+    desc "Does part of the work."
+  e5:system "Element 5"
+    desc "Does part of the work."
+  e6:system "Element 6"
+    desc "Does part of the work."
+  e7:system "Element 7"
+    desc "Does part of the work."
+  e8:system "Element 8"
+    desc "Does part of the work."
+  e9:system "Element 9"
+    desc "Does part of the work."
+  e10:system "Element 10"
+    desc "Does part of the work."
+`,
+  },
+  {
+    rule: "crowded-node",
+    why: "seven connectors leaving one side of one element",
+    expect: 1,
+    /* GEOMETRY IS WRITTEN INTO THE DOCUMENT, because this rule is about what
+       will be DRAWN and the default layout is free to move things. Seven
+       targets in a row beneath the hub all leave its bottom side, whose 88px
+       gives 11px between neighbours — just under the floor. */
+    source: `archlab 1.0
+title "T"
+
+@context ctx-root "T"
+  hub:system "Hub" (500,0 176x88)
+    desc "One element every other one talks to."
+  n0:system "Target 0" (110,400 176x88)
+  n1:system "Target 1" (240,400 176x88)
+  n2:system "Target 2" (370,400 176x88)
+  n3:system "Target 3" (500,400 176x88)
+  n4:system "Target 4" (630,400 176x88)
+  n5:system "Target 5" (760,400 176x88)
+  n6:system "Target 6" (890,400 176x88)
+
+  hub -> n0 : "Calls the 0 service" [HTTPS]
+  hub -> n1 : "Calls the 1 service" [HTTPS]
+  hub -> n2 : "Calls the 2 service" [HTTPS]
+  hub -> n3 : "Calls the 3 service" [HTTPS]
+  hub -> n4 : "Calls the 4 service" [HTTPS]
+  hub -> n5 : "Calls the 5 service" [HTTPS]
+  hub -> n6 : "Calls the 6 service" [HTTPS]
+`,
+  },
+  {
     rule: "column-layout",
     why: "a six-deep chain, which the top-down layout draws as a column",
     expect: 1,
@@ -553,12 +619,17 @@ for (const name of ["shopflow", "order-shop"]) {
     "column-layout",
     "path-revisits-element",
     "path-teleports",
+    /* `crowded-node` is arch-lab's own and cites the module that decides it —
+       the fan is this app's answer to several connectors on one side, and C4
+       has no opinion on where a line meets a box. `crowded-diagram` stays in
+       the C4 set because its remedy IS C4's: push the detail down a level. */
+    "crowded-node",
   ]);
 
   const uncited = declared.filter((rule) => {
     const because = ADVISORY_RULES[rule].because;
     return FORMAT_RULES.has(rule)
-      ? !/MAX_TITLE_LENGTH|\.alab/.test(because)
+      ? !/MAX_TITLE_LENGTH|\.alab|edge-fan/.test(because)
       : !/\bC4\b/.test(because);
   });
   if (uncited.length === 0) {

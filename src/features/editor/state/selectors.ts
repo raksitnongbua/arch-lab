@@ -17,6 +17,8 @@ import {
   type C4NodeType,
 } from "@/types";
 
+import { parallelEdgeGroups } from "@/lib/edge-fan";
+
 import type { BreadcrumbSegment, EditorModel, EditorState } from "./store";
 
 /** The diagram being edited. Falls back to the root if the id ever dangles. */
@@ -203,10 +205,11 @@ const parallelGroupsCache = new WeakMap<
  * For parallel-edge offsetting: edgeId → { index, count } within its
  * source|target group, for the ACTIVE diagram's edges.
  *
- * Grouping uses the UNORDERED endpoint pair, so two A→B edges AND an A→B/B→A
- * pair both count as parallel — either way the curves overlap visually and
- * need offsetting. `index` is 0-based in edge-id order (stable across
- * renders because edges keep their ids).
+ * The grouping itself is `lib/edge-fan`'s — this selector is the CACHE and the
+ * shape conversion, nothing more. It used to be a third copy of that loop,
+ * beside the viewer canvas's and the SVG exporter's, which is how the canvas
+ * and the exporter came to be two independent implementations of a placement
+ * they are required to agree on.
  */
 export function selectParallelEdgeGroups(
   s: EditorState,
@@ -215,24 +218,7 @@ export function selectParallelEdgeGroups(
   const cached = parallelGroupsCache.get(diagram);
   if (cached !== undefined) return cached;
 
-  const byPair = new Map<string, string[]>();
-  for (const edge of diagram.edges) {
-    const key =
-      edge.source < edge.target
-        ? `${edge.source}|${edge.target}`
-        : `${edge.target}|${edge.source}`;
-    const group = byPair.get(key);
-    if (group === undefined) byPair.set(key, [edge.id]);
-    else group.push(edge.id);
-  }
-
-  const result: Record<string, { index: number; count: number }> = {};
-  for (const group of byPair.values()) {
-    group.sort();
-    group.forEach((edgeId, index) => {
-      result[edgeId] = { index, count: group.length };
-    });
-  }
+  const result = Object.fromEntries(parallelEdgeGroups(diagram.edges));
 
   parallelGroupsCache.set(diagram, result);
   return result;

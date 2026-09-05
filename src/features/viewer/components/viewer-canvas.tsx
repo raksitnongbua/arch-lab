@@ -75,7 +75,6 @@ import "@xyflow/react/dist/style.css";
 
 import type {
   C4Diagram,
-  C4Edge,
   C4EdgeRevision,
   C4NodeFrameChoice,
   C4NodeRevision,
@@ -85,7 +84,9 @@ import type {
 import { childLevelOf, hasChildDiagram, placedByHand } from "@/types";
 
 import {
+  assignFanSlots,
   getFloatingAnchors,
+  parallelEdgeGroups,
   getParallelEdgePath,
   labelBiasByEdgeId,
 } from "@/features/editor/lib/edge-geometry";
@@ -859,27 +860,6 @@ function nodeRect(diagram: C4Diagram, nodeId: string): Rect | null {
     width: node.size.width,
     height: node.size.height,
   };
-}
-
-/** Group parallel edges by unordered endpoint pair. */
-function parallelGroups(
-  edges: readonly C4Edge[],
-): Map<string, { index: number; count: number }> {
-  const byPair = new Map<string, string[]>();
-  for (const edge of edges) {
-    const key =
-      edge.source < edge.target
-        ? `${edge.source}|${edge.target}`
-        : `${edge.target}|${edge.source}`;
-    const list = byPair.get(key);
-    if (list) list.push(edge.id);
-    else byPair.set(key, [edge.id]);
-  }
-  const out = new Map<string, { index: number; count: number }>();
-  for (const ids of byPair.values()) {
-    ids.forEach((id, index) => out.set(id, { index, count: ids.length }));
-  }
-  return out;
 }
 
 const LEVEL_SENTENCE: Record<C4Diagram["level"], string> = {
@@ -2384,7 +2364,7 @@ function ViewerCanvasInner({
   );
 
   const edges = useMemo(() => {
-    const groups = parallelGroups(diagram.edges);
+    const groups = parallelEdgeGroups(diagram.edges);
     const labelBias = labelBiasByEdgeId(diagram.edges);
     /* Where every chip goes, decided once for the whole diagram.
      *
@@ -2403,6 +2383,11 @@ function ViewerCanvasInner({
     const rectById = new Map(
       diagram.nodes.map((node, index) => [node.id, modelRects[index]] as const),
     );
+    /* Fan slots come from the MODEL rects for the reason the chips do: the
+       exporter has only these, and a connector that met its node in a
+       different place in the PNG than on screen would be the two-halves
+       failure `codebase.md` §4 names. */
+    const fans = assignFanSlots(diagram.edges, rectById);
     const labelPlacements = placeEdgeLabels(
       diagram.edges.flatMap((edge) => {
         const source = rectById.get(edge.source);
@@ -2410,7 +2395,7 @@ function ViewerCanvasInner({
         if (source === undefined || target === undefined) return [];
         const size = edgeChipSize(edge.label, edge.technology);
         if (size === null) return [];
-        const anchors = getFloatingAnchors(source, target);
+        const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
         const group = groups.get(edge.id) ?? { index: 0, count: 1 };
         const anchor = getParallelEdgePath({
           ...anchors,
@@ -2488,6 +2473,7 @@ function ViewerCanvasInner({
           edge,
           parallelIndex: group.index,
           parallelCount: group.count,
+          fanSlots: fans.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
           /* Every element except this connector's own two, so the curve can

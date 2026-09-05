@@ -48,6 +48,7 @@ import type { C4Edge } from "@/types";
 
 import {
   getFloatingAnchors,
+  type EdgeFanSlots,
   getParallelEdgePath,
   type LabelBias,
   type NodeRect,
@@ -76,6 +77,17 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   parallelCount: number;
   /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
   labelBias: LabelBias;
+  /**
+   * Where this connector attaches on each of its two node sides, among the
+   * connectors sharing that side (`lib/edge-fan`).
+   *
+   * Handed down for the reason `obstacles` is: an edge would have to know
+   * every OTHER edge on both of its nodes to work its own slot out, and the
+   * answer only changes with the model. The canvas computes it once per
+   * diagram from the model rects, which is the same input the exporter uses —
+   * so a connector meets its node in the same place in the PNG as on screen.
+   */
+  fanSlots?: EdgeFanSlots;
   /**
    * Where the chip actually sits, from the canvas's whole-diagram placement
    * pass (`lib/edge-label-placement`). Null when this relationship has nothing
@@ -158,7 +170,7 @@ function ViewerEdgeInner({
   const targetRect = internalNodeRect(targetNode);
   const anchors =
     sourceRect !== null && targetRect !== null
-      ? getFloatingAnchors(sourceRect, targetRect)
+      ? getFloatingAnchors(sourceRect, targetRect, data?.fanSlots)
       : { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
 
   const { path, labelX, labelY } = getParallelEdgePath({
