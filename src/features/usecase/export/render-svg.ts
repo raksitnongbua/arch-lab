@@ -31,6 +31,7 @@
  */
 
 import { rasterise } from "@/lib/gif";
+import { countOf, svgAccessibility } from "@/lib/svg-a11y";
 import { escapeXml, fmt } from "@/lib/svg-markup";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
 // The C4/flowchart exporters' wash registry, shared: the on-screen surface
@@ -95,10 +96,27 @@ export function renderUseCaseSvg(
      it is under everything; full-bleed, including any export padding, because
      a sheet does not stop where the drawing stops. */
   const ground = resolveExportGround();
+  /* THE ACCESSIBLE NAME AND DESCRIPTION. An exported file is pasted into a
+     README or a deck, where nothing else supplies alt text — see
+     `lib/svg-a11y.ts` for why the description says what the diagram is ABOUT
+     rather than narrating its shapes, and why the ids carry a slug. */
+  const a11y = svgAccessibility({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    summary: `A use-case diagram of ${countOf(
+      file.elements.filter((element) => element.kind === "actor").length,
+      "actor",
+    )} and ${countOf(
+      file.elements.filter((element) => element.kind === "usecase").length,
+      "use case",
+    )}.`,
+    idSeed: file.metadata.title,
+  });
   push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +
-      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}">`,
+      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}"${a11y.attributes}>`,
   );
+  push(a11y.elements);
   // Explicit backdrop: without one the file composites over whatever the
   // viewer paints behind it — black in most image viewers.
   push(

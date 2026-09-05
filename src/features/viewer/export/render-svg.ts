@@ -41,6 +41,7 @@ import type { C4Diagram, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
 import { assignHops, parseCurve, pathWithHops } from "@/lib/edge-crossings";
+import { countOf, svgAccessibility } from "@/lib/svg-a11y";
 import {
   assignFanSlots,
   getFloatingAnchors,
@@ -1135,9 +1136,25 @@ export function renderDiagramSvg(
       : "";
 
   const ground = resolveExportGround();
+  /* THE ACCESSIBLE NAME AND DESCRIPTION, from the shared builder the other
+     eight now use. Two things changed here rather than only being added
+     elsewhere: there was no `<desc>` at all, so a listener got the diagram's
+     name and nothing about what was in it; and the ids were the FIXED strings
+     `af-title`, which two diagrams inlined into one HTML page would both
+     claim — `aria-labelledby` then resolves to whichever came first, and the
+     second diagram is announced with the first one's name. */
+  const a11y = svgAccessibility({
+    title: `${heading} (${LEVEL_LABEL[diagram.level]} view)`,
+    description: diagram.description,
+    summary: `A ${LEVEL_LABEL[diagram.level].toLowerCase()} of ${countOf(
+      diagram.nodes.length,
+      "element",
+    )} and ${countOf(diagram.edges.length, "relationship")}.`,
+    idSeed: diagram.id,
+  });
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="af-title">` +
-    `<title id="af-title">${escapeXml(`${heading} (${LEVEL_LABEL[diagram.level]} view)`)}</title>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"${a11y.attributes}>` +
+    a11y.elements +
     `<defs>` +
     `<marker id="${markerId}" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse">` +
     `<path d="M 1 1 L 11 6 L 1 11 Z" fill="${theme.edge}"/>` +

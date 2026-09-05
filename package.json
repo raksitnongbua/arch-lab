@@ -100,6 +100,7 @@
     "check:canvas-chrome": "node scripts/canvas-chrome-check.mjs",
     "check:canvas-grid": "node scripts/canvas-grid-check.mjs",
     "check:hero": "node scripts/hero-check.mjs",
+    "check:svg-a11y": "node scripts/svg-a11y-check.mjs",
     "check:themes": "node scripts/theme-check.mjs",
     "check:eink": "node scripts/eink-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
