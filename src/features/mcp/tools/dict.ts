@@ -49,7 +49,11 @@ export function readDict(source: string): ReadDictResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(DICT_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(
+              DICT_FORMAT_LABEL[error.format],
+              error,
+              source,
+            )
           : error.message,
     };
   }

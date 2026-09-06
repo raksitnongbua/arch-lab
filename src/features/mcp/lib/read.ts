@@ -131,7 +131,9 @@ export function readSource(source: string, choice: CheckChoice): ReadResult {
     status: "error",
     message: joinSections(
       `INVALID as ${formatNote(result.format, result.autoDetected)}.`,
-      result.issues.length > 0 ? renderIssues(result.issues) : result.message,
+      result.issues.length > 0
+        ? renderIssues(result.issues, source)
+        : result.message,
     ),
   };
 }

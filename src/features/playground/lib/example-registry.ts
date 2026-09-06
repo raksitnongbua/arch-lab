@@ -91,25 +91,20 @@ import type { SeedKind } from "../input/parse";
 /* Notation names                                                              */
 /* -------------------------------------------------------------------------- */
 
-/**
- * What to CALL each notation in prose, singular.
+/*
+ * `EXAMPLE_NOTATION_LABEL` MOVED to `kind-copy.ts`, beside the per-kind blurb,
+ * and is re-exported here so the name a caller imports did not change.
  *
- * Singular and free of the word "diagram" where the noun already carries it,
- * because these are read in a sentence ("Example gantt chart `store-migration`
- * …") rather than as a section label. `/demo`'s jump bar has plural forms of
- * its own; they are a UI legend beside a glyph and a colour, not this.
+ * WHY IT MOVED. It is prose about a notation and had no dependency on this
+ * module at all, but living here made it unreachable from anything that cannot
+ * load a diagram: this file imports the bundled `.archlab.json` models, so a
+ * plain `import` of it from a build script dies on a missing import attribute
+ * long before it reaches the table. `scripts/build-skill.mjs` needs these names
+ * to write "the C4 model, sequence diagram and gantt chart" rather than a set
+ * of slugs, and `kind-copy.ts` is the module that already owns what we call a
+ * notation to a person.
  */
-export const EXAMPLE_NOTATION_LABEL: Record<SeedKind, string> = {
-  c4: "C4 model",
-  sequence: "sequence diagram",
-  flowchart: "flowchart",
-  usecase: "use-case diagram",
-  er: "ER diagram",
-  dict: "data dictionary",
-  gantt: "gantt chart",
-  timeline: "milestone timeline",
-  lifecycle: "lifecycle",
-};
+export { EXAMPLE_NOTATION_LABEL } from "./kind-copy";
 
 /* -------------------------------------------------------------------------- */
 /* Shapes                                                                      */

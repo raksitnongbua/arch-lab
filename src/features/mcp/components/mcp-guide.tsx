@@ -34,6 +34,7 @@ import {
   MCP_TOOLS,
   SKILL_DESTINATION,
   SKILL_INSTALL,
+  SKILL_INSTALL_ALTERNATIVE,
   mcpEndpointUrl,
 } from "../catalog";
 import type { McpToolDoc } from "../catalog";
@@ -278,11 +279,40 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           />
         </div>
         <P className="mt-4">
-          That writes <Code>{SKILL_DESTINATION}</Code> — one markdown file,
-          generated from the same syntax reference this server hands out and
-          verified against the real parser on every build. Nothing runs, nothing
-          connects, and it is a normal file you can read and diff.
+          That writes <Code>{SKILL_DESTINATION}</Code> plus a{" "}
+          <Code>reference/</Code> folder beside it — plain markdown, generated
+          from the same syntax reference this server hands out and verified
+          against the real parser on every build. Nothing runs, nothing
+          connects, and they are normal files you can read and diff.
         </P>
+        {/* WHY IT IS SEVERAL FILES. Said here because a reader who expected one
+            file will otherwise wonder what the folder is for, and because the
+            shape is the point: an agent writing a gantt should not be carrying
+            the C4 node table to reach four hundred tokens about `starts`. */}
+        <P className="mt-4">
+          The entry file is short on purpose: what every <Code>.alab</Code>{" "}
+          document needs whatever its notation, and a table pointing at one
+          grammar file per notation. An agent writing a gantt reads the gantt
+          reference and never pays for the C4 or sequence grammar — which is the
+          whole reason a skill is cheap.
+        </P>
+
+        {/* THE SECOND COMMAND, offered rather than hidden. The CLI reports
+            installs to its own telemetry endpoint by default and links the
+            skill into every agent directory it recognises; both are reasonable
+            defaults and neither is something to hand a reader with no way out.
+            This is the same file by the plainest possible route. */}
+        <P className="mt-4">
+          Prefer to copy the directory and nothing else — no CLI, no telemetry,
+          no symlinks into other agents&rsquo; folders?
+        </P>
+        <div className="mt-3">
+          <CopySnippet
+            snippet={SKILL_INSTALL_ALTERNATIVE}
+            caption="bash"
+            label="Install it by copying the directory instead"
+          />
+        </div>
 
         {/* The honest boundary. Someone who thinks a skill replaces the server
             will trust an invalid file because "the skill said so" — which is a

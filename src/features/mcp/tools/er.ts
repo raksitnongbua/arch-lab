@@ -66,7 +66,7 @@ export function readEr(source: string): ReadErResult {
       kind: error.kind,
       message:
         error.kind === "parse"
-          ? renderKindParseFailure(ER_FORMAT_LABEL[error.format], error)
+          ? renderKindParseFailure(ER_FORMAT_LABEL[error.format], error, source)
           : error.message,
     };
   }

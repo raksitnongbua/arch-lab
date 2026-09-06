@@ -77,9 +77,13 @@ import {
  * something the caller would otherwise never learn to ask for (the C4 review
  * notes). The other eight tools inline the two-arm choice at their read site.
  */
-function renderReadError(error: SequenceInputError): string {
+function renderReadError(error: SequenceInputError, source: string): string {
   if (error.kind === "parse") {
-    return renderKindParseFailure(SEQUENCE_FORMAT_LABEL[error.format], error);
+    return renderKindParseFailure(
+      SEQUENCE_FORMAT_LABEL[error.format],
+      error,
+      source,
+    );
   }
   if (error.kind === "c4-detected") {
     return joinSections(
@@ -118,7 +122,7 @@ export function readSequence(source: string): ReadSequenceResult {
     return {
       status: "error",
       kind: result.error.kind,
-      message: renderReadError(result.error),
+      message: renderReadError(result.error, source),
     };
   }
   return {
@@ -275,6 +279,13 @@ function renderSummary(file: SequenceLabFile, counts: SequenceCounts): string {
  * WILL IT FIT — the one thing a caller writing a diagram it cannot see has no
  * other way to learn.
  *
+ * KEYED `Size:`, LIKE THE OTHER EIGHT. It said `Fit:` — the better word for
+ * what the sentence goes on to say — and that was the whole problem: an agent
+ * looking for the extent of what it just wrote scans for the key the rest of
+ * the surface uses, and a line no other tool spells that way is a line it
+ * concludes is missing. The narrative after the semicolon is the part worth
+ * having and is unchanged.
+ *
  * Column gaps are capped (`maxColumnGap`), so a label far wider than its own
  * arrow is drawn OVER its neighbours rather than stretching the diagram. That
  * is a deliberate layout choice and it is fine once or twice; a document where
@@ -293,7 +304,7 @@ function renderFit(file: SequenceLabFile): string {
     (m) => !m.self && m.labelWidth > Math.abs(m.toX - m.fromX),
   );
   const size = `${Math.round(layout.width)} x ${Math.round(layout.height)} px`;
-  if (wide.length === 0) return `Fit: ${size}; every label fits its arrow.`;
+  if (wide.length === 0) return `Size: ${size}; every label fits its arrow.`;
   const worst = wide
     .slice()
     .sort((a, b) => b.labelWidth - a.labelWidth)
@@ -301,7 +312,7 @@ function renderFit(file: SequenceLabFile): string {
     .map((m) => `${m.step}`)
     .join(", ");
   return (
-    `Fit: ${size}; ${wide.length} of ${layout.messages.length} labels are WIDER ` +
+    `Size: ${size}; ${wide.length} of ${layout.messages.length} labels are WIDER ` +
     `than their own arrow (steps ${worst} worst) and will be drawn over ` +
     "neighbouring lifelines. Shorten those labels to a verb phrase and move " +
     "the endpoint, payload and caveats into a `desc` — a `desc` is never " +

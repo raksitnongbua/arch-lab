@@ -24,8 +24,9 @@ Customisation is a promise the code has already made in several places. Extend
 those seams rather than inventing new ones:
 
 - **Themes.** Every theme is complete and contrast-measured. Adding one takes
-  three edits, all listed in the `THEMES` comment in `src/lib/constants.ts`,
-  and `pnpm check:themes` fails on each one being forgotten.
+  five edits, all listed in the `THEMES` comment in `src/lib/constants.ts` —
+  that comment is the count, not this line — and `pnpm check:themes` fails on
+  each one being forgotten.
 - **Icons.** One icon source rendered in two styles, following the theme.
   Product marks are never recoloured — several upstream licences are
   no-derivatives (`README.md`, "Third-party assets").

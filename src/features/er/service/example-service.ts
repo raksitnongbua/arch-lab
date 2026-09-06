@@ -79,6 +79,63 @@ description "A join table whose key is entirely foreign, a course that requires 
   course |o--o{ course : "requires"
 `;
 
+/**
+ * A THIRD example that exists for the cardinality tokens the other two never
+ * write, which is a different reason from the second's and worth stating
+ * plainly: `course-catalogue` was chosen for the SHAPES a reader hits first,
+ * this one for the VOCABULARY the notation has and the registry did not show.
+ *
+ * `get_syntax_reference` deliberately does not teach the ER grammar — the tool
+ * says so and points here instead, on the argument that a worked example
+ * teaches arrows and named rows faster than a grammar would. That argument
+ * only holds while the examples actually spell the whole notation, and they
+ * did not: across the eight relationships in the other two, the left-hand
+ * `}|` and the right-hand `||` and `o|` never appeared once. An agent reading
+ * them could not have discovered how to write "exactly one" or "zero or one"
+ * on the right of a line, and the two sides are NOT mirrors of each other —
+ * `keywords.ts` notes that reversing `o{` gives `{o`, which parses as nothing
+ * — so seeing a token on the left teaches nothing about the right.
+ *
+ * `check:mcp` now asserts the coverage, so this file cannot quietly lose it
+ * again and a tenth notation cannot ship with the same hole.
+ */
+const PARCEL_DELIVERY = `archlab 1.0 er
+title "Parcel delivery"
+description "One shipment, exactly one label, at most one signature, and the parcels that make it up."
+
+@er
+  entity shipment "Shipment" [PostgreSQL]
+    desc "One dispatch to one address. Created when the picking is finished, never before."
+    attr id uuid pk
+    attr order_id uuid fk
+    attr carrier_id uuid fk
+    attr dispatched_at timestamp
+  entity carrier "Carrier"
+    attr id uuid pk
+    attr name string uk
+    attr tracking_url_template string
+  entity parcel "Parcel"
+    desc "A physical box. A shipment too heavy for one box becomes several, all travelling together."
+    attr id uuid pk
+    attr shipment_id uuid fk
+    attr weight_g integer
+  entity label "Shipping label"
+    desc "Printed once per shipment and never reprinted — a second label is a second shipment, because the carrier has already scanned the first."
+    attr shipment_id uuid pk fk
+    attr tracking_code string uk
+    attr printed_at timestamp
+  entity signature "Signature"
+    desc "Captured on delivery, when the service level asks for one. Most parcels are left in a safe place and have none."
+    attr shipment_id uuid pk fk
+    attr signed_by string
+    attr captured_at timestamp
+
+  carrier ||--o{ shipment : carries
+  shipment ||--|| label : "is printed as"
+  shipment ||--o| signature : "is signed for by"
+  parcel }|--|| shipment : "travels in"
+`;
+
 const SOURCES: readonly ErExampleSource[] = [
   {
     id: "shop-orders",
@@ -91,6 +148,12 @@ const SOURCES: readonly ErExampleSource[] = [
     blurb:
       "A join table whose entire primary key is foreign, plus a course that requires another course — a self-join drawn beside its own box.",
     text: COURSE_CATALOGUE,
+  },
+  {
+    id: "parcel-delivery",
+    blurb:
+      "Exactly one label per shipment, at most one signature, and one or more parcels per shipment — the three crow's-foot ends the other two examples never write.",
+    text: PARCEL_DELIVERY,
   },
 ];
 

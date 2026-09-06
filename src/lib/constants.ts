@@ -25,10 +25,16 @@ export const APP_NAME = "arch-lab";
  * nudge it with the arrow keys, delete it — with every change written back
  * into the source pane as text.
  *
- * `false` for the current deploy. The canvas is read-only exactly as it was,
- * and no lock control renders. Flipping it to `true` is the whole switch:
- * every affordance reads from this flag rather than being commented out, so
- * neither state can ship half-built.
+ * `true` for the current deploy: the canvas answers a drag, the lock control
+ * renders, and edits land in the source pane as text. Flipping it back to
+ * `false` is the whole switch — every affordance reads from this flag rather
+ * than being commented out, so neither state can ship half-built.
+ *
+ * THIS COMMENT SAID `false` LONG AFTER THE VALUE SAID `true`, which is the
+ * failure worth naming rather than quietly correcting: a reader deciding
+ * whether the canvas is editable reads the paragraph, not the initialiser, and
+ * a flag whose prose disagrees with its value is worse than an undocumented
+ * one. Change both or neither.
  *
  * C4 ONLY FOR A POSITION, and that is a property of the notations rather than a
  * gap here. The other five kinds SOLVE their geometry from the text —

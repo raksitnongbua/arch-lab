@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: shipped in #119
 ---
 
 # Implementation plan: Paths — authored walks through a C4 diagram

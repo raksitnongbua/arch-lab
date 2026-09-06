@@ -9,6 +9,97 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The `.alab` skill installs with the skills CLI, and both routes are
+  offered.** `npx skills add raksitnongbua/arch-lab --skill alab` is the
+  recommended command — it brings a lockfile you can commit, `skills update`
+  and `skills remove`, and works for agents other than Claude Code. The old
+  `npx degit` command stays beside it for anyone who would rather copy one
+  directory and nothing else: no CLI, no telemetry, no symlinks into other
+  agents' folders. Both land the same file at the same path.
+- **The skill is split so you only pay for the notation you are writing.**
+  `SKILL.md` was one 870-line file carrying all five grammars, so an agent
+  writing a gantt loaded the C4 node table, the frame rules and the whole
+  sequence grammar to reach four hundred tokens about `starts`. The entry file
+  is now 138 lines — what every `.alab` document needs whatever its notation,
+  plus a table pointing at one grammar file per notation under `reference/`.
+  Nothing was cut; the routing is the feature.
+- **The skill is findable without reading the MCP page.** It was named on
+  exactly one page — the one you reach by having already decided you want the
+  server — so an agent reading `llms.txt`, which is the audience that file is
+  for, learned only about the connector. Both `llms.txt` and `llms-full.txt`
+  now carry the install command and say plainly what the skill can and cannot
+  do without the server.
+
+- **Connectors leaving the same element no longer start from the same point.**
+  Every connector used to meet its element at the midpoint of the side facing
+  the other end, so six relationships leaving one system began at one pixel and
+  left as a sheaf — each line correct, and the picture unreadable, because you
+  cannot tell which of six you are following back. They now fan along the side,
+  ordered by where they are going so the lines do not cross on the way out. An
+  element carrying one connector per side is exactly where it always was. The
+  SVG and PNG exports fan identically, from the same module the canvas uses.
+- **Where two connectors cross, one of them now steps over the other.** A
+  crossing used to read as four lines leaving a junction, and the eye joins the
+  wrong pair. The shorter of the two is interrupted by a small arc, so the
+  crossing reads as a bridge — the shorter one because the arc stays inside the
+  smaller visual span, and because deciding it from the geometry means nothing
+  about how the file is written can move the bridge. Never both lines; never
+  within a twelfth of a connector's end, where an arc would land on an
+  arrowhead; and a connector crossing more than three others keeps its straight
+  line rather than becoming a row of bumps. Exports draw the same bridges in
+  the same places as the canvas.
+- **`validate_model` says when a diagram is too big to read once it is shown.**
+  A diagram wider than the frame it is put in is not cropped, it is shrunk —
+  and its labels shrink with it, so a diagram that reads perfectly at the size
+  you drew it can be unreadable in the deck it was drawn for. The review notes
+  now name the width to aim for ("keep it under 1422px wide") rather than
+  reporting a percentage, and offer the other remedy: split it into an overview
+  and the diagram it drills into.
+- **A Mermaid import now says what it cost your document, not what it might
+  have.** The old note recited the same sentence on every import — boundaries
+  become tags, `SystemDb` loses its styling — whether or not your file had
+  either. It now itemises what actually happened to yours, including "nothing
+  in this document was affected", which is the line that makes the other lines
+  worth reading. A `ContainerDb` that kept its shape is no longer reported as
+  damaged.
+- **`validate_model` says when a diagram is too crowded to present.** Past
+  about nine elements or twelve relationships, or when one element has more
+  connectors on a side than a reader can separate, the review notes say so and
+  name C4's own remedy — give an element a child diagram and let this one show
+  the shape. Advice, never an error: a dense diagram is a correct diagram, it
+  is just one nobody can present.
+
+- **The MCP validators now hand back the fix, not just the complaint.** A
+  `.alab` parse error reported over `/api/mcp` carries the same repair the
+  error panel offers as a button — its stable issue code, and the source line
+  as it would read once applied, so an agent retyping a line by hand is not
+  guessing the indent width. Where the parser cannot prove which rewrite was
+  meant, every candidate is listed with that admission rather than one being
+  picked. Working on all nine notations: the eight `validate_<kind>` tools
+  dropped the fix at the same boundary `validate_model` did.
+- **`get_syntax_reference` now teaches gantt charts, timelines and
+  lifecycles.** An agent that asked for the grammar before writing a plan
+  previously received the C4 reference and no mention of the notation it
+  wanted. Flowcharts, use-case diagrams, ER schemas and data dictionaries are
+  still taught by `get_example_model` instead, and the tool now says which
+  four rather than claiming to cover only two.
+- **A third ER example, and a rule that keeps the other three honest.**
+  `get_syntax_reference` does not teach the flowchart, use-case, ER or
+  dictionary grammar — it points at the bundled examples instead, on the
+  argument that one worked document teaches arrows and named rows faster than
+  a grammar would. That only holds while the examples spell the whole
+  notation, and ER's did not: nothing in them wrote `}|` on the left of a
+  line, or `||` or `o|` on the right, so "exactly one" and "zero or one" were
+  undiscoverable. **Parcel delivery** writes all three, and a check now proves
+  every notation without a syntax section is spelled in full by its own
+  examples — read off the parsed model, since `||` appears in every ER example
+  already, on the other side of the line.
+- **Every notation reports the size of what it just validated.** `validate_model`
+  gives each diagram's drawn extent beside its node and edge counts, so an
+  agent can tell whether the C4 model it just wrote will fit on a slide.
+  `validate_sequence` reported the same numbers under `Fit:`; it is `Size:`
+  now, as the other eight already spelled it.
+
 - **The layout direction says what it cannot move, and offers to release it.**
   Dragging an element writes its coordinates into the document, and those
   coordinates beat the layout for that element alone — so on a diagram you had
@@ -163,6 +254,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The skill no longer claims to be the complete `.alab` grammar.** It teaches
+  five of the nine notations; the flowchart, use-case diagram, ER diagram and
+  data dictionary have no section in it and are taught by a worked example
+  instead. It now says so, and names them, so an agent that reads it before
+  writing a flowchart does not conclude the format has none. Its frontmatter
+  said "C4 diagrams and sequence diagrams" long after gantt, timeline and
+  lifecycle were added; both lines are derived from the section list now.
 - **A layer whose coordinates happen to match the layout is no longer counted
   as unplaced.** An element line carrying `(40,40 176x88)` beats the layout
   whether or not those numbers are the ones the layout would have chosen — so a

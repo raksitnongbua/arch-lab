@@ -25,8 +25,11 @@ import {
   type Advisory,
   type AdvisoryRule,
 } from "@/features/validate/lib/advisories";
+import { applyTextEdit } from "@/features/archtext";
+import type { ArchTextIssue, FixCandidate } from "@/features/archtext";
 import type { CheckFormat, CheckIssue } from "@/features/validate/lib/check";
 import { CHECK_FORMAT_LABEL } from "@/features/validate/lib/check";
+import { sourceLines } from "@/lib/source-text";
 
 /* -------------------------------------------------------------------------- */
 /* MCP result envelopes                                                        */
@@ -132,8 +135,123 @@ function withoutRepeatedLocation(message: string, location: string): string {
   return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Fixes                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The repair the parser already computed, rendered for the caller that has to
+ * perform it by hand.
+ *
+ * WHY THIS EXISTS AT ALL. `checkSource` has attached `code` and `fixes` to
+ * every `.alab` issue since the quick-fix work, and the playground, the text
+ * pane and `/validate` all render them as buttons. This renderer dropped both
+ * on the floor, so the ONE caller that cannot see the button — an agent, which
+ * has to retype the line — was the only caller told nothing about the rewrite.
+ * `fix.ts`'s own header claimed all three surfaces read the same candidates;
+ * until this function it was two.
+ *
+ * WHY A BUTTON'S LABEL IS NOT ENOUGH HERE. `title` is imperative and capped at
+ * 40 characters because it is a button, so "Use spaces instead of a tab" leaves
+ * the width unsaid and an agent that guesses four has produced a document that
+ * fails at the same line. The candidate's edits already settle it exactly, so
+ * what is shown is the SOURCE AFTER THE EDIT, not a description of it.
+ *
+ * WHY A `choice` IS NOT AN `askHumanResult`. The ask envelope is for a fork the
+ * wrong branch of which cannot be undone later (`lib/ask.ts`). A parse failure
+ * is the most undoable state there is — the document does not parse, so nothing
+ * downstream has consumed a wrong reading, and the agent can try again for the
+ * cost of one call. Candidates are therefore INFORMATION, listed with the
+ * parser's own admission that it cannot prove which was meant.
+ */
+function previewFix(candidate: FixCandidate, source: string): string | null {
+  const edits = candidate.edits;
+  if (edits.length === 0) return null;
+
+  const firstLine = Math.min(...edits.map((edit) => edit.start.line));
+  const lastLine = Math.max(...edits.map((edit) => edit.end.line));
+  // How many lines the edited span gains or loses, so the window closes on the
+  // right row afterwards: an inserted `@sequence` header pushes its successor
+  // down, a deleted duplicate `archlab` line pulls one up.
+  const lineDelta = edits.reduce(
+    (total, edit) =>
+      total +
+      (edit.text.split("\n").length - 1) -
+      (edit.end.line - edit.start.line),
+    0,
+  );
+  const lastLineAfter = lastLine + lineDelta;
+  if (lastLineAfter < firstLine) return null; // A pure deletion shows nothing.
+
+  const lines = sourceLines(applyTextEdit(source, edits));
+  const width = Math.max(String(lastLineAfter).length, 3);
+  return lines
+    .slice(firstLine - 1, lastLineAfter)
+    .map(
+      (text, offset) =>
+        `${gutter(String(firstLine + offset), width)} | ${text}`,
+    )
+    .join("\n");
+}
+
+/**
+ * The whole offer for one issue.
+ *
+ * `source` is optional because two callers legitimately have no document to
+ * apply an edit to — a JSON validation failure and a Mermaid import failure
+ * carry no candidates in the first place. Without it the titles still print:
+ * knowing a repair exists and roughly what it is beats knowing nothing, and
+ * silently omitting the block would make an absent document look like an
+ * unfixable error.
+ */
+function renderFixes(
+  fixes: readonly FixCandidate[],
+  source: string | undefined,
+): string | null {
+  if (fixes.length === 0) return null;
+
+  const body = fixes
+    .map((candidate, index) => {
+      const ordinal = fixes.length > 1 ? `  ${index + 1}. ` : "  ";
+      const preview =
+        source === undefined ? null : previewFix(candidate, source);
+      const indented =
+        preview === null
+          ? null
+          : preview
+              .split("\n")
+              .map((line) => `     ${line}`)
+              .join("\n");
+      return [`${ordinal}${candidate.title}`, indented]
+        .filter((part): part is string => part !== null)
+        .join("\n");
+    })
+    .join("\n");
+
+  // The heading states the parser's own certainty, because that is the whole
+  // difference between "apply this" and "read these and decide". A `safe`
+  // candidate is one the mutation corpus in `scripts/quickfix-check.mjs` has
+  // proven restores the ORIGINAL MODEL, not merely a document that parses.
+  const heading =
+    fixes.length > 1
+      ? `Fixes — ${fixes.length} candidates; the parser cannot prove which was ` +
+        `meant, so pick one or rewrite the line yourself:`
+      : fixes[0].kind === "safe"
+        ? "Fix — one provable rewrite:"
+        : "Fix — one candidate, unproven; check it says what you meant:";
+
+  return `${heading}\n${body}`;
+}
+
+/* -------------------------------------------------------------------------- */
+
 /** One issue as a numbered entry, with its quoted line when it has one. */
-function renderIssue(issue: CheckIssue, index: number, total: number): string {
+function renderIssue(
+  issue: CheckIssue,
+  index: number,
+  total: number,
+  source: string | undefined,
+): string {
   const ordinal = total > 1 ? `${index + 1}. ` : "";
   const location =
     issue.line !== undefined
@@ -146,13 +264,28 @@ function renderIssue(issue: CheckIssue, index: number, total: number): string {
       ? `${ordinal}${issue.message}`
       : `${ordinal}${location}: ${withoutRepeatedLocation(issue.message, location)}`;
 
-  if (issue.lineText === undefined || issue.line === undefined) return headline;
-  return `${headline}\n\n${quoteSourceLine(issue.lineText, issue.line, issue.column)}`;
+  return joinSections(
+    // The code is a STABLE NAME where the sentence is not — `issue-codes.ts`
+    // says so in as many words — so an agent that meets the same failure twice
+    // has something to match on that a reworded message cannot break.
+    issue.code === undefined ? headline : `${headline}  [${issue.code}]`,
+    issue.lineText === undefined || issue.line === undefined
+      ? null
+      : quoteSourceLine(issue.lineText, issue.line, issue.column),
+    issue.fixes === undefined ? null : renderFixes(issue.fixes, source),
+  );
 }
 
-export function renderIssues(issues: readonly CheckIssue[]): string {
+/**
+ * `source` is the document the issues were raised against, used to show what
+ * each fix candidate leaves behind. Omitting it degrades to titles only.
+ */
+export function renderIssues(
+  issues: readonly CheckIssue[],
+  source?: string,
+): string {
   return issues
-    .map((issue, index) => renderIssue(issue, index, issues.length))
+    .map((issue, index) => renderIssue(issue, index, issues.length, source))
     .join("\n\n");
 }
 
@@ -181,18 +314,36 @@ export function renderKindParseFailure(
      * of input): there is nothing to quote and the message already says where.
      */
     lineText: string | null;
+    /**
+     * The `.alab` issue the reader flattened this from, when there is one —
+     * every one of the eight readers already carries it, and it is where the
+     * code and the fix candidates live. Absent for a Mermaid failure, which
+     * has neither.
+     */
+    issue?: ArchTextIssue;
   },
+  /** The document, so a fix can be shown as the line it leaves behind. */
+  source?: string,
 ): string {
   return joinSections(
     `INVALID as ${formatLabel}.`,
-    renderIssues([
-      {
-        message: failure.message,
-        line: failure.line,
-        column: failure.column,
-        lineText: failure.lineText ?? undefined,
-      },
-    ]),
+    renderIssues(
+      [
+        {
+          message: failure.message,
+          line: failure.line,
+          column: failure.column,
+          lineText: failure.lineText ?? undefined,
+          ...(failure.issue?.code === undefined
+            ? {}
+            : { code: failure.issue.code }),
+          ...(failure.issue?.fixes === undefined
+            ? {}
+            : { fixes: failure.issue.fixes }),
+        },
+      ],
+      source,
+    ),
   );
 }
 
@@ -218,6 +369,14 @@ export function renderDiagramTable(
     level: string;
     nodeCount: number;
     edgeCount: number;
+    /**
+     * The drawn extent of this diagram, when the caller could measure one.
+     *
+     * PER DIAGRAM RATHER THAN PER MODEL, because a C4 model is several
+     * pictures and only one of them is ever on the screen. A single number for
+     * the file would answer a question nobody asks.
+     */
+    size?: { width: number; height: number };
   }[],
 ): string {
   if (diagrams.length === 0) return "(no diagrams)";
@@ -230,7 +389,10 @@ export function renderDiagramTable(
         `${diagram.id.padEnd(idWidth)}  ` +
         `${JSON.stringify(diagram.title)} — ` +
         `${diagram.nodeCount} node${diagram.nodeCount === 1 ? "" : "s"}, ` +
-        `${diagram.edgeCount} edge${diagram.edgeCount === 1 ? "" : "s"}`,
+        `${diagram.edgeCount} edge${diagram.edgeCount === 1 ? "" : "s"}` +
+        (diagram.size === undefined
+          ? ""
+          : `, ${Math.round(diagram.size.width)} x ${Math.round(diagram.size.height)} px`),
     )
     .join("\n");
 }

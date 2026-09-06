@@ -84,12 +84,29 @@ export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
  * section to `content/syntax-sections.ts` therefore fixes the tool's own
  * description in the same edit; `check:mcp` asserts the two agree.
  */
-const KINDS_WITHOUT_SYNTAX_SECTIONS = (
+export const KINDS_WITHOUT_SYNTAX_SECTIONS = (
   Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]
 ).filter(
   (kind) =>
     kind !== "c4" && !(SYNTAX_SECTION_IDS as readonly string[]).includes(kind),
 );
+
+/**
+ * The complement — what the reference DOES teach, for the same description.
+ *
+ * BOTH HALVES DERIVED, and the second one is here because the first alone was
+ * not enough. The description named its covered kinds in prose ("C4 AND
+ * SEQUENCE DIAGRAMS ONLY") and its uncovered count as a word ("the other seven
+ * notations") while interpolating the derived list beside them, so adding the
+ * gantt, timeline and lifecycle sections would have left a sentence that
+ * promised two notations, said seven were missing, and then listed four. A
+ * derived list next to a hand-typed count is the failure mode in a nicer
+ * costume.
+ */
+
+export const KINDS_WITH_SYNTAX_SECTIONS = (
+  Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]
+).filter((kind) => !KINDS_WITHOUT_SYNTAX_SECTIONS.includes(kind));
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -815,16 +832,18 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
   },
   {
     name: "get_syntax_reference",
-    title: "Get the C4 and sequence .alab grammar",
+    title: "Get the .alab grammar",
     description:
-      "The .alab grammar FOR C4 MODELS AND SEQUENCE DIAGRAMS ONLY, generated " +
-      "from examples verified against the real parser on every build. Read " +
-      "it BEFORE writing either of those by hand — significant indentation " +
-      "and order-free attributes are easy to guess wrong. It does NOT cover " +
-      `the other seven notations (${KINDS_WITHOUT_SYNTAX_SECTIONS.join(", ")}): ` +
-      "for those, fetch a bundled document with list_example_models and " +
-      "get_example_model, which is the parser-verified reference for their " +
-      "grammar. Also available as the resource archlab://syntax.",
+      `The .alab grammar for ${KINDS_WITH_SYNTAX_SECTIONS.join(", ")} ` +
+      "documents, generated from examples verified against the real parser " +
+      "on every build. Read it BEFORE writing one of those by hand — " +
+      "significant indentation and order-free attributes are easy to guess " +
+      `wrong. It does NOT cover the other ` +
+      `${KINDS_WITHOUT_SYNTAX_SECTIONS.length} notations ` +
+      `(${KINDS_WITHOUT_SYNTAX_SECTIONS.join(", ")}): for those, fetch a ` +
+      "bundled document with list_example_models and get_example_model, " +
+      "which is the parser-verified reference for their grammar. Also " +
+      "available as the resource archlab://syntax.",
     args: [
       {
         name: "section",
@@ -1239,17 +1258,34 @@ export const MCP_PROMPTS: readonly McpPromptDoc[] = [
 /* -------------------------------------------------------------------------- */
 
 /**
- * Where the skill lands in the reader's project, and the one command that puts
+ * Where the skill lands in the reader's project, and the two commands that put
  * it there.
  *
- * WHY `degit` AND NOT AN OWN PACKAGE. `npx <name>` needs something published to
- * npm, and nothing here is: the repo is private and unpublished, so a
- * `npx arch-lab-skills` in these docs would be a command that works for
- * precisely nobody — the exact failure this whole module exists to prevent.
- * `degit` copies a subdirectory straight out of the public GitHub repo, so the
- * command in the docs is one that actually runs today, with no release step
- * standing between the page and the truth. If a package is ever published this
- * becomes a one-line change, in one place.
+ * TWO, AND BOTH ARE REAL. The skills CLI is the one to reach for, and `degit`
+ * stays because it is the one that works when the first cannot be trusted or
+ * reached.
+ *
+ * WHY THE OLD REASONING NO LONGER HOLDS. This module used to carry a paragraph
+ * arguing for `degit` on the grounds that "`npx <name>` needs something
+ * published to npm, and nothing here is". That was true of a package OF OURS
+ * and irrelevant to the command below: `npx skills` runs somebody ELSE's
+ * published CLI (`skills` on npm, from vercel-labs) which resolves a skill out
+ * of a public git repo — there is no registry to publish to and no release step
+ * between this page and the truth, which was the property the old argument
+ * actually cared about. The conclusion survived its own premise for a while,
+ * which is the failure worth naming.
+ *
+ * WHAT THE CLI ADDS over copying a directory: a `skills-lock.json` the reader
+ * can commit, `skills update` and `skills remove`, and installation into any of
+ * the agents it knows rather than only Claude Code's directory. What it does
+ * NOT add is a signature — install-time checking is a third-party static audit
+ * — so `degit` is not a lesser fallback, it is the same trust model with fewer
+ * moving parts, and a reader who prefers to see exactly what lands in their
+ * repo should use it.
+ *
+ * BOTH COMMANDS LAND THE SAME FILE AT THE SAME PATH, which `check:skill`
+ * asserts: a page offering two ways to do one thing has to be telling the truth
+ * about both, or the second one is a trap.
  *
  * The skill itself is generated by `scripts/build-skill.mjs` from
  * `content/syntax-sections.ts` — the same source `get_syntax_reference` serves
@@ -1258,9 +1294,25 @@ export const MCP_PROMPTS: readonly McpPromptDoc[] = [
  */
 export const SKILL_REPO = "raksitnongbua/arch-lab";
 export const SKILL_SOURCE_DIR = "skills/alab";
-export const SKILL_DESTINATION = ".claude/skills/alab/SKILL.md";
+/** The skill's own name, which the spec requires to equal its directory. */
+export const SKILL_NAME = "alab";
+export const SKILL_DESTINATION = `.claude/skills/${SKILL_NAME}/SKILL.md`;
 
-export const SKILL_INSTALL = `npx degit ${SKILL_REPO}/${SKILL_SOURCE_DIR} .claude/skills/alab`;
+/**
+ * The recommended command: the open skills CLI, which reads the skill straight
+ * out of the public repo.
+ */
+export const SKILL_INSTALL = `npx skills add ${SKILL_REPO} --skill ${SKILL_NAME}`;
+
+/**
+ * The same file, copied by hand.
+ *
+ * KEPT RATHER THAN REPLACED. The CLI reports installs to its own telemetry
+ * endpoint by default and installs a symlink farm across every agent it
+ * recognises; both are reasonable defaults and neither is something to hand a
+ * reader without an alternative. This command copies one directory and stops.
+ */
+export const SKILL_INSTALL_ALTERNATIVE = `npx degit ${SKILL_REPO}/${SKILL_SOURCE_DIR} .claude/skills/${SKILL_NAME}`;
 
 /* -------------------------------------------------------------------------- */
 /* Connecting                                                                  */

@@ -12,6 +12,17 @@
 import { getBezierPath, Position } from "@xyflow/react";
 
 import { clearingOffset } from "@/lib/curve-clearance";
+import {
+  facingSide,
+  fanOffset,
+  pointOnSide,
+  sideLength,
+  type FanSide,
+  type FanSlot,
+} from "@/lib/edge-fan";
+
+export { assignFanSlots, parallelEdgeGroups } from "@/lib/edge-fan";
+export type { EdgeFanSlots, FanSlot } from "@/lib/edge-fan";
 
 /** Control-point spacing between adjacent parallel edges, in flow units. */
 export const PARALLEL_EDGE_SPACING = 48;
@@ -36,36 +47,27 @@ export interface FloatingAnchors {
 }
 
 /**
- * The side of `rect` facing the direction (dx, dy), where (dx, dy) points
- * from this rect's centre toward the other node's centre. The horizontal /
- * vertical decision normalises by the node's own half-extents, so a wide
- * node connecting to a neighbour slightly above it exits through its (long)
- * top side rather than snapping to a narrow left/right side.
+ * `@xyflow/react`'s enum for one of `lib/edge-fan`'s plain side names.
+ *
+ * The two are the same four strings; the mapping exists so the fan geometry can
+ * stay loadable by a check script (React cannot be followed by Node's type
+ * stripping) while React Flow still receives the member it expects.
  */
-function facingSide(rect: NodeRect, dx: number, dy: number): Position {
-  const horizontalness = Math.abs(dx) / Math.max(rect.width / 2, 1);
-  const verticalness = Math.abs(dy) / Math.max(rect.height / 2, 1);
-  if (horizontalness >= verticalness) {
-    return dx >= 0 ? Position.Right : Position.Left;
-  }
-  return dy >= 0 ? Position.Bottom : Position.Top;
-}
+const POSITION_BY_SIDE: Record<FanSide, Position> = {
+  left: Position.Left,
+  right: Position.Right,
+  top: Position.Top,
+  bottom: Position.Bottom,
+};
 
-/** Midpoint of the given side of `rect`. */
-function sideMidpoint(
+/** Where one connector attaches on the side it leaves, fanned when it shares. */
+function attachPoint(
   rect: NodeRect,
-  side: Position,
+  side: FanSide,
+  slot: FanSlot,
 ): { x: number; y: number } {
-  switch (side) {
-    case Position.Left:
-      return { x: rect.x, y: rect.y + rect.height / 2 };
-    case Position.Right:
-      return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
-    case Position.Top:
-      return { x: rect.x + rect.width / 2, y: rect.y };
-    case Position.Bottom:
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
-  }
+  const length = sideLength(rect, side);
+  return pointOnSide(rect, side, fanOffset(slot.index, slot.count, length));
 }
 
 /**
@@ -85,22 +87,36 @@ function sideMidpoint(
 export function getFloatingAnchors(
   source: NodeRect,
   target: NodeRect,
+  /**
+   * This edge's place among those sharing each of its two node sides, from
+   * `assignFanSlots`.
+   *
+   * OPTIONAL, AND THE DEFAULT IS THE OLD BEHAVIOUR — a lone connector attaches
+   * at the midpoint, which is `fanOffset(0, 1, L)`. Two callers legitimately
+   * have no fan to consult: the connection line drawn while a user is still
+   * dragging a new edge (it has no id yet, so it is in no group), and any
+   * caller holding two rects and nothing else. Making the argument required
+   * would have forced both to invent a slot, which is how a default becomes a
+   * lie.
+   */
+  slots?: { source: FanSlot; target: FanSlot },
 ): FloatingAnchors {
   const dx = target.x + target.width / 2 - (source.x + source.width / 2);
   const dy = target.y + target.height / 2 - (source.y + source.height / 2);
 
-  const sourcePosition = facingSide(source, dx, dy);
-  const targetPosition = facingSide(target, -dx, -dy);
-  const sourcePoint = sideMidpoint(source, sourcePosition);
-  const targetPoint = sideMidpoint(target, targetPosition);
+  const sourceSide = facingSide(source, dx, dy);
+  const targetSide = facingSide(target, -dx, -dy);
+  const alone: FanSlot = { index: 0, count: 1 };
+  const sourcePoint = attachPoint(source, sourceSide, slots?.source ?? alone);
+  const targetPoint = attachPoint(target, targetSide, slots?.target ?? alone);
 
   return {
     sourceX: sourcePoint.x,
     sourceY: sourcePoint.y,
     targetX: targetPoint.x,
     targetY: targetPoint.y,
-    sourcePosition,
-    targetPosition,
+    sourcePosition: POSITION_BY_SIDE[sourceSide],
+    targetPosition: POSITION_BY_SIDE[targetSide],
   };
 }
 

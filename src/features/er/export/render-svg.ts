@@ -17,6 +17,7 @@
  */
 
 import type { ErLabFile } from "@/types";
+import { countOf, svgAccessibility } from "@/lib/svg-a11y";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { resolveExportGround } from "@/features/viewer/export/ground";
@@ -88,10 +89,24 @@ export function renderErSvg(file: ErLabFile, theme: ExportTheme): RenderedSvg {
      it is under everything; full-bleed, including any export padding, because
      a sheet does not stop where the drawing stops. */
   const ground = resolveExportGround();
+  /* THE ACCESSIBLE NAME AND DESCRIPTION. An exported file is pasted into a
+     README or a deck, where nothing else supplies alt text — see
+     `lib/svg-a11y.ts` for why the description says what the diagram is ABOUT
+     rather than narrating its shapes, and why the ids carry a slug. */
+  const a11y = svgAccessibility({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    summary: `An entity-relationship diagram of ${countOf(
+      file.entities.length,
+      "table",
+    )} and ${countOf(file.relationships.length, "relationship")}.`,
+    idSeed: file.metadata.title,
+  });
   push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +
-      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}">`,
+      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}"${a11y.attributes}>`,
   );
+  push(a11y.elements);
   push(
     `<rect x="0" y="0" width="${layout.width}" height="${layout.height}" fill="${theme.canvas}"/>`,
   );

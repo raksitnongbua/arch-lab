@@ -19,8 +19,14 @@
  * merely parseable.
  */
 
-import type { CheckChoice } from "@/features/validate/lib/check";
+import type { ArchLabFile } from "@/types";
+import type {
+  CheckChoice,
+  DiagramSummary,
+} from "@/features/validate/lib/check";
 import { MERMAID_CAVEAT } from "@/features/validate/lib/check";
+import { renderMermaidLedger } from "@/features/mermaid";
+import { boundsOf } from "@/lib/geometry";
 import { stepLikeFork, stepLikeReading } from "../lib/ask";
 import { readFailureResult, readSource } from "../lib/read";
 import {
@@ -32,6 +38,44 @@ import {
   textResult,
   type McpTextResult,
 } from "../lib/render";
+
+/**
+ * The summary rows with each diagram's drawn extent attached.
+ *
+ * WHY THE BIGGEST NOTATION WAS THE ONE WITHOUT A SIZE. Six of the nine kinds
+ * report `Size: W x H px` because they SOLVE their geometry — the tool runs the
+ * same layout the canvas does and reads the answer off it. C4 has no layout
+ * module to run: the geometry is in the document, put there by the author or by
+ * `defaultPositions` at parse time. So the measurement is a different shape here
+ * (a box round what the file already says) and it simply never got written,
+ * leaving an agent with no way to ask "will this fit on a slide?" about the
+ * notation most likely to be presented.
+ *
+ * `boundsOf` RATHER THAN A LOCAL LOOP. Its own note says every fit the canvas
+ * performs must agree about what "the bounds of these nodes" means; a second
+ * copy here would be free to drift, and then the size an agent is told and the
+ * size the reader sees would differ with nothing to catch it. It lives in
+ * `lib/geometry` rather than the viewer now, because by the time three features
+ * outside the viewer wanted it, that rule was being kept by deep imports.
+ *
+ * THE NODES ONLY. Edges are drawn between nodes they connect, and a frame is
+ * derived from its members' box, so neither can enlarge the extent — except a
+ * `via` waypoint routed outside it, which is rare enough that widening the
+ * measurement for it would make the common answer wrong to protect the
+ * uncommon one.
+ */
+function diagramTableRows(
+  file: ArchLabFile,
+  summaries: readonly DiagramSummary[],
+): readonly (DiagramSummary & { size?: { width: number; height: number } })[] {
+  const byId = new Map(file.diagrams.map((diagram) => [diagram.id, diagram]));
+  return summaries.map((summary) => {
+    const diagram = byId.get(summary.id);
+    if (diagram === undefined || diagram.nodes.length === 0) return summary;
+    const bounds = boundsOf(diagram.nodes);
+    return { ...summary, size: { width: bounds.width, height: bounds.height } };
+  });
+}
 
 export function validateModel(
   source: string,
@@ -59,9 +103,14 @@ export function validateModel(
     ]
       .filter((line): line is string => line !== null)
       .join("\n"),
-    renderDiagramTable(summary.diagrams),
+    renderDiagramTable(diagramTableRows(file, summary.diagrams)),
     renderAdvisories(advisories, "model"),
-    actual === "mermaid" ? `Note: ${MERMAID_CAVEAT}` : null,
+    /* THE LEDGER, not the leaflet. This was `Note: ${MERMAID_CAVEAT}` — the
+       same sentence on every import, naming losses the document may not have
+       had. `renderMermaidLedger` keeps the caveat and adds what actually
+       happened to THIS file, including "nothing", which is the line that makes
+       the other lines believable. */
+    actual === "mermaid" ? renderMermaidLedger(file, MERMAID_CAVEAT) : null,
   );
 
   /*
