@@ -16,6 +16,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `npx degit` command stays beside it for anyone who would rather copy one
   directory and nothing else: no CLI, no telemetry, no symlinks into other
   agents' folders. Both land the same file at the same path.
+- **The skill is split so you only pay for the notation you are writing.**
+  `SKILL.md` was one 870-line file carrying all five grammars, so an agent
+  writing a gantt loaded the C4 node table, the frame rules and the whole
+  sequence grammar to reach four hundred tokens about `starts`. The entry file
+  is now 138 lines — what every `.alab` document needs whatever its notation,
+  plus a table pointing at one grammar file per notation under `reference/`.
+  Nothing was cut; the routing is the feature.
 - **The skill is findable without reading the MCP page.** It was named on
   exactly one page — the one you reach by having already decided you want the
   server — so an agent reading `llms.txt`, which is the audience that file is
