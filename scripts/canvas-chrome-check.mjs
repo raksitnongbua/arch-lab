@@ -314,53 +314,162 @@ console.log("\nBoth panes' footer strips are built to the same metrics");
    with a quarter of the side padding — most visible in immersive mode, where
    Share and Export are hidden and the toolbar is all that is left.
 
-   THE EXPECTATION IS READ FROM THE C4 SHELL, never hardcoded here: it is the
-   pane the other five were asked to match, so a deliberate change there should
-   move this check's expectation with it rather than fail it. */
+   IT USED TO COMPARE THE TWO FILES TO EACH OTHER, reading the class string out
+   of each footer and asking whether the C4 pane's sizing tokens all appeared in
+   the playground's. That worked and it was the wrong instrument: a check that
+   scrapes two class strings and diffs them is reimplementing, in a regex, the
+   agreement a shared constant can simply state — `codebase.md` names that, and
+   `kind-copy.ts` was the last thing to be scraped here before it stopped being
+   scrapable. The metrics live in `lib/diagram-footer.ts` now. This section
+   reads THEM, and asks of each pane only that it takes them from there.
+
+   WHICH IS THE STRONGER TEST ANYWAY. The old comparison passed the day both
+   footers were wrong in the same way, and it could not see the third pane that
+   has not been written yet. */
 {
+  const footer = readCode("src/lib/diagram-footer.ts");
   const shell = read("src/features/viewer/components/viewer-shell.tsx");
   const playground = read(
     "src/features/playground/components/view-playground.tsx",
   );
 
-  /** The classes on the row inside a footer's bordered ground, as tokens. */
-  const footerRow = (source) =>
-    (/"(mx-auto flex w-full max-w-7xl[^"]*)"/.exec(source)?.[1] ?? "")
-      .split(/\s+/)
-      .filter((token) => token !== "");
-
-  /* SIZING ONLY, and what counts as sizing is read off the C4 row rather than
-     typed here: every width ceiling and horizontal pad it wears is a metric the
-     other five have to wear too, so a deliberate change there moves this
-     expectation with it instead of failing. The two rows legitimately differ in
-     LAYOUT — the C4 footer stacks a title block above its controls on a phone
-     (`flex-col gap-3`) and the other five have no title to stack — so asserting
-     the whole string would forbid a difference that is correct. */
-  const expected = footerRow(shell);
-  const actual = footerRow(playground);
-  const sizing = expected.filter((token) =>
-    /^(max-w-|px-|sm:px-|md:px-|lg:px-)/.test(token),
-  );
-  const missing = sizing.filter((token) => !actual.includes(token));
+  /* THE FRAME IS THE HORIZONTAL AGREEMENT — a width ceiling and a side pad.
+     Read out of the module rather than typed here, so a deliberate change to
+     the strip moves this expectation with it instead of failing it, which is
+     the property the file-to-file comparison had and is worth keeping. */
+  const frame = /DIAGRAM_FOOTER_FRAME =\s*"([^"]+)"/.exec(footer)?.[1];
   check(
-    "the non-C4 footer pads to the same metrics as the C4 shell's",
-    sizing.length > 0 && missing.length === 0,
-    sizing.length === 0
-      ? "the C4 footer row was not found, so nothing was compared"
-      : `the C4 footer pads with ${sizing.join(" ")}; the other five are missing ${missing.join(", ")}`,
+    "the footer's frame still carries a width ceiling and a side pad",
+    frame !== undefined &&
+      /\bmax-w-/.test(frame) &&
+      /\bpx-/.test(frame) &&
+      /\bsm:px-/.test(frame),
+    `the shared frame resolves to \`${frame ?? "nothing"}\` — without a ` +
+      "ceiling the row runs the full width of a desktop while the diagram " +
+      "above it does not, and without the pads its controls sit on the trim",
   );
+
+  /* BOTH PANES TAKE ALL FOUR, and the list is what stops a pane adopting the
+     module for one metric and hand-rolling the rest — which is how the two
+     footers drifted the first time, one token at a time. */
+  const SHARED = [
+    "DIAGRAM_FOOTER_FRAME",
+    "diagramFooterPad",
+    "diagramFooterControl",
+    "DIAGRAM_FOOTER_DIAL",
+  ];
+  for (const [label, source] of [
+    ["the C4 shell", shell],
+    ["the playground pane", playground],
+  ]) {
+    const missing = SHARED.filter((name) => !source.includes(name));
+    check(
+      `${label}'s footer takes every metric from the shared module`,
+      missing.length === 0,
+      `it does not read ${missing.join(", ")} — a footer that shares its ` +
+        "padding and hand-rolls its control size is the drift this section " +
+        "exists to catch, arriving one metric at a time",
+    );
+  }
+
+  /* AND NEITHER HAND-ROLLS THE ROW IT REPLACED. The literal is what the module
+     was extracted from; a pane that grew it back would satisfy every assertion
+     above while drawing its own strip. */
+  for (const [label, source] of [
+    ["the C4 shell", shell],
+    ["the playground pane", playground],
+  ]) {
+    check(
+      `${label} does not hand-roll the footer row it used to`,
+      !/mx-auto flex w-full max-w-7xl/.test(source) &&
+        !/isImmersive \? "py-\d/.test(source),
+      "the row's class string is back in the component, so the shared " +
+        "module is now a second opinion rather than the definition",
+    );
+  }
 
   /* THE HEIGHT PAIR, which is a two-value rule rather than one: the row is
-     shorter in immersive because the description above it is gone. Both panes
-     have to make the same trade or one notation's toolbar jumps on entering the
-     mode while the other's does not. */
-  const heightPair = (source) => /isImmersive \? "py-2" : "py-3"/.test(source);
+     shorter in immersive because the description, Share, Export and the edit
+     link are all gone from it. Asserted as an ORDER rather than as two
+     literals — the numbers are the module's to choose, and what this check is
+     for is that the mode makes the row shorter at all. */
+  const pads =
+    /diagramFooterPad[\s\S]*?return immersive \? "py-([\d.]+)" : "py-([\d.]+)"/.exec(
+      footer,
+    );
   check(
-    "both footers tighten by the same step in immersive mode",
-    heightPair(shell) && heightPair(playground),
-    "one pane changes its footer height on entering immersive and the other " +
-      "does not, so the row moves when the notation does",
+    "immersive is the shorter of the two footer paddings",
+    pads !== null && Number(pads[1]) < Number(pads[2]),
+    pads === null
+      ? "the padding pair was not found, so nothing was compared"
+      : `immersive pads py-${pads[1]} against py-${pads[2]} — the mode that ` +
+          "clears the site chrome must not spend more height on the strip " +
+          "that survives it",
   );
+
+  /* AND THE CONTROLS COME DOWN WITH IT. Padding alone moves 12px; the buttons
+     are the other 8, and a row of `h-8` controls in a `py-1.5` strip is a
+     toolbar that has been crammed rather than sized. */
+  const control =
+    /diagramFooterControl[\s\S]*?return immersive\s*\?\s*"([^"]+)"/.exec(
+      footer,
+    )?.[1] ?? "";
+  check(
+    "the immersive controls are shorter than the row's default, icons included",
+    /\bh-7\b/.test(control) && /\[&_svg\]:size-/.test(control),
+    `the immersive control override is \`${control}\` — without a height it ` +
+      "is a 32px button in a strip padded for 28, and without the icon rule " +
+      "a 16px glyph in it",
+  );
+
+  /* SHARE AND EXPORT ARE GONE FROM BOTH, and this is the assertion whose
+     absence let them diverge for a release. The prose at the top of this
+     section has said "in immersive, where Share and Export are hidden" since
+     the footers were first pinned together — while only the playground did it,
+     and the C4 shell, which is the pane an embed actually shows, kept both
+     controls at full size over somebody else's canvas. A belief stated in a
+     comment and checked nowhere is how that happens. */
+  for (const [label, source] of [
+    ["the C4 shell", shell],
+    ["the playground pane", playground],
+  ]) {
+    /* THE REGION A GATE GOVERNS, found by matching its own braces.
+       Bounding it by the NEXT gate instead was tried and is wrong: the shell
+       hides its description behind an earlier `isImmersive ? null :`, so a
+       window running to the following gate swallowed the controls and the
+       assertion passed with Share and Export ungated — which is the exact
+       failure this check was added to catch, reproduced by the check. The
+       playground's branch is a nine-way chain on the notation and the shell's
+       is a fragment, so nothing about their SHAPE is common; the container
+       they sit in is. */
+    const gated = [];
+    for (const gate of ["{isImmersive ? null : ", "{isImmersive ? null :"]) {
+      let at = source.indexOf(gate);
+      while (at !== -1) {
+        let depth = 0;
+        let end = at;
+        for (; end < source.length; end += 1) {
+          if (source[end] === "{") depth += 1;
+          else if (source[end] === "}") {
+            depth -= 1;
+            if (depth === 0) break;
+          }
+        }
+        gated.push(source.slice(at, end));
+        at = source.indexOf(gate, at + gate.length);
+      }
+      if (gated.length > 0) break;
+    }
+    check(
+      `${label} hides Share and Export while immersive`,
+      gated.some(
+        (block) => /ShareButton/.test(block) && /ExportButton/.test(block),
+      ),
+      "both act on the document rather than on the view of it, and their " +
+        "panels open upward over a diagram that fills the screen — a strip " +
+        "kept for the exit is not a place to keep them",
+    );
+  }
 
   /* NO GHOST BUTTON IN THAT ROW. Share and Export are `outline` in both footers
      because they are literally the same components; a ghost control beside them
@@ -368,8 +477,9 @@ console.log("\nBoth panes' footer strips are built to the same metrics");
      Export are hidden — it is the whole toolbar reading as a weaker control set
      than the C4 one. */
   const footerRegion =
-    /"mx-auto flex w-full max-w-7xl[\s\S]*?<\/section>/.exec(playground)?.[0] ??
-    "";
+    /className=\{cn\(\s*DIAGRAM_FOOTER_FRAME[\s\S]*?<\/section>/.exec(
+      playground,
+    )?.[0] ?? "";
   check(
     "the non-C4 footer holds no ghost control beside the outlined ones",
     footerRegion !== "" && !/variant: "ghost"/.test(footerRegion),

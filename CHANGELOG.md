@@ -213,6 +213,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Immersive mode keeps the diagram and gets out of the way.** The strip under
+  the drawing still carries the title and the way out, but it no longer carries
+  Share, Export or the link to go and edit the model elsewhere — those act on
+  the document rather than on the view of it, and their menus opened upward
+  over the diagram they were opened to act on. What is left is shorter: the row
+  loses a fifth of its height, and the title is set at the size of a caption
+  rather than a heading. Leaving the mode brings all of it back. Every notation
+  makes the same trade, so the strip no longer changes shape when you switch
+  what you are drawing. Most visible in an embed — dropped into a Miro board
+  the diagram arrives at somebody else's scale, and chrome sized for a full
+  browser window was the largest thing on the screen.
 - **C4 boundaries are given room, and the elements inside one are kept
   together.** A `frame` carries no coordinates — its rectangle is derived from
   wherever its members landed — and the layout used to place those members
