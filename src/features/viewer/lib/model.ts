@@ -80,37 +80,19 @@ export function deepFreeze<T>(value: T): T {
 /* Geometry                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/**
- * The model-space box enclosing a set of nodes.
+/*
+ * `Rect` and `boundsOf` MOVED to `@/lib/geometry`, and are re-exported here so
+ * the name a caller imports did not change.
  *
- * One function, because every fit the canvas performs must agree about what
- * "the bounds of these nodes" means — a whole diagram, a beat of a path, a
- * selection. A second copy would drift and the camera would frame two things
- * differently for no reason a reader could see. An empty set has no box, so it
- * answers a unit rect at the origin: `getViewportForBounds` needs a rect, and
- * an infinite one silently produces NaN.
+ * WHY THEY MOVED. `boundsOf`'s own note says every fit the canvas performs must
+ * agree about what "the bounds of these nodes" means — and by the time three
+ * features outside the viewer wanted the same answer, the rule was being kept by
+ * three cross-feature deep imports and one open-coded fourth copy in the
+ * advisories. A shared answer belongs in `src/lib`, which is what `dry.md` says
+ * and what stopped being true here quietly.
  */
-export function boundsOf(nodes: readonly C4Node[]): Rect {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const node of nodes) {
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + node.size.width);
-    maxY = Math.max(maxY, node.position.y + node.size.height);
-  }
-  if (minX === Infinity) return { x: 0, y: 0, width: 1, height: 1 };
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
+export type { Rect } from "@/lib/geometry";
+export { boundsOf } from "@/lib/geometry";
 
 /* -------------------------------------------------------------------------- */
 /* Reads                                                                       */

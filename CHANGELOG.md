@@ -48,6 +48,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   arrowhead; and a connector crossing more than three others keeps its straight
   line rather than becoming a row of bumps. Exports draw the same bridges in
   the same places as the canvas.
+- **`validate_model` says when a diagram is too big to read once it is shown.**
+  A diagram wider than the frame it is put in is not cropped, it is shrunk —
+  and its labels shrink with it, so a diagram that reads perfectly at the size
+  you drew it can be unreadable in the deck it was drawn for. The review notes
+  now name the width to aim for ("keep it under 1422px wide") rather than
+  reporting a percentage, and offer the other remedy: split it into an overview
+  and the diagram it drills into.
+- **A Mermaid import now says what it cost your document, not what it might
+  have.** The old note recited the same sentence on every import — boundaries
+  become tags, `SystemDb` loses its styling — whether or not your file had
+  either. It now itemises what actually happened to yours, including "nothing
+  in this document was affected", which is the line that makes the other lines
+  worth reading. A `ContainerDb` that kept its shape is no longer reported as
+  damaged.
 - **`validate_model` says when a diagram is too crowded to present.** Past
   about nine elements or twelve relationships, or when one element has more
   connectors on a side than a reader can separate, the review notes say so and

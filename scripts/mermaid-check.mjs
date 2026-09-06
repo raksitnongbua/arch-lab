@@ -736,6 +736,71 @@ expectParseError(
   check("a broken parse throws and applies nothing (all-or-nothing)", threw);
 }
 
+/* --- the shape tag is a receipt for a LOSS, never a label on a kept shape --- */
+
+/*
+ * `lib/ledger.ts` reports how many elements were declared as a database or a
+ * queue and are not drawn as one, and it counts the `database` / `queue` TAG to
+ * do it. That is only sound while the importer never tags a node with the shape
+ * it already has — otherwise every `ContainerDb` at container level, which keeps
+ * its shape and loses nothing, would be reported as damaged.
+ *
+ * The ledger's predicate guards against it anyway, so no test of the ledger can
+ * fail if this stops being true: removing the guard changes no output, because
+ * the case it excludes does not arise. THIS is where it is held, over every
+ * element form the mapping defines rather than over a fixture — the guarantee is
+ * about the importer, so it is asserted about the importer.
+ */
+{
+  const { ELEMENT_FORMS } = await import(
+    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/mapping.ts")).href
+  );
+  const forms = Object.keys(ELEMENT_FORMS);
+  const headers = {
+    context: "C4Context",
+    container: "C4Container",
+    component: "C4Component",
+  };
+  let contradictions = 0;
+  let kept = 0;
+  for (const [level, header] of Object.entries(headers)) {
+    for (const form of forms) {
+      const args = form.startsWith("Person")
+        ? '(e, "E", "d")'
+        : level === "context"
+          ? '(e, "E", "d")'
+          : '(e, "E", "T", "d")';
+      let file;
+      try {
+        file = parseMermaidC4(`${header}\n  title T\n  ${form}${args}\n`);
+      } catch {
+        continue; // a form that is not legal at this level proves nothing here
+      }
+      for (const diagram of file.diagrams) {
+        for (const node of diagram.nodes) {
+          for (const shape of ["database", "queue"]) {
+            const tagged = node.tags?.includes(shape) ?? false;
+            if (tagged && node.type === shape) contradictions += 1;
+            if (!tagged && node.type === shape) kept += 1;
+          }
+        }
+      }
+    }
+  }
+  check(
+    "no imported node is both tagged a shape and drawn as that shape",
+    contradictions === 0,
+    `${contradictions} node(s) carry a shape tag they did not need — the ` +
+      "import ledger would report them as having lost something they kept",
+  );
+  check(
+    "a Db/Queue form that keeps its shape exists, so the rule above is not vacuous",
+    kept > 0,
+    "no form anywhere kept its native shape, so the assertion above passes " +
+      "by having nothing to check",
+  );
+}
+
 /* ----------------------------------------------------------------------- */
 /* Flowchart dialect                                                        */
 /* ----------------------------------------------------------------------- */

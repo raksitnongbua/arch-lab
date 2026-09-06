@@ -35,6 +35,8 @@
  */
 
 import { defaultPositions } from "@/features/archtext";
+import { boundsOf } from "@/lib/geometry";
+import { presentationWarning } from "@/lib/presentation-fit";
 import {
   MIN_FAN_SPACING,
   assignFanSlots,
@@ -67,7 +69,8 @@ export type AdvisoryRule =
   | "path-revisits-element"
   | "path-teleports"
   | "crowded-diagram"
-  | "crowded-node";
+  | "crowded-node"
+  | "unreadable-when-presented";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
 export const ADVISORY_RULES: Record<
@@ -83,6 +86,16 @@ export const ADVISORY_RULES: Record<
       "document will be DRAWN rather than what it says, and it is advice " +
       "rather than a fix because the layout direction is the author's line to " +
       "write and nothing may write it for them.",
+  },
+  "unreadable-when-presented": {
+    title: "Too big to read once it is put on a slide",
+    because:
+      "A diagram wider than the frame it is shown in is not cropped, it is " +
+      "SHRUNK, and its labels shrink with it — so a diagram that reads " +
+      "perfectly at the size its author is looking at can be unreadable in " +
+      "the deck it was drawn for. Not a C4 rule: this one is about how an " +
+      "`.alab` document will be SEEN, and the floor it measures against is " +
+      "in `lib/presentation-fit.ts` with the reasoning for the number.",
   },
   "crowded-diagram": {
     title: "More on one picture than a reader will take in",
@@ -266,20 +279,21 @@ const COLUMN_RATIO = 0.6;
 /** Below this many elements a tall diagram is just a small diagram. */
 const COLUMN_MIN_NODES = 6;
 
+/**
+ * The drawn extent of a diagram, or `null` when it has nothing in it.
+ *
+ * `boundsOf` RATHER THAN THE LOOP THAT WAS HERE. This was a fourth
+ * implementation of "the box round these nodes", beside the canvas's, the
+ * exporter's and `validate_model`'s — and the one place it could differ is
+ * exactly the place it matters, because this function decides whether an author
+ * is TOLD their diagram is too big while the canvas decides how it is framed.
+ */
 function extentOf(
   diagram: C4Diagram,
 ): { width: number; height: number } | null {
   if (diagram.nodes.length === 0) return null;
-  const xs = diagram.nodes.map((node) => node.position.x);
-  const ys = diagram.nodes.map((node) => node.position.y);
-  const rights = diagram.nodes.map((node) => node.position.x + node.size.width);
-  const bottoms = diagram.nodes.map(
-    (node) => node.position.y + node.size.height,
-  );
-  return {
-    width: Math.max(...rights) - Math.min(...xs),
-    height: Math.max(...bottoms) - Math.min(...ys),
-  };
+  const { width, height } = boundsOf(diagram.nodes);
+  return { width, height };
 }
 
 function laidOutBy(
@@ -398,6 +412,18 @@ function adviseDiagramDensity(diagram: C4Diagram, out: Advisory[]): void {
  * merely looks high. An element with eight connectors spread over four sides
  * is fine and says nothing.
  */
+function advisePresentationFit(diagram: C4Diagram, out: Advisory[]): void {
+  const extent = extentOf(diagram);
+  if (extent === null) return;
+  const warning = presentationWarning(extent.width, extent.height);
+  if (warning === null) return;
+  out.push({
+    rule: "unreadable-when-presented",
+    where: diagram.id,
+    message: `"${diagram.title}" — ${warning}`,
+  });
+}
+
 function adviseNodeDensity(diagram: C4Diagram, out: Advisory[]): void {
   const rects = new Map(
     diagram.nodes.map((node) => [
@@ -497,6 +523,7 @@ function advisePaths(diagram: C4Diagram, out: Advisory[]): void {
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
   adviseColumnLayout(diagram, out);
   adviseDiagramDensity(diagram, out);
+  advisePresentationFit(diagram, out);
   adviseNodeDensity(diagram, out);
   advisePaths(diagram, out);
   if (isBlank(diagram.title)) {

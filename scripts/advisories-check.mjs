@@ -139,6 +139,38 @@ const PATH_BODY = `  db:database "Orders DB" [PostgreSQL 16]
 
 const CASES = [
   {
+    rule: "unreadable-when-presented",
+    why: "a diagram laid out wider than a slide can shrink and stay readable",
+    expect: 1,
+    /* GEOMETRY WRITTEN IN, because this rule is about what will be DRAWN and
+       the default layout is free to place things anywhere. Nine elements at
+       260px intervals is ~2,300px wide; a 16:9 slide fits 1,422 before the
+       10px meta line drops under the 9px floor. */
+    source: `archlab 1.0
+title "T"
+
+@context ctx-root "T"
+  n0:system "Element 0" (0,0 176x88)
+    desc "Does part of the work."
+  n1:system "Element 1" (260,0 176x88)
+    desc "Does part of the work."
+  n2:system "Element 2" (520,0 176x88)
+    desc "Does part of the work."
+  n3:system "Element 3" (780,0 176x88)
+    desc "Does part of the work."
+  n4:system "Element 4" (1040,0 176x88)
+    desc "Does part of the work."
+  n5:system "Element 5" (1300,0 176x88)
+    desc "Does part of the work."
+  n6:system "Element 6" (1560,0 176x88)
+    desc "Does part of the work."
+  n7:system "Element 7" (1820,0 176x88)
+    desc "Does part of the work."
+  n8:system "Element 8" (2080,0 176x88)
+    desc "Does part of the work."
+`,
+  },
+  {
     rule: "crowded-diagram",
     why: "a context diagram carrying eleven elements",
     expect: 1,

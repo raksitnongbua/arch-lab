@@ -691,6 +691,77 @@ check("a kind reader's parse failure carries the fix too", () => {
   assert.match(text, /\n\s+4 \| {3}step a "A"$/m);
 });
 
+check("a Mermaid import says what it cost THIS document", () => {
+  /* IT USED TO SAY THE SAME THING EVERY TIME. The caveat named boundaries
+     becoming tags and Db/Queue elements losing their shape whether or not the
+     file had either, so a reader whose import lost nothing was warned about
+     damage that did not happen — and the one whose import lost five boundaries
+     got the identical sentence. A warning that cannot tell those apart is one
+     people learn to skip. */
+  const clean = expectOk(validateModel(MERMAID, "auto"));
+  assert.match(clean, /VALID as Mermaid C4/);
+  assert.match(
+    clean,
+    /Nothing in this document was affected/,
+    "a lossless import still recites the general caveat as though it applied",
+  );
+
+  /* A BOUNDARY AND A DEMOTED SHAPE, in one file. `SystemDb` at CONTEXT level
+     cannot keep `database` — it is not a valid type there — so the importer
+     records the shape as a tag, which is what the ledger counts. The identical
+     keyword at container level would keep its shape and must NOT be counted,
+     which is why this is read off the model rather than the source. */
+  const lossy = `C4Context
+  title Shop
+  Enterprise_Boundary(b1, "Acme") {
+    Person(customer, "Customer", "Buys coffee")
+    SystemDb(store, "Order store", "Keeps orders")
+  }
+  Rel(customer, store, "Reads", "SQL")
+`;
+  const text = expectOk(validateModel(lossy, "auto"));
+  assert.match(text, /In this document:/, "the ledger did not itemise");
+  assert.match(
+    text,
+    /boundary\/boundaries became/,
+    "the boundary went unreported",
+  );
+  assert.match(
+    text,
+    /declared as a database are not drawn as one/,
+    "the demoted shape went unreported",
+  );
+  assert.doesNotMatch(
+    text,
+    /Nothing in this document was affected/,
+    "it claimed nothing happened while itemising what did",
+  );
+
+  /* THE CASE THAT SEPARATES COUNTING FROM ASSUMING, and the reason the ledger
+     reads the model instead of the source. The SAME Mermaid keyword family at
+     CONTAINER level keeps its shape — `database` is native there — so it must
+     not be reported. Without this, a ledger that counted every Db element
+     rather than only the demoted ones would pass every assertion above. */
+  const kept = `C4Container
+  title Shop
+  ContainerDb(store, "Order store", "PostgreSQL", "Keeps orders")
+  Container(api, "API", "Go", "Serves orders")
+  Rel(api, store, "Reads", "SQL")
+`;
+  const keptText = expectOk(validateModel(kept, "auto"));
+  assert.doesNotMatch(
+    keptText,
+    /declared as a database are not drawn as one/,
+    "a database that KEPT its shape was reported as demoted — the ledger is " +
+      "counting the keyword rather than what the importer did with it",
+  );
+  assert.match(
+    keptText,
+    /Nothing in this document was affected/,
+    "an import that lost nothing did not say so",
+  );
+});
+
 check("validate_model reads arch-lab JSON and Mermaid C4 too", () => {
   const json = expectOk(convertModel(VALID_ALAB, "auto", "json", undefined));
   const jsonText = json.split("```json\n")[1].split("\n```")[0];

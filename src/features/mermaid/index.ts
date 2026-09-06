@@ -147,6 +147,8 @@ export {
   MERMAID_ER_HEADER_WORD,
 } from "./lib/er-mapping";
 export { MERMAID_EXTENSION_KEY, readMermaidExtension } from "./lib/toModel";
+export { mermaidImportLedger, renderMermaidLedger } from "./lib/ledger";
+export type { LedgerEntry } from "./lib/ledger";
 export type {
   MermaidBoundary,
   MermaidExtension,

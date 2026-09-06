@@ -25,7 +25,8 @@ import type {
   DiagramSummary,
 } from "@/features/validate/lib/check";
 import { MERMAID_CAVEAT } from "@/features/validate/lib/check";
-import { boundsOf } from "@/features/viewer/lib/model";
+import { renderMermaidLedger } from "@/features/mermaid";
+import { boundsOf } from "@/lib/geometry";
 import { stepLikeFork, stepLikeReading } from "../lib/ask";
 import { readFailureResult, readSource } from "../lib/read";
 import {
@@ -50,10 +51,12 @@ import {
  * leaving an agent with no way to ask "will this fit on a slide?" about the
  * notation most likely to be presented.
  *
- * `boundsOf` RATHER THAN A LOCAL LOOP. That function's own note says every fit
- * the canvas performs must agree about what "the bounds of these nodes" means;
- * a second copy here would be free to drift, and then the size an agent is told
- * and the size the reader sees would differ with nothing to catch it.
+ * `boundsOf` RATHER THAN A LOCAL LOOP. Its own note says every fit the canvas
+ * performs must agree about what "the bounds of these nodes" means; a second
+ * copy here would be free to drift, and then the size an agent is told and the
+ * size the reader sees would differ with nothing to catch it. It lives in
+ * `lib/geometry` rather than the viewer now, because by the time three features
+ * outside the viewer wanted it, that rule was being kept by deep imports.
  *
  * THE NODES ONLY. Edges are drawn between nodes they connect, and a frame is
  * derived from its members' box, so neither can enlarge the extent — except a
@@ -102,7 +105,12 @@ export function validateModel(
       .join("\n"),
     renderDiagramTable(diagramTableRows(file, summary.diagrams)),
     renderAdvisories(advisories, "model"),
-    actual === "mermaid" ? `Note: ${MERMAID_CAVEAT}` : null,
+    /* THE LEDGER, not the leaflet. This was `Note: ${MERMAID_CAVEAT}` — the
+       same sentence on every import, naming losses the document may not have
+       had. `renderMermaidLedger` keeps the caveat and adds what actually
+       happened to THIS file, including "nothing", which is the line that makes
+       the other lines believable. */
+    actual === "mermaid" ? renderMermaidLedger(file, MERMAID_CAVEAT) : null,
   );
 
   /*
