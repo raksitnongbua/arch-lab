@@ -829,7 +829,16 @@ export default function Home() {
               `CANVAS_EDITING_PASSAGE` rather than pasting its words. Moving it
               within the page keeps every one of those assertions true; pasting
               a shortened copy here would have broken the one property they
-              exist to defend. */}
+              exist to defend.
+
+              AND SHORTENING IT WAS DONE AT THE CONSTANT, for exactly that
+              reason. It reached 1,430 characters here — a single unbroken
+              sentence taller than the three steps under it — because it was
+              built by joining all nine of the grid's gesture clauses. The
+              enumeration now renders as a LIST in `/llms-full.txt`, which is
+              the document whose job is to be exhaustive, and this passage
+              answers the question instead: which notations, and what a drag
+              writes. */}
           {CANVAS_EDIT_ENABLED ? (
             <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
               {CANVAS_EDITING_PASSAGE}

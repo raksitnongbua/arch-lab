@@ -232,6 +232,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   drawn and read, and c4model.com has no opinion on any of them. A reader
   following that link for the note they had just been shown would not have
   found it.
+- **"How you actually use it" stopped being a wall of text.** The passage
+  answering "can I edit a diagram on the canvas, and which kinds" was built by
+  joining all nine of the capability grid's gesture clauses into one sentence,
+  which had reached 1,430 characters — a single unbroken paragraph taller than
+  the three steps under it. It now answers the question: all nine notations are
+  edited as text, three of them — C4, sequence and flowchart — also on the
+  canvas, where a drag writes a position or an order into that same text. The
+  full list of nine gestures moved to `/llms-full.txt`, as a list, which is the
+  document whose job is to be exhaustive.
 - **The C4 diagram opens as the diagram.** The strip of hint text that sat
   permanently across the bottom of the canvas — click for details, double-click
   to zoom, Esc steps back, drag to pan — is gone. Every clause it carried is

@@ -1013,23 +1013,49 @@ export const CANVAS_GESTURE_CLAUSES: readonly string[] = Object.values(
  * two notations offer. Opening with the canvas would sell a drawing tool and
  * then take it back.
  *
- * The clauses are joined with "and" rather than by `Intl.ListFormat`, and the
- * count is spelled by `inWords`: this is a contract string, so it must not vary
- * with the ICU data a runtime happens to ship (`lib/prose.ts`).
+ * IT NAMES THE NOTATIONS AND NOT THE NINE GESTURES, and that is the second
+ * time this sentence has had to be cut back to its answer. The hand-written
+ * version grew by a verb every time a canvas learned one, until the intro read
+ * as a wall; deriving it from the grid fixed the STALENESS and reproduced the
+ * wall exactly — `CANVAS_GESTURE_CLAUSES.join(", and ")` was 1,430 characters
+ * of one unbroken sentence on the landing page, and a passage nobody finishes
+ * is not a passage an assistant quotes either. `codebase.md` §5: when a rule
+ * keeps producing work nobody asked for, suspect the rule. What was wanted was
+ * the ANSWER — which notations, and what a drag writes — and the enumeration
+ * is a LIST, which is why `CANVAS_GESTURE_CLAUSES` is exported and rendered as
+ * one by `/live`'s disclosure and by `/llms-full.txt`. `check:seo` pins each
+ * clause to that list rather than to this sentence, so the capability model
+ * still cannot ship a gesture no document mentions.
+ *
+ * The names and the count come from the grid: a tenth notation, or a fourth
+ * editable canvas, rewrites this sentence without anyone editing it. The names
+ * are joined by `joinList` and the count spelled by `inWords` because this is a
+ * contract string and must not vary with the ICU data a runtime ships
+ * (`lib/prose.ts`).
  */
 export const CANVAS_EDITING_PASSAGE: string = (() => {
   const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
-  const editable = new Set(
-    notations.filter((notation) =>
-      Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
-    ),
+  const editable = notations.filter((notation) =>
+    Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
   );
+  /* The grid's own short name for each — the identity word without the head
+     noun, so the sentence supplies "notations" once instead of once per name.
+     Read from the first offering cell of each, which is where `shortNoun`
+     lives; `check:canvas-edit` pins every cell of one notation to the same
+     one, so which cell answers cannot matter. */
+  const named = editable.map((notation) => {
+    const cell = Object.values(CANVAS_EDIT_OFFERS)
+      .map((cells) => cells[notation])
+      .find((offer) => offer.offers);
+    return cell !== undefined && cell.offers ? cell.shortNoun : notation;
+  });
   return (
     `An ${APP_NAME} diagram is edited two ways. All ${inWords(notations.length)} ` +
-    `notations are edited as source text; ${inWords(editable.size)} of them are ` +
-    `also editable on the canvas — ${CANVAS_GESTURE_CLAUSES.join(", and ")}. ` +
-    `Either way the change lands in the same one-line-per-element text you ` +
-    `review in a pull request.`
+    `notations are edited as source text; ${inWords(editable.length)} of them — ` +
+    `${joinList(named)} — are also editable on the canvas, where a drag writes ` +
+    `a position or an order into that same text rather than into a private ` +
+    `layout file. Either way the change lands in the same one-line-per-element ` +
+    `text you review in a pull request.`
   );
 })();
 
