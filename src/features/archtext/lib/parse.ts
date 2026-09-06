@@ -2465,7 +2465,20 @@ function resolve(
      * and so the serializer, which resolves the same way, omits exactly what
      * the author left out. */
     const layoutDirection = diagram.directionAttr ?? header.direction ?? "tb";
-    const layout = defaultPositions(sortedIds, diagram.edges, layoutDirection);
+    /* Frame membership reaches the layout so that a boundary's members are
+       placed together and given room from their neighbours. The serializer
+       builds the same map from the same `in=` values, which is what keeps
+       filling geometry in and omitting it symmetric. */
+    const layoutFrames = new Map<string, string>();
+    for (const node of diagram.nodes) {
+      if (node.frameId !== undefined) layoutFrames.set(node.id, node.frameId);
+    }
+    const layout = defaultPositions(
+      sortedIds,
+      diagram.edges,
+      layoutDirection,
+      layoutFrames,
+    );
     const finalNodes: Record<string, unknown>[] = [];
     for (const node of diagram.nodes) {
       // Fill in a derived name before assembly, so the JSON model always

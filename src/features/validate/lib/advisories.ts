@@ -35,6 +35,7 @@
  */
 
 import { defaultPositions } from "@/features/archtext";
+import { placeFrames } from "@/features/editor/lib/frame-layout";
 import { boundsOf } from "@/lib/geometry";
 import { presentationWarning } from "@/lib/presentation-fit";
 import {
@@ -70,6 +71,7 @@ export type AdvisoryRule =
   | "path-teleports"
   | "crowded-diagram"
   | "crowded-node"
+  | "split-boundary"
   | "unreadable-when-presented";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
@@ -107,6 +109,22 @@ export const ADVISORY_RULES: Record<
       "picture becomes an overview plus the diagram it drills into. Advice " +
       "rather than an error because a dense diagram is a correct diagram; " +
       "it is only one nobody can present.",
+  },
+  "split-boundary": {
+    title: "A boundary that will be drawn as more than one box",
+    because:
+      "A frame carries no geometry: its rectangle is derived from where its " +
+      "members ended up, and it may never reach an element that is not one " +
+      "of them. So a boundary whose members are scattered is drawn as one " +
+      "rectangle per cluster — a real convention, but not what an author who " +
+      "wrote one `frame` line is expecting to see, and on a crowded diagram " +
+      "several part-boundaries read as shading rather than as grouping. Not " +
+      "a C4 rule: this one is about how an `.alab` document will be DRAWN, " +
+      "and the rule it enforces is the format's own — a frame carries no " +
+      "geometry. The " +
+      "remedy is the model's, not the geometry's — a boundary whose members " +
+      "have nothing joining them is usually two boundaries, or one that has " +
+      "been drawn around the wrong elements.",
   },
   "crowded-node": {
     title: "More connectors on one element than can be told apart",
@@ -304,6 +322,11 @@ function laidOutBy(
     diagram.nodes.map((node) => node.id).sort(),
     diagram.edges.map((edge) => ({ source: edge.source, target: edge.target })),
     direction,
+    new Map(
+      diagram.nodes.flatMap((node) =>
+        node.frameId === undefined ? [] : [[node.id, node.frameId] as const],
+      ),
+    ),
   );
 }
 
@@ -520,11 +543,42 @@ function advisePaths(diagram: C4Diagram, out: Advisory[]): void {
   }
 }
 
+/**
+ * Boundaries that will not draw as the single rectangle their author wrote.
+ *
+ * Asked of the same module the canvas and the exporter derive frame
+ * rectangles from, so this fires exactly when a reader would see the boundary
+ * come apart — never from a heuristic about how the members "look" related.
+ */
+function adviseFrameSplits(diagram: C4Diagram, out: Advisory[]): void {
+  const frames = diagram.frames ?? [];
+  if (frames.length === 0) return;
+  const parts = new Map<string, number>();
+  for (const rect of placeFrames(diagram)) {
+    parts.set(rect.id, (parts.get(rect.id) ?? 0) + 1);
+  }
+  for (const frame of frames) {
+    const count = parts.get(frame.id) ?? 0;
+    if (count < 2) continue;
+    out.push({
+      rule: "split-boundary",
+      where: `${diagram.id} / ${frame.id}`,
+      message:
+        `"${frame.label}" will be drawn as ${count.toString()} separate ` +
+        "rectangles, because its members do not sit together and a boundary " +
+        "may not reach across the elements between them. Either the members " +
+        "belong in more than one boundary, or the elements standing between " +
+        "them belong inside this one.",
+    });
+  }
+}
+
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
   adviseColumnLayout(diagram, out);
   adviseDiagramDensity(diagram, out);
   advisePresentationFit(diagram, out);
   adviseNodeDensity(diagram, out);
+  adviseFrameSplits(diagram, out);
   advisePaths(diagram, out);
   if (isBlank(diagram.title)) {
     out.push({

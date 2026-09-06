@@ -33,6 +33,25 @@ const PAD = 28;
 /** Additional height at the top of a frame, reserved for its label. */
 const LABEL_BAND = 26;
 
+/**
+ * How far a frame's border must stay from an element that is not its member.
+ *
+ * THE TEST USED TO BE THE STRANGER'S CENTRE POINT, and a point is not what a
+ * reader sees. An element whose centre sat just outside a boundary had up to
+ * half its box inside it — drawn as if it were a member, with the border
+ * running through it — and the merge loop below grows every rectangle to the
+ * largest size that still passes, so boxes were reliably pushed until they
+ * were touching whatever they were not allowed to swallow. That is the
+ * cramped picture: borders resting against elements they have nothing to do
+ * with, and against each other.
+ *
+ * So the test is the stranger's whole BOX, and it must miss by this much. The
+ * default layout leaves far more than this between a framed element and its
+ * neighbours (`FRAME_GUTTER` in `archtext/lib/defaults.ts`), so the clearance
+ * is what holds the line on hand-placed geometry, where nothing else does.
+ */
+const MIN_CLEARANCE = 16;
+
 export interface FrameRect {
   x: number;
   y: number;
@@ -129,14 +148,13 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
     return out;
   };
 
-  const encloses = (box: Box, node: C4Node): boolean => {
-    const centreX = node.position.x + node.size.width / 2;
-    const centreY = node.position.y + node.size.height / 2;
+  const crowds = (box: Box, node: C4Node): boolean => {
+    const it = boxOfNode(node);
     return (
-      centreX > box.minX &&
-      centreX < box.maxX &&
-      centreY > box.minY &&
-      centreY < box.maxY
+      it.maxX > box.minX - MIN_CLEARANCE &&
+      it.minX < box.maxX + MIN_CLEARANCE &&
+      it.maxY > box.minY - MIN_CLEARANCE &&
+      it.minY < box.maxY + MIN_CLEARANCE
     );
   };
 
@@ -146,6 +164,42 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
     maxX: box.maxX + PAD,
     maxY: box.maxY + PAD,
   });
+
+  /**
+   * Pull a padded rectangle back off any stranger it reaches.
+   *
+   * THE MERGE TEST ALONE DOES NOT HOLD THE INVARIANT. It is applied to merged
+   * candidates, so a cluster that never merges — a single member, or the last
+   * part left after a merge was refused — is padded with nothing checking
+   * where the pad lands. `PAD` is a wish, not a right: the room is taken when
+   * it is there and given up when a stranger is standing in it.
+   *
+   * Only a stranger lying WHOLLY beyond the members on an axis can move that
+   * side. One overlapping the members' own span on both axes is standing
+   * inside the boundary, which the merge test refuses for a merged box and
+   * which no layout produces for a single one — shrinking for it would mean
+   * choosing a side by coin toss. And no side is ever pulled inside the
+   * members themselves: a border cutting through what it encloses would trade
+   * one wrong picture for another.
+   */
+  const clamp = (box: Box, core: Box, foreign: readonly C4Node[]): Box => {
+    let { minX, minY, maxX, maxY } = box;
+    for (const node of foreign) {
+      const it = boxOfNode(node);
+      if (it.minX >= core.maxX) maxX = Math.min(maxX, it.minX - MIN_CLEARANCE);
+      if (it.maxX <= core.minX) minX = Math.max(minX, it.maxX + MIN_CLEARANCE);
+      if (it.minY >= core.maxY) maxY = Math.min(maxY, it.minY - MIN_CLEARANCE);
+      if (it.maxY <= core.minY) minY = Math.max(minY, it.maxY + MIN_CLEARANCE);
+    }
+    return {
+      minX: Math.min(minX, core.minX),
+      /* The label band is not padding and is not negotiable: give it up and
+         the caption is printed over the top row of what it captions. */
+      minY: Math.min(minY, core.minY - LABEL_BAND),
+      maxX: Math.max(maxX, core.maxX),
+      maxY: Math.max(maxY, core.maxY),
+    };
+  };
 
   const boxes = new Map<string, Box[]>();
   const visiting = new Set<string>();
@@ -164,7 +218,8 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
    * layout cannot be changed without moving coordinates people have on disk.
    *
    * So the invariant is the one that was actually broken: A FRAME'S RECTANGLE
-   * MUST NOT ENCLOSE A NODE THAT IS NOT ITS MEMBER. Clusters start as one box
+   * MUST NOT REACH A NODE THAT IS NOT ITS MEMBER — not its box, and not the
+   * clearance around it (`MIN_CLEARANCE`). Clusters start as one box
    * per member and merge only while the merged rectangle stays legal by that
    * rule, nearest pair first. A frame whose members sit together merges all
    * the way back to one box, so every diagram that looked right still does.
@@ -198,7 +253,7 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
     const mine = membersOf(id);
     const foreign = diagram.nodes.filter((node) => !mine.has(node.id));
     const legal = (box: Box): boolean =>
-      !foreign.some((node) => encloses(pad(box), node));
+      !foreign.some((node) => crowds(pad(box), node));
 
     /* Merge the nearest legal pair until none is left. Nearest first so the
      * clusters that form are the ones a reader would group by eye, and the
@@ -223,7 +278,7 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
 
     // Deterministic order: top-left first, so ids and paint order are stable.
     parts.sort((a, b) => a.minY - b.minY || a.minX - b.minX);
-    const padded = parts.map(pad);
+    const padded = parts.map((core) => clamp(pad(core), core, foreign));
     boxes.set(id, padded);
     return padded;
   };

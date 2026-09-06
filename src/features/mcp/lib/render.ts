@@ -421,6 +421,13 @@ const MAX_ITEMS_PER_RULE = 8;
 const ADVISORY_INSTRUCTIONS: Partial<Record<AdvisoryRule, string>> = {
   "vague-relationship":
     "  If you do not know what flows here, ask — do not invent a payload.",
+  /* The cheapest wrong repair is to start writing coordinates. A document
+     that pins its own geometry stops being laid out at all, so the next
+     element added to it lands wherever the author guessed — and the boundary
+     that was drawn in two pieces is now drawn in two pieces permanently. */
+  "split-boundary":
+    "  Fix the grouping, not the geometry: do not write coordinates to " +
+    "pull the members together.",
 };
 
 /**

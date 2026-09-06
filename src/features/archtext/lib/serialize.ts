@@ -903,11 +903,20 @@ export function resolveDirection(
    alternative — a cast at that one call site — would be a cast standing where
    the whole point is that both callers compute the same map. */
 function defaultLayoutFor(
-  nodes: readonly { readonly id?: unknown }[],
+  nodes: readonly { readonly id?: unknown; readonly frameId?: unknown }[],
   edges: readonly { readonly source?: unknown; readonly target?: unknown }[],
   direction: "tb" | "lr",
 ): ReadonlyMap<string, Point> {
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
+  /* The same map the parser builds from the same `in=` values — a boundary's
+     members are placed together and given room, so geometry that matches the
+     rule is still omitted rather than written out. */
+  const frameOf = new Map<string, string>();
+  for (const node of nodes) {
+    if (typeof node.id === "string" && typeof node.frameId === "string") {
+      frameOf.set(node.id, node.frameId);
+    }
+  }
   return defaultPositions(
     sortedIds,
     edges.flatMap((edge) =>
@@ -916,6 +925,7 @@ function defaultLayoutFor(
         : [],
     ),
     direction,
+    frameOf,
   );
 }
 
