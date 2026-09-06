@@ -34,7 +34,17 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { registerTsResolution } from "./lib/resolve-ts.mjs";
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/* The kind table itself, loaded rather than read as text — see the note above
+   `KINDS` below for the bug that bought this. `kind-copy.ts` imports one type
+   and nothing else, so type stripping can reach it. */
+const { KIND_BLURB } = await registerTsResolution(ROOT)(
+  "src/features/playground/lib/kind-copy.ts",
+);
+
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 /**
@@ -399,19 +409,27 @@ console.log("\nThe well under a diagram is the same colour in every notation");
    a row in it — which makes it the one list in this repo that cannot fall
    behind the notations that exist. `codebase.md` names the alternative and what
    it costs: a hardcoded list cannot notice the thing it has never heard of, and
-   this defect plus four others on the same branch were exactly that. */
-const KINDS = [
-  ...readCode("src/features/playground/lib/kind-copy.ts").matchAll(
-    /^ {2}([a-z][a-z0-9]*):\s*$|^ {2}([a-z][a-z0-9]*): "/gm,
-  ),
-]
-  .map((match) => match[1] ?? match[2])
-  .filter((kind) => kind !== undefined);
+   this defect plus four others on the same branch were exactly that.
+
+   READ FROM THE RECORD, not scraped out of the file it lives in. This was a
+   regex over every two-space-indented key in `kind-copy.ts`, which was correct
+   for exactly as long as that file held ONE record: a second one arrived
+   (`EXAMPLE_NOTATION_LABEL`, keyed by the same nine notations) and the scrape
+   returned eighteen kinds — every per-notation assertion below ran twice, and
+   the one that counts them broke outright.
+
+   The vacuity guard did not catch it because it asks `>= 9`, and it cannot be
+   tightened to `=== 9` without failing on the day a tenth notation is added,
+   which is the opposite of what it is for. So the fix is at the source: the
+   module is pure and type-stripping loads it, which is what `codebase.md` asks
+   for anyway — never reimplement app logic inside a check, and a regex over
+   another module's syntax is a reimplementation of its parser. */
+const KINDS = Object.keys(KIND_BLURB);
 
 check(
   "the kind table still yields every notation",
   KINDS.length >= 9,
-  `only ${KINDS.length} kind(s) parsed out of \`kind-copy.ts\` — every ` +
+  `only ${KINDS.length} kind(s) came back from \`KIND_BLURB\` — every ` +
     "assertion below would be passing vacuously over a short list, which is " +
     "the failure this section is written against",
 );

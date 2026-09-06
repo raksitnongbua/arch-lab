@@ -56,9 +56,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { contrast, flatten, luminance, parseOklch } from "./lib/oklch.mjs";
+import { registerTsResolution } from "./lib/resolve-ts.mjs";
 import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+
+/* The kind table itself, loaded rather than read as text — see the note above
+   `KINDS` below for the bug that bought this. `kind-copy.ts` imports one type
+   and nothing else, so type stripping can reach it. */
+const { KIND_BLURB } = await registerTsResolution(ROOT)(
+  "src/features/playground/lib/kind-copy.ts",
+);
+
 const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 const CSS = read("src/app/globals.css");
 
@@ -270,19 +279,27 @@ console.log("\nevery notation paints the ladder, and none paints its own");
    `check:canvas-chrome` uses for the well's colour. `KIND_BLURB` is a total
    `Record<SeedKind, string>`, so a tenth notation cannot compile without a row
    in it and therefore fails HERE on the day it is declared, rather than
-   shipping groundless. */
-const KINDS = [
-  ...readCode("src/features/playground/lib/kind-copy.ts").matchAll(
-    /^ {2}([a-z][a-z0-9]*):\s*$|^ {2}([a-z][a-z0-9]*): "/gm,
-  ),
-]
-  .map((match) => match[1] ?? match[2])
-  .filter((kind) => kind !== undefined);
+   shipping groundless.
+
+   READ FROM THE RECORD, not scraped out of the file it lives in. This was a
+   regex over every two-space-indented key in `kind-copy.ts`, which was correct
+   for exactly as long as that file held ONE record: a second one arrived
+   (`EXAMPLE_NOTATION_LABEL`, keyed by the same nine notations) and the scrape
+   returned eighteen kinds — every per-notation assertion below ran twice, and
+   the one that counts them broke outright.
+
+   The vacuity guard did not catch it because it asks `>= 9`, and it cannot be
+   tightened to `=== 9` without failing on the day a tenth notation is added,
+   which is the opposite of what it is for. So the fix is at the source: the
+   module is pure and type-stripping loads it, which is what `codebase.md` asks
+   for anyway — never reimplement app logic inside a check, and a regex over
+   another module's syntax is a reimplementation of its parser. */
+const KINDS = Object.keys(KIND_BLURB);
 
 check(
   `the kind table still yields every notation (${KINDS.length})`,
   KINDS.length >= 9,
-  `only ${KINDS.length} kind(s) parsed out of \`kind-copy.ts\` — every ` +
+  `only ${KINDS.length} kind(s) came back from \`KIND_BLURB\` — every ` +
     "assertion below would be passing vacuously over a short list",
 );
 
@@ -375,9 +392,16 @@ for (const kind of KINDS.filter((kind) => kind !== "c4")) {
       "canvas it would also be cloned into every exported file twice over",
   );
 }
+/* THE EXPECTED COUNT IS DERIVED, and the literal `8` it replaces is the second
+   half of the same bug. C4 is excluded above because its ground is mounted by
+   its own hosts, so what must be measured here is EVERY OTHER notation — which
+   is a number the kind table already knows. Typed out, it was a second place to
+   remember on the day a tenth notation arrives, and it would have failed then
+   for a reason that had nothing to do with the ground. */
+const expectedPaneGround = KINDS.length - 1;
 check(
-  `all eight non-C4 notations ground their pane (${paneGround.length})`,
-  paneGround.length === 8,
+  `every non-C4 notation grounds its pane (${paneGround.length} of ${expectedPaneGround})`,
+  paneGround.length === expectedPaneGround,
   `only ${paneGround.join(", ")} — a notation missing here is measured by ` +
     "nothing above",
 );
