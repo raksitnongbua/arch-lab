@@ -722,32 +722,20 @@ export default function Home() {
         aria-labelledby="agent-heading"
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-          {/* `min-w-0` IS LOAD-BEARING, and without it this section overflowed
-              the viewport on a phone — the heading, the paragraph and both
-              buttons all clipped, not just the snippet.
+        {/* THE ARGUMENT BESIDE ITS PICTURE, and the two commands under both.
 
-              The cause is the install command below. A grid item's automatic
-              minimum size is its CONTENT's minimum, so the item refused to
-              shrink narrower than one unbreakable ~90-character line, the
-              single-column track grew to match, and `w-full` on the section
-              resolved against something wider than the screen. The
-              `overflow-x-auto` inside `CopySnippet` cannot save this: it scrolls
-              the line once the block has a width to scroll within, and this item
-              never gave it one.
-              `/mcp` already knew — every wrapper around a `CopySnippet` over
-              there carries `min-w-0` (`mcp-guide.tsx`). This was the one call
-              site that did not.
+            They were all in the left column, which worked while there was one
+            snippet and fell apart at two: the column ran to roughly three times
+            the height of the figure it was paired with, so the right half of
+            the section was empty from the first snippet downwards, and the two
+            commands — which are ALTERNATIVES — sat stacked in a narrow column
+            where they read as one setup in two steps.
 
-              The `lg:` track above is `minmax(0,1fr)` for the same reason, which
-              is why the bug only ever showed below `lg`: the explicit 0 minimum
-              did this job on desktop and there was nothing doing it on a phone. */}
+            Side by side under the full width, they read as the choice they
+            are, and the two halves of the top row end within a line of each
+            other. */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
           <div className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
-                <Bot aria-hidden="true" className="size-5" />
-              </span>
-            </div>
             <h2
               id="agent-heading"
               className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
@@ -761,51 +749,55 @@ export default function Home() {
               {MCP_TOOLS.length} read-only tools, over all {KINDS.length}{" "}
               document kinds. Nothing here can change your files.
             </p>
-
-            {/* BOTH ROUTES, on the page where the choice is actually made. The
-                landing page offered the MCP command alone, so the skill — the
-                cheaper option, and the one that needs no connector at all —
-                existed only for a reader who had already decided to add a
-                server and clicked through to `/mcp` to do it. That is exactly
-                backwards: the reader who would prefer a file never got as far
-                as being told there was one.
-
-                Both commands come from the catalogue `/mcp` renders, so
-                neither can drift from the one that works. */}
-            <div className="mt-6 space-y-4">
-              {CLAUDE_CODE_RECIPE === undefined ? null : (
-                <AgentRoute
-                  title="Connect the MCP server"
-                  detail="Hosted. Nothing to install, no key."
-                  snippet={CLAUDE_CODE_RECIPE.snippet(endpoint)}
-                  caption="Claude Code"
-                  label="Claude Code install command"
-                />
-              )}
-              <AgentRoute
-                title="Or install the skill"
-                detail="The same grammar as files in your repo — no connector, nothing running."
-                snippet={SKILL_INSTALL}
-                caption="bash"
-                label="Install the .alab skill"
-              />
-            </div>
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link href="/mcp" className={buttonClasses({ size: "md" })}>
-                Connect your agent
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <Link
-                href="/syntax"
-                className={buttonClasses({ variant: "outline", size: "md" })}
-              >
-                Read the format
-              </Link>
-            </div>
           </div>
 
           <McpFlow />
+        </div>
+
+        {/* BOTH ROUTES, on the page where the choice is actually made. The
+            landing page offered the MCP command alone, so the skill — the
+            cheaper option, and the one that needs no connector at all —
+            existed only for a reader who had already decided to add a server
+            and clicked through to `/mcp` to do it. That is exactly backwards:
+            the reader who would prefer a file never got as far as being told
+            there was one.
+
+            Both commands come from the catalogue `/mcp` renders, so neither
+            can drift from the one that works.
+
+            `md:` rather than `sm:` for the split: each command is one
+            unbreakable ~90-character line, and halving a 640px viewport gives
+            each column less room to scroll it in than the phone layout does. */}
+        <div className="mt-10 grid gap-5 md:grid-cols-2">
+          {CLAUDE_CODE_RECIPE === undefined ? null : (
+            <AgentRoute
+              title="Connect the MCP server"
+              detail="Hosted. Nothing to install, no key."
+              snippet={CLAUDE_CODE_RECIPE.snippet(endpoint)}
+              caption="Claude Code"
+              label="Claude Code install command"
+            />
+          )}
+          <AgentRoute
+            title="Or install the skill"
+            detail="The same grammar as files in your repo — no connector, nothing running."
+            snippet={SKILL_INSTALL}
+            caption="bash"
+            label="Install the .alab skill"
+          />
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Link href="/mcp" className={buttonClasses({ size: "md" })}>
+            Connect your agent
+            <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link
+            href="/syntax"
+            className={buttonClasses({ variant: "outline", size: "md" })}
+          >
+            Read the format
+          </Link>
         </div>
       </section>
 
