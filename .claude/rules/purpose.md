@@ -54,5 +54,9 @@ Keep both working; they are the argument for using this at all.
   [`new-diagram-type.md`](new-diagram-type.md); read it before starting one.
 - Both document types — C4 and sequence — are stable and in real use as of
   v1.0.0. Treat their formats as things people have files of.
-- The MCP surface and `.alab` are marked **beta** in-product. If a change breaks
-  either, say so explicitly in the pull request; do not let it pass as routine.
+- `.alab` is marked **beta** in-product. If a change breaks it, say so
+  explicitly in the pull request; do not let it pass as routine.
+- The MCP surface is **no longer beta**. Its endpoint, tool names and arguments
+  are a stable contract — breaking one is a major bump, not a routine change.
+  Response wording is deliberately outside that contract and may be rewritten;
+  `MCP_STABILITY_NOTICE` is where both halves are stated.

@@ -131,9 +131,8 @@ const {
   MCP_TOOLS,
   MCP_RESOURCES,
   MCP_PROMPTS,
-  MCP_STATUS_LABEL,
-  MCP_BETA_NOTICE,
-  MCP_BETA_NOTICE_SHORT,
+  MCP_STABILITY_NOTICE,
+  MCP_STABILITY_NOTICE_SHORT,
   CONNECT_RECIPES,
   KINDS_WITHOUT_SYNTAX_SECTIONS,
   mcpEndpointUrl,
@@ -462,21 +461,77 @@ check("the authoring prompt tells the agent to validate", () => {
   assert.match(text, /get_syntax_reference/);
 });
 
-check("the beta status is one constant, stated in commitments", () => {
-  assert.equal(MCP_STATUS_LABEL, "Beta");
-  // Not adjectives: a reader needs to know what is safe to depend on. Both
-  // notices must name the stable part AND the unstable part.
+check("what is safe to depend on is stated, and the line is drawn", () => {
+  /* THE BETA LABEL WAS REMOVED and this is what has to survive it. "Beta" said
+     "expect this to move" without ever saying which part, so a reader deciding
+     whether to script against this learned nothing; what replaced it is only
+     an improvement while it keeps naming BOTH sides — the names that will not
+     move, and the prose that will. A notice that named one side would be the
+     old problem with a new adjective. */
   for (const [name, notice] of [
-    ["MCP_BETA_NOTICE", MCP_BETA_NOTICE],
-    ["MCP_BETA_NOTICE_SHORT", MCP_BETA_NOTICE_SHORT],
+    ["MCP_STABILITY_NOTICE", MCP_STABILITY_NOTICE],
+    ["MCP_STABILITY_NOTICE_SHORT", MCP_STABILITY_NOTICE_SHORT],
   ]) {
-    assert.match(notice, /beta/i, `${name} must say it is beta`);
-    assert.match(notice, /endpoint URL/i, `${name} must name what is stable`);
-    assert.match(notice, /tool names/i, `${name} must name what may change`);
+    assert.match(
+      notice,
+      /tool names/i,
+      `${name} must name what is stable, or a reader cannot plan around it`,
+    );
+    assert.match(
+      notice,
+      /wording/i,
+      `${name} must name what is NOT stable — an agent that pins on a ` +
+        "response sentence breaks on the next rewording, silently",
+    );
+    /* AND MUST FORBID IT, not merely mention it. The first version of this
+       assertion looked for the word "wording" alone, and a mutation that
+       rewrote the sentence to say response wording was ALSO fixed and safe to
+       match on still passed it: the word survived while its meaning inverted.
+       A prohibition is what an agent acts on, so a prohibition is what is
+       asserted. */
+    assert.match(
+      notice,
+      /\bnever\b|\bdo not\b/i,
+      `${name} mentions response wording without telling a reader not to ` +
+        "depend on it, which is the one instruction that changes behaviour",
+    );
+    assert.doesNotMatch(
+      notice,
+      /\bbeta\b/i,
+      `${name} still calls the integration beta; the label was removed from ` +
+        "the navbar, the page and the handshake together, and a leftover " +
+        "here is the one an agent actually reads",
+    );
   }
 });
 
-check("the server tells a connecting client it is beta", async () => {
+check("no surface still advertises the removed beta label", async () => {
+  /* IT WAS ON FIVE SURFACES and each read the same constant, which is what
+     made removing it safe — but three of them (the page title, the OG card's
+     footer, the llms.txt endpoint line) spelled their own copy of the word
+     rather than interpolating, so deleting the constant could not have found
+     them. This is written from the FILES for that reason. */
+  for (const rel of [
+    "src/app/mcp/page.tsx",
+    "src/app/llms.txt/route.ts",
+    "src/app/llms-full.txt/route.ts",
+    "src/components/layout/header.tsx",
+    "src/features/mcp/components/mcp-guide.tsx",
+  ]) {
+    const source = await readFile(path.join(ROOT, rel), "utf8");
+    /* The word may appear in a COMMENT saying the label was removed — that is
+       the record of the decision and is worth keeping. What must not survive
+       is a string a reader sees. */
+    const visible = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    assert.doesNotMatch(
+      visible,
+      /\bbeta\b/i,
+      `${rel} still shows a reader the word "beta" for the MCP integration`,
+    );
+  }
+});
+
+check("the server tells a connecting client what it may pin", async () => {
   // The handshake is where an agent learns this — a human may never open /mcp.
   const route = await readFile(
     path.join(ROOT, "src/app/api/mcp/route.ts"),
@@ -484,8 +539,9 @@ check("the server tells a connecting client it is beta", async () => {
   );
   assert.match(
     route,
-    /MCP_BETA_NOTICE_SHORT/,
-    "the initialize instructions must carry the beta notice",
+    /MCP_STABILITY_NOTICE_SHORT/,
+    "the initialize instructions must say which parts of a response are a " +
+      "contract; without it an agent pins on prose and breaks on a rewrite",
   );
 });
 

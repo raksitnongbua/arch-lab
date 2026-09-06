@@ -207,6 +207,31 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The MCP integration is out of beta, and says what you may depend on
+  instead.** The "Beta" pill in the navbar, the callout above the endpoint on
+  `/mcp` and the marker in the page title are gone. In their place is a plain
+  commitment: the endpoint URL, the tool names and their arguments are stable
+  and will not be renamed or dropped without a major release, while response
+  _wording_ is prose and is reworded whenever a clearer sentence exists — so
+  match on what a tool documents it returns, never on the exact text. The
+  server's `initialize` payload carries the same sentence, so an agent that
+  never sees the page still learns where the line is. The `.alab` format is
+  still marked beta; that is a separate claim and it has not changed.
+- **The home page offers both ways to give an agent the format.** It showed the
+  MCP install command alone, so the skill — the cheaper route, and the one that
+  needs no connector at all — was reachable only by a reader who had already
+  decided to add a server. Both commands now sit side by side, framed
+  identically so they read as a choice rather than as two steps.
+- **`/mcp` and `/validate` say less.** The beta box above the endpoint, three
+  paragraphs of pitch in the skill section, and a sentence on `/validate`
+  explaining which parser it uses have all gone; the endpoint now follows the
+  opening sentence directly. Nothing a reader can act on was removed.
+- **The review notes on `/validate` no longer claim to all come from C4.** The
+  panel read "N C4 review notes" and told you every one came from
+  c4model.com — five of them are arch-lab's own, about how a document will be
+  drawn and read, and c4model.com has no opinion on any of them. A reader
+  following that link for the note they had just been shown would not have
+  found it.
 - **The C4 diagram opens as the diagram.** The strip of hint text that sat
   permanently across the bottom of the canvas — click for details, double-click
   to zoom, Esc steps back, drag to pan — is gone. Every clause it carried is

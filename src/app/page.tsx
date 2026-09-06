@@ -27,8 +27,8 @@ import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
 import {
   CONNECT_RECIPES,
-  MCP_STATUS_LABEL,
   MCP_TOOLS,
+  SKILL_INSTALL,
   mcpEndpointUrl,
 } from "@/features/mcp/catalog";
 import { CopySnippet } from "@/features/mcp/components/copy-snippet";
@@ -747,7 +747,6 @@ export default function Home() {
               <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
                 <Bot aria-hidden="true" className="size-5" />
               </span>
-              <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
             </div>
             <h2
               id="agent-heading"
@@ -756,22 +755,41 @@ export default function Home() {
               Ask your agent for the diagram
             </h2>
             <p className="mt-4 max-w-xl leading-relaxed text-muted-foreground">
-              The format is plain text, so an AI agent can write it — and the
-              MCP server gives it the two things it cannot guess: the exact
+              The format is plain text, so an AI agent can write it — and
+              arch-lab gives it the two things it cannot guess: the exact
               grammar, and the real parser&apos;s verdict on what it just wrote.{" "}
               {MCP_TOOLS.length} read-only tools, over all {KINDS.length}{" "}
               document kinds. Nothing here can change your files.
             </p>
 
-            {CLAUDE_CODE_RECIPE === undefined ? null : (
-              <div className="mt-6">
-                <CopySnippet
+            {/* BOTH ROUTES, on the page where the choice is actually made. The
+                landing page offered the MCP command alone, so the skill — the
+                cheaper option, and the one that needs no connector at all —
+                existed only for a reader who had already decided to add a
+                server and clicked through to `/mcp` to do it. That is exactly
+                backwards: the reader who would prefer a file never got as far
+                as being told there was one.
+
+                Both commands come from the catalogue `/mcp` renders, so
+                neither can drift from the one that works. */}
+            <div className="mt-6 space-y-4">
+              {CLAUDE_CODE_RECIPE === undefined ? null : (
+                <AgentRoute
+                  title="Connect the MCP server"
+                  detail="Hosted. Nothing to install, no key."
                   snippet={CLAUDE_CODE_RECIPE.snippet(endpoint)}
                   caption="Claude Code"
                   label="Claude Code install command"
                 />
-              </div>
-            )}
+              )}
+              <AgentRoute
+                title="Or install the skill"
+                detail="The same grammar as files in your repo — no connector, nothing running."
+                snippet={SKILL_INSTALL}
+                caption="bash"
+                label="Install the .alab skill"
+              />
+            </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link href="/mcp" className={buttonClasses({ size: "md" })}>
@@ -943,6 +961,40 @@ export default function Home() {
 /* -------------------------------------------------------------------------- */
 /* Pieces                                                                      */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * One of the two ways to give an agent the format: a name, one line saying what
+ * it costs, and the command.
+ *
+ * A SHARED SHAPE ON PURPOSE. Two bare snippets stacked would have read as one
+ * setup in two steps — run this, then run that — which is the opposite of the
+ * truth: they are alternatives, and most readers want exactly one. Identical
+ * framing is what makes them look like a choice rather than a sequence.
+ */
+function AgentRoute({
+  title,
+  detail,
+  snippet,
+  caption,
+  label,
+}: {
+  title: string;
+  detail: string;
+  snippet: string;
+  caption: string;
+  label: string;
+}): React.JSX.Element {
+  return (
+    /* `min-w-0` for the reason the section around it carries one: the command
+       is a single unbreakable ~90-character line, and without it this block
+       sets the grid item's minimum width and the phone layout overflows. */
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-0.5 mb-2 text-sm text-muted-foreground">{detail}</p>
+      <CopySnippet snippet={snippet} caption={caption} label={label} />
+    </div>
+  );
+}
 
 /**
  * The page's ground: a wash, a line grid, a dot field over it, and two still

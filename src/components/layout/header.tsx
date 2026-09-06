@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonClasses } from "@/components/ui/button";
-import { MCP_STATUS_LABEL } from "@/features/mcp/catalog";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -61,9 +60,13 @@ import { cn } from "@/lib/utils";
  * for: Escape-to-close, pointerdown-outside-to-close, no focus trap. It is a
  * short list of links under a bar, not a dialog.
  *
- * MCP carries a `status` pill read from the mcp feature's catalogue, so the
- * beta marker here can never disagree with the one on `/mcp` or the one the
- * server sends on `initialize` — there is one constant behind all three.
+ * NO ENTRY CARRIES A STATUS PILL. MCP carried a "Beta" one, read from the mcp
+ * feature's catalogue so it could not disagree with the page or the server's
+ * handshake; the integration is no longer beta, and the `status` field went
+ * with it rather than staying as a slot nothing fills. What the pill was
+ * standing in for now lives where it can be acted on — one bullet on `/mcp`
+ * and one sentence in the server's `initialize` payload, both from
+ * `MCP_STABILITY_NOTICE`.
  *
  * The empty-array guard on the <nav> below still matters if every entry is
  * ever removed again: an empty <nav> would expose a navigation landmark with
@@ -72,8 +75,6 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS: ReadonlyArray<{
   href: string;
   label: string;
-  /** Release status, shown as a small pill after the label. */
-  status?: string;
   /**
    * Drawn as a button-styled call to action rather than a text link. A
    * button, not a group separator, because a separator only splits the row
@@ -101,7 +102,7 @@ const NAV_LINKS: ReadonlyArray<{
   { href: "/demo", label: "Demo" },
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
-  { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
+  { href: "/mcp", label: "MCP" },
 ];
 
 /** Shared by every focusable in this file that cannot take `buttonClasses`. */
@@ -331,9 +332,8 @@ export function Header(): React.JSX.Element {
 
 /**
  * One nav entry, in either layout. One definition on purpose: the current-page
- * treatment, the `aria-current` contract, and the status pill must behave
- * identically in the row and in the panel, and two renderers would let them
- * drift.
+ * treatment and the `aria-current` contract must behave identically in the row
+ * and in the panel, and two renderers would let them drift.
  */
 function NavEntry({
   link,
@@ -376,15 +376,6 @@ function NavEntry({
       )}
     >
       {link.label}
-      {/* Part of the link's accessible name, not aria-hidden: "MCP Beta" is
-          what the entry actually offers, and a screen-reader user needs the
-          caveat as much as anyone. No width to reclaim any more — the row only
-          exists at `sm` and up, and the panel has the room. */}
-      {link.status !== undefined ? (
-        <span className="rounded-full border border-accent/25 bg-accent/12 px-1.5 py-px text-[10px] leading-none font-medium tracking-wide text-accent uppercase">
-          {link.status}
-        </span>
-      ) : null}
     </Link>
   );
 }

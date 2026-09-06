@@ -1,6 +1,5 @@
 import {
   MCP_ENDPOINT_PATH,
-  MCP_STATUS_LABEL,
   MCP_TOOLS,
   SKILL_INSTALL,
   SKILL_INSTALL_ALTERNATIVE,
@@ -159,7 +158,7 @@ ${THEMES_PASSAGE}
 
 ## For agents
 
-- MCP endpoint (${MCP_STATUS_LABEL}, Streamable HTTP, read-only): ${origin}${MCP_ENDPOINT_PATH}
+- MCP endpoint (Streamable HTTP, read-only): ${origin}${MCP_ENDPOINT_PATH}
 - Tools: ${MCP_TOOLS.map((tool) => tool.name).join(", ")}
 - How to connect: ${origin}/mcp
 - The grammar, with every example verified against the real parser: ${origin}/syntax

@@ -4,13 +4,18 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server at
 `/api/mcp`, so an AI agent can read, check and convert `.alab` models. Also
 documents itself at `/mcp`.
 
-**Status: beta.** `MCP_STATUS_LABEL` and `MCP_BETA_NOTICE` in `catalog.ts` are
-the single source of that claim — the navbar pill, the `/mcp` page callout and
-the server's `initialize` instructions all read them, so the marker cannot be
-true in one place and stale in another. The endpoint URL and the `.alab` format
-are stable; tool names, arguments and response wording are not yet. Promoting
-out of beta is an edit to those two constants (and deleting the check that
-asserts the label).
+**No longer beta.** The endpoint URL, the tool names and their arguments are
+stable — none of them is renamed or dropped without a major release. Response
+wording is not: it is prose, and it is reworded whenever a clearer sentence
+exists. `MCP_STABILITY_NOTICE` in `catalog.ts` is the single source of that
+distinction; the `/mcp` page and the server's `initialize` instructions both
+read it, and `check:mcp` asserts each half of it is still stated.
+
+The beta marker it replaced — a navbar pill, and a callout above the endpoint —
+said "expect this to move" without ever saying which part, which is the least
+useful thing a status can do. What replaced it draws the line a reader
+can actually plan around. `.alab` ITSELF is still marked beta in-product — that
+is a claim about the FORMAT and is unaffected.
 
 ## What it is for — and what it is not
 

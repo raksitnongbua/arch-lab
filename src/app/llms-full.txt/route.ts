@@ -1,6 +1,5 @@
 import {
   MCP_ENDPOINT_PATH,
-  MCP_STATUS_LABEL,
   MCP_TOOLS,
   KINDS_WITH_SYNTAX_SECTIONS,
   KINDS_WITHOUT_SYNTAX_SECTIONS,
@@ -242,8 +241,7 @@ ${listLifecycleExampleIds()
 
 ## Using it from an AI agent (MCP)
 
-Endpoint (${MCP_STATUS_LABEL}, Streamable HTTP, stateless, unauthenticated,
-read-only): ${origin}${MCP_ENDPOINT_PATH}
+Endpoint (Streamable HTTP, stateless, unauthenticated, read-only): ${origin}${MCP_ENDPOINT_PATH}
 
 Connect with, for example: \`claude mcp add --transport http arch-lab ${origin}${MCP_ENDPOINT_PATH}\`
 

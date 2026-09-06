@@ -41,8 +41,11 @@ in a link:
 Breaking changes are called out explicitly in the entry and bump the **major**
 version. Do not fold one into a minor bump because it felt small.
 
-The `.alab` format and the MCP surface are marked beta in-product, which is the
-one place this is relaxed — but a break there still needs an entry saying so.
+The `.alab` format is marked beta in-product, which is the one place this is
+relaxed — but a break there still needs an entry saying so. The MCP surface is
+NOT: its endpoint, tool names and arguments are a stable contract and breaking
+one is a major bump. Its response WORDING is not part of that contract and can
+be rewritten freely.
 
 ## Releasing
 

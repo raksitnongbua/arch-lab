@@ -656,12 +656,19 @@ for (const name of ["shopflow", "order-shop"]) {
        has no opinion on where a line meets a box. `crowded-diagram` stays in
        the C4 set because its remedy IS C4's: push the detail down a level. */
     "crowded-node",
+    /* `unreadable-when-presented` sat in the C4 set for a release and passed
+       this check anyway, because its reason OPENS with "Not a C4 rule" and the
+       test below only looked for the letters C4. A rule can therefore satisfy
+       the C4 branch by DENYING it — which is why the disclaimer assertion
+       further down exists. It belongs here: the floor it measures against is
+       arch-lab's own, in `lib/presentation-fit.ts`. */
+    "unreadable-when-presented",
   ]);
 
   const uncited = declared.filter((rule) => {
     const because = ADVISORY_RULES[rule].because;
     return FORMAT_RULES.has(rule)
-      ? !/MAX_TITLE_LENGTH|\.alab|edge-fan/.test(because)
+      ? !/MAX_TITLE_LENGTH|\.alab|edge-fan|presentation-fit/.test(because)
       : !/\bC4\b/.test(because);
   });
   if (uncited.length === 0) {
@@ -670,6 +677,27 @@ for (const name of ["shopflow", "order-shop"]) {
     );
   } else {
     fail("every rule cites its source", `uncited: ${uncited.join(", ")}`);
+  }
+
+  /* THE HOLE THE CHECK ABOVE CANNOT SEE. `/\bC4\b/` is satisfied by a reason
+     that says "Not a C4 rule" just as well as by one that cites C4 — so a rule
+     could be filed in the C4 family, state plainly that it is nothing of the
+     kind, and be reported as cited. That is not hypothetical: it shipped, and
+     `/validate` told readers every note came from c4model.com while five did
+     not. A rule that disclaims C4 is a format rule; say so in both places. */
+  const disclaiming = declared.filter(
+    (rule) =>
+      /not a c4 rule/i.test(ADVISORY_RULES[rule].because) &&
+      !FORMAT_RULES.has(rule),
+  );
+  if (disclaiming.length === 0) {
+    ok("no rule is filed under C4 while its own reason denies it");
+  } else {
+    fail(
+      "no rule is filed under C4 while its own reason denies it",
+      `${disclaiming.join(", ")} — add to FORMAT_RULES, and check that the ` +
+        "panel on /validate does not attribute them to c4model.com either",
+    );
   }
 }
 
