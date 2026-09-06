@@ -122,37 +122,37 @@ export function mcpEndpointUrl(origin: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Release status                                                              */
+/* What is safe to depend on                                                   */
 /* -------------------------------------------------------------------------- */
 
 /**
- * The integration is in **beta**, and says so everywhere it is offered: the
- * navbar entry, the `/mcp` page, and the server's own `initialize`
- * instructions — so an agent that connects without a human ever visiting the
- * page still learns that tool names and response shapes may move under it.
+ * THE BETA LABEL IS GONE, and what replaced it is a commitment rather than
+ * nothing. A status pill said "expect this to move" without ever saying which
+ * part, which is the least useful thing a version marker can do: a reader
+ * deciding whether to wire this into a script needs the LINE between what is
+ * pinned and what is prose, and "beta" drew no line at all.
  *
- * One constant, read by all three, because a status that is true in one place
- * and stale in another is worse than no status at all.
+ * So the surfaces that carried the pill — the navbar, `/mcp`, the home page —
+ * now carry no status at all, and the one place the distinction actually
+ * changes behaviour keeps a sentence: the server's `initialize` payload, read
+ * by an agent that may never see a page, and one bullet under Privacy & limits
+ * for the human equivalent.
+ *
+ * `.alab` ITSELF IS STILL MARKED BETA in-product (`purpose.md`) and that is a
+ * separate claim about the FORMAT, not about this integration. Removing one
+ * did not remove the other.
  */
-export const MCP_STATUS_LABEL = "Beta";
-
-/**
- * What beta actually means here, in commitments rather than adjectives. Vague
- * "this may change" wording tells a reader nothing they can plan around; this
- * separates what is safe to depend on from what is not.
- */
-export const MCP_BETA_NOTICE =
-  "This integration is in beta. The endpoint URL and the .alab format itself " +
-  "are stable — the format's round-trip guarantees are proven on every build " +
-  "— but tool names, arguments and the wording of responses may still change, " +
-  "and there is no protocol-level versioning to smooth that over yet. Pin " +
-  "nothing to the exact text of a response, and expect to re-read this page " +
-  "after an upgrade.";
+export const MCP_STABILITY_NOTICE =
+  "The endpoint URL, the tool names and their arguments are stable — none of " +
+  "them is renamed or dropped without a major release. Response wording is " +
+  "not: it is prose written for a reader, and it is reworded whenever a " +
+  "clearer sentence exists. Match on what a tool documents it returns, never " +
+  "on the exact text it says it in.";
 
 /** The same commitment, compressed for the server's `initialize` payload. */
-export const MCP_BETA_NOTICE_SHORT =
-  "This server is in beta: the endpoint URL is stable, but tool names, " +
-  "arguments and response wording may change without a version bump.";
+export const MCP_STABILITY_NOTICE_SHORT =
+  "Tool names and arguments are stable and will not change without a major " +
+  "release; response wording is prose and may be reworded — do not pin to it.";
 
 /* -------------------------------------------------------------------------- */
 /* Tools                                                                       */

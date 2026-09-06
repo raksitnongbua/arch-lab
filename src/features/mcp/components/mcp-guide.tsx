@@ -19,17 +19,16 @@
  * confused until told otherwise.
  */
 
-import { ChevronRight, FlaskConical } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 
 import {
   CONNECT_RECIPES,
-  MCP_BETA_NOTICE,
   MCP_PROMPTS,
   MCP_RESOURCES,
-  MCP_STATUS_LABEL,
+  MCP_STABILITY_NOTICE,
   MCP_TOOL_GROUPS,
   MCP_TOOLS,
   SKILL_DESTINATION,
@@ -55,8 +54,8 @@ const SECTIONS: readonly { id: string; label: string; hint: string }[] = [
   },
   {
     id: "skill",
-    label: "No server? Use the skill",
-    hint: "one command, the grammar as a file",
+    label: "Or use the skill",
+    hint: "the grammar as a file, no connector",
   },
   {
     id: "tools",
@@ -100,9 +99,6 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           <span className="af-mcp-pulse size-1.5 rounded-full bg-accent" />
           Integration · Model Context Protocol
         </Badge>
-        {/* Outline rather than accent: the status qualifies the badge next to
-            it, so it should not compete with it for attention. */}
-        <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
       </div>
 
       {/* NAMES THE CATEGORY, not the product. "Use arch-lab from your AI
@@ -128,24 +124,17 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         </a>{" "}
         server, so Claude Code, Claude Desktop, Cursor and anything else
         speaking the protocol can read, write and check C4 models and sequence
-        diagrams as <Code>.alab</Code> text. It is hosted — there is nothing to
-        install and no key to configure.
+        diagrams as <Code>.alab</Code> text. It is hosted — nothing to install,
+        no key to configure.
       </p>
 
-      {/* Above the endpoint, not buried at the bottom: someone about to paste
-          a URL into their client deserves to know what it does not promise
-          before they depend on it. */}
-      <div className="af-mcp-rise af-mcp-d3 mt-6 rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-          <FlaskConical aria-hidden="true" className="size-4 text-accent" />
-          {MCP_STATUS_LABEL}
-        </h2>
-        <p className="mt-2 leading-relaxed text-muted-foreground">
-          {MCP_BETA_NOTICE}
-        </p>
-      </div>
-
-      <div className="af-mcp-rise af-mcp-d4 mt-6">
+      {/* THE ENDPOINT NOW FOLLOWS THE OPENING SENTENCE DIRECTLY. A beta callout
+          used to sit between them, spending five lines of the page's most
+          valuable space on a status that told a reader nothing they could act
+          on. The commitment it was standing in for is one bullet under Privacy
+          & limits, where it sits beside the other things worth knowing before
+          you depend on this. */}
+      <div className="af-mcp-rise af-mcp-d3 mt-6">
         <CopySnippet
           snippet={endpoint}
           caption="endpoint"
@@ -159,30 +148,30 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           call the server does not have. */}
       <McpRoundTrip
         toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
-        className="af-mcp-rise af-mcp-d5 mt-6"
+        className="af-mcp-rise af-mcp-d4 mt-6"
       />
 
-      <div className="af-mcp-card af-mcp-rise af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4">
+      <div className="af-mcp-card af-mcp-rise af-mcp-d5 mt-8 rounded-lg border border-border bg-card px-5 py-4">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           What this is for
         </h2>
         <p className="mt-2 leading-relaxed text-muted-foreground">
-          Your agent can already read and write files — that is the point of a
-          text format, and you should let it edit <Code>.alab</Code> directly.
-          This server exists for the two things it cannot do on its own:{" "}
+          Your agent can already read and write files — let it edit{" "}
+          <Code>.alab</Code> directly. This server is for the two things it
+          cannot do alone:{" "}
           <strong className="text-foreground">know the grammar exactly</strong>{" "}
           and{" "}
           <strong className="text-foreground">
             get the real parser&apos;s verdict
           </strong>
-          . It is a compiler and a reference, not a filesystem.
+          . A compiler and a reference, not a filesystem.
         </p>
       </div>
 
       {/* ---- on this page ---------------------------------------------------- */}
       <nav
         aria-label="On this page"
-        className="af-mcp-fade af-mcp-d7 mt-8 rounded-lg border border-border bg-card px-5 py-4"
+        className="af-mcp-fade af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4"
       >
         <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           On this page
@@ -210,8 +199,8 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* ---- connect --------------------------------------------------------- */}
       <Section id="connect" title="Connect">
         <P>
-          One transport, Streamable HTTP, at the URL above. Open your client —
-          each entry is the complete setup:
+          One transport, Streamable HTTP, at the URL above. Open yours — each
+          entry is the whole setup:
         </P>
         {/*
          * One <details> per client, because seven recipes stacked open meant
@@ -264,12 +253,11 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       </Section>
 
       {/* ---- the skill ------------------------------------------------------- */}
-      <Section id="skill" title="No server? Use the skill">
+      <Section id="skill" title="Or use the skill">
         <P>
-          Connecting a server is not the only way to get this. Most of what the
-          MCP server offers an agent is <em>knowledge</em> — the grammar, in
-          exact detail — and knowledge travels fine as a file. If you would
-          rather not add a connector, drop the skill into your project instead:
+          Most of what this server gives an agent is <em>knowledge</em> — the
+          grammar, in exact detail — and knowledge travels fine as a file. If
+          you would rather not add a connector:
         </P>
         <div className="mt-5">
           <CopySnippet
@@ -278,23 +266,19 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             label="Install the .alab skill"
           />
         </div>
+        {/* ONE PARAGRAPH, where there were three. It said what the command
+            writes, then that the files are ordinary, then why the folder has
+            several of them — and a reader who has already run a one-line
+            install does not need to be sold on it three times. What survives
+            is the part they cannot see for themselves: where the content comes
+            from, and why the entry file is short. */}
         <P className="mt-4">
-          That writes <Code>{SKILL_DESTINATION}</Code> plus a{" "}
+          That writes <Code>{SKILL_DESTINATION}</Code> and a{" "}
           <Code>reference/</Code> folder beside it — plain markdown, generated
           from the same syntax reference this server hands out and verified
-          against the real parser on every build. Nothing runs, nothing
-          connects, and they are normal files you can read and diff.
-        </P>
-        {/* WHY IT IS SEVERAL FILES. Said here because a reader who expected one
-            file will otherwise wonder what the folder is for, and because the
-            shape is the point: an agent writing a gantt should not be carrying
-            the C4 node table to reach four hundred tokens about `starts`. */}
-        <P className="mt-4">
-          The entry file is short on purpose: what every <Code>.alab</Code>{" "}
-          document needs whatever its notation, and a table pointing at one
-          grammar file per notation. An agent writing a gantt reads the gantt
-          reference and never pays for the C4 or sequence grammar — which is the
-          whole reason a skill is cheap.
+          against the real parser on every build. The entry file is short on
+          purpose: an agent writing a gantt reads the gantt reference and never
+          pays for the C4 grammar.
         </P>
 
         {/* THE SECOND COMMAND, offered rather than hidden. The CLI reports
@@ -303,8 +287,8 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             defaults and neither is something to hand a reader with no way out.
             This is the same file by the plainest possible route. */}
         <P className="mt-4">
-          Prefer to copy the directory and nothing else — no CLI, no telemetry,
-          no symlinks into other agents&rsquo; folders?
+          Or copy the directory and nothing else — no CLI, no telemetry, no
+          symlinks into other agents&rsquo; folders:
         </P>
         <div className="mt-3">
           <CopySnippet
@@ -322,17 +306,17 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             What you give up
           </h3>
           <p className="mt-2 leading-relaxed text-muted-foreground">
-            The grammar, but not the verdict. A file in your project cannot tell
-            you whether the model you just wrote actually parses — for that you
-            need <Code>validate_model</Code>, which means the server, or the{" "}
+            The grammar, but not the verdict. A file cannot tell you whether the
+            model you just wrote parses — for that you need{" "}
+            <Code>validate_model</Code>, which means the server, or the{" "}
             <Link
               href="/validate"
               className="font-medium text-primary hover:underline"
             >
               validator on this site
             </Link>
-            . The two are not exclusive: plenty of people want the skill for
-            everyday writing and the server for the check at the end.
+            . Plenty of people use the skill for everyday writing and the server
+            for the check at the end.
           </p>
         </div>
       </Section>
@@ -341,7 +325,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       <Section id="tools" title="What it can do">
         <P>
           {MCP_TOOLS.length} tools, all read-only — nothing here mutates
-          anything, on your machine or ours. Grouped by job:
+          anything, on your machine or ours:
         </P>
         {/*
          * Grouped, not a flat list: ten identical cards gave a reader no way
@@ -371,8 +355,8 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* ---- resources & prompts --------------------------------------------- */}
       <Section id="context" title="Resources & prompts">
         <P>
-          Clients that prefer to pin reference material rather than call a tool
-          for it can read the grammar as a resource:
+          Clients that would rather pin reference material than call for it can
+          read the grammar as a resource:
         </P>
         <ul className="mt-4 space-y-3">
           {MCP_RESOURCES.map((resource) => (
@@ -390,8 +374,8 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           ))}
         </ul>
         <P className="mt-6">
-          And one prompt, for when you want the whole authoring procedure rather
-          than a single call:
+          And one prompt, for the whole authoring procedure rather than a single
+          call:
         </P>
         <ul className="mt-4 space-y-3">
           {MCP_PROMPTS.map((prompt) => (
@@ -467,17 +451,16 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <ul className="mt-2 space-y-3 text-muted-foreground">
           <Bullet>
             <strong className="text-foreground">Nothing is stored.</strong>{" "}
-            Every tool is a pure function of the text you send it. There is no
-            database, no account, and no model history — send a model, get an
-            answer, nothing is kept.
+            Every tool is a pure function of the text you send it — no database,
+            no account, no history.
           </Bullet>
           <Bullet>
             <strong className="text-foreground">
               Share links do not upload your model.
             </strong>{" "}
-            The model is compressed into the URL <em>fragment</em> (after{" "}
-            <Code>#</Code>), which browsers never transmit to a server. Opening
-            one renders entirely in the recipient&apos;s browser.
+            It is compressed into the URL <em>fragment</em> (after{" "}
+            <Code>#</Code>), which browsers never transmit. Opening one renders
+            entirely in the recipient&apos;s browser.
           </Bullet>
           <Bullet>
             <strong className="text-foreground">No authentication.</strong> The
@@ -489,22 +472,30 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             <strong className="text-foreground">
               {MAX_SOURCE_CHARS.toLocaleString("en-US")}-character ceiling
             </strong>{" "}
-            on any single model, which is several times larger than any model
-            anyone has authored. Past it, split the model with{" "}
-            <Code>childRef</Code>.
+            on a single model — several times larger than anything anyone has
+            authored. Past it, split it with <Code>childRef</Code>.
           </Bullet>
           <Bullet>
             <strong className="text-foreground">Mermaid is one-way.</strong>{" "}
-            Importing Mermaid C4 works; exporting to it drops geometry, tags,
-            icons, drill-down links and traceability. Sequence documents import
-            from Mermaid <Code>sequenceDiagram</Code> the same one-way — there
-            is no Mermaid export for them at all. Keep <Code>.alab</Code> or{" "}
-            <Code>.archlab.json</Code> as the source of truth.
+            Importing Mermaid C4 and <Code>sequenceDiagram</Code> works;
+            exporting drops geometry, tags, icons, drill-down links and
+            traceability, and for sequence there is no export at all. Keep{" "}
+            <Code>.alab</Code> or <Code>.archlab.json</Code> as the source of
+            truth.
+          </Bullet>
+          {/* WHERE THE BETA CALLOUT WENT. It was a box above the endpoint
+              saying "expect this to move" without saying which part, which is
+              the least useful thing a status can do. As a bullet it sits with
+              the other four things worth knowing before you depend on this,
+              and it now draws the line the pill never did. */}
+          <Bullet>
+            <strong className="text-foreground">What you may pin.</strong>{" "}
+            {MCP_STABILITY_NOTICE}
           </Bullet>
         </ul>
 
         <P className="mt-8">
-          The grammar itself is documented at{" "}
+          The grammar is documented at{" "}
           <Link
             href="/syntax"
             className="font-medium text-primary hover:underline"

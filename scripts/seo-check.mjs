@@ -97,6 +97,20 @@ registerHooks({
 const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
   await load("src/features/playground/input/canvas-edit.ts");
 
+/**
+ * `/llms-full.txt` AS IT IS ACTUALLY SERVED, not as it is written.
+ *
+ * The gesture clauses reach that document through a `.map()` over
+ * `CANVAS_GESTURE_CLAUSES`, so no assertion over the route's SOURCE could tell
+ * a rendered list from an import statement — which is the failure the "closing
+ * brace" note further down was written about. The route takes no arguments and
+ * reads no request, so running it is simply cheaper than reasoning about it.
+ */
+const LLMS_FULL_BODY = await (async () => {
+  const { GET } = await load("src/app/llms-full.txt/route.ts");
+  return GET().text();
+})();
+
 /* THE THEME LIST AND THE SENTENCE BUILT FROM IT, loaded for section 11 on the
    same terms as the grid above: the claim "nine themes" is only checkable
    against the list that decides it. */
@@ -979,11 +993,36 @@ console.log("\nthe canvas-editing passage is reachable and quotable");
         `${named} — a capability an assistant cannot attribute is one it ` +
         "will not quote",
     );
+    /* PINNED TO THE LIST, NOT TO THE PASSAGE, and the move is the fix for a
+       rule that was producing the defect it existed to prevent. Requiring all
+       nine clauses inside one sentence made that sentence 1,430 characters
+       long on the landing page — the exact wall the derivation was introduced
+       to end, rebuilt automatically. What the capability model actually owes a
+       reader is that no gesture ships undocumented, and `/llms-full.txt` is
+       the document whose job is to be exhaustive: it renders the clauses as a
+       list, where nine of them are a reference rather than a run-on.
+
+       Measured on the RENDERED body, not on the source: a check that looked
+       for `CANVAS_GESTURE_CLAUSES` in the file would pass on the import line
+       alone — the mistake the "closing brace" note further down records. */
     check(
-      `and the ${named} clause for "${ability}" reaches the passage`,
-      CANVAS_EDITING_PASSAGE.includes(offer.onCanvas),
-      "the clause exists in the grid but the derived passage does not carry " +
-        "it, so the page and the capability model disagree",
+      `and the ${named} clause for "${ability}" reaches /llms-full.txt`,
+      LLMS_FULL_BODY.includes(offer.onCanvas),
+      "the clause exists in the grid and no document carries it, so an " +
+        "assistant cannot learn the gesture exists",
+    );
+  }
+  /* THE PASSAGE STILL HAS TO ANSWER THE QUESTION, which is "which kinds" —
+     so what it lost in gestures it must keep in NAMES. Without this the
+     passage could shrink to "some of them are editable on the canvas" and
+     every assertion above would stay green, because they now all measure the
+     list. */
+  for (const named of new Set(editable.map(({ offer }) => offer.shortNoun))) {
+    check(
+      `the passage names ${named} as an editable canvas`,
+      CANVAS_EDITING_PASSAGE.includes(named),
+      "the passage answers 'which kinds', and a kind it does not name is one " +
+        "an assistant will say cannot be edited",
     );
   }
   /* THE DISTINCTION IS THE POINT OF THE PASSAGE. A reader arriving from a

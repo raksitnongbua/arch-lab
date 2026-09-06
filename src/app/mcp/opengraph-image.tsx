@@ -28,9 +28,10 @@ import { APP_NAME } from "@/lib/constants";
  * `MCP_CARD_TOOLS` resolves the three through the guard that throws at module
  * load, so a rename fails the build here too.
  *
- * "(beta)" is on the page and in its title but not on the card: a preview has
- * one line of footer, and "read-only and unauthenticated" is the fact that
- * decides whether someone connects it. The status is one click away.
+ * The footer is one line, and it spends it on "read-only and unauthenticated"
+ * — the fact that decides whether someone connects this. It never carried the
+ * beta marker for that reason, which is why removing the marker changed
+ * nothing here.
  *
  * The frame, the palette and the Satori constraints live in
  * `features/marketing/og/card.tsx`.

@@ -158,8 +158,9 @@ agent cannot author is half-shipped.
   rewrites that file and breaks the check.
 - `pnpm check:mcp`.
 
-MCP and `.alab` are marked beta in-product, which is the one place the format
-guarantees relax — but a break there still needs an explicit changelog entry.
+`.alab` is marked beta in-product, which is the one place the format guarantees
+relax — but a break there still needs an explicit changelog entry. The MCP
+surface is not beta: renaming a tool or an argument is a major bump.
 
 ## 4. Home page, syntax reference, demo
 

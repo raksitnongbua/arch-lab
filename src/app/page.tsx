@@ -27,8 +27,8 @@ import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
 import {
   CONNECT_RECIPES,
-  MCP_STATUS_LABEL,
   MCP_TOOLS,
+  SKILL_INSTALL,
   mcpEndpointUrl,
 } from "@/features/mcp/catalog";
 import { CopySnippet } from "@/features/mcp/components/copy-snippet";
@@ -722,33 +722,20 @@ export default function Home() {
         aria-labelledby="agent-heading"
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-          {/* `min-w-0` IS LOAD-BEARING, and without it this section overflowed
-              the viewport on a phone — the heading, the paragraph and both
-              buttons all clipped, not just the snippet.
+        {/* THE ARGUMENT BESIDE ITS PICTURE, and the two commands under both.
 
-              The cause is the install command below. A grid item's automatic
-              minimum size is its CONTENT's minimum, so the item refused to
-              shrink narrower than one unbreakable ~90-character line, the
-              single-column track grew to match, and `w-full` on the section
-              resolved against something wider than the screen. The
-              `overflow-x-auto` inside `CopySnippet` cannot save this: it scrolls
-              the line once the block has a width to scroll within, and this item
-              never gave it one.
-              `/mcp` already knew — every wrapper around a `CopySnippet` over
-              there carries `min-w-0` (`mcp-guide.tsx`). This was the one call
-              site that did not.
+            They were all in the left column, which worked while there was one
+            snippet and fell apart at two: the column ran to roughly three times
+            the height of the figure it was paired with, so the right half of
+            the section was empty from the first snippet downwards, and the two
+            commands — which are ALTERNATIVES — sat stacked in a narrow column
+            where they read as one setup in two steps.
 
-              The `lg:` track above is `minmax(0,1fr)` for the same reason, which
-              is why the bug only ever showed below `lg`: the explicit 0 minimum
-              did this job on desktop and there was nothing doing it on a phone. */}
+            Side by side under the full width, they read as the choice they
+            are, and the two halves of the top row end within a line of each
+            other. */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
           <div className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
-                <Bot aria-hidden="true" className="size-5" />
-              </span>
-              <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
-            </div>
             <h2
               id="agent-heading"
               className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
@@ -756,38 +743,61 @@ export default function Home() {
               Ask your agent for the diagram
             </h2>
             <p className="mt-4 max-w-xl leading-relaxed text-muted-foreground">
-              The format is plain text, so an AI agent can write it — and the
-              MCP server gives it the two things it cannot guess: the exact
+              The format is plain text, so an AI agent can write it — and
+              arch-lab gives it the two things it cannot guess: the exact
               grammar, and the real parser&apos;s verdict on what it just wrote.{" "}
               {MCP_TOOLS.length} read-only tools, over all {KINDS.length}{" "}
               document kinds. Nothing here can change your files.
             </p>
-
-            {CLAUDE_CODE_RECIPE === undefined ? null : (
-              <div className="mt-6">
-                <CopySnippet
-                  snippet={CLAUDE_CODE_RECIPE.snippet(endpoint)}
-                  caption="Claude Code"
-                  label="Claude Code install command"
-                />
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link href="/mcp" className={buttonClasses({ size: "md" })}>
-                Connect your agent
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <Link
-                href="/syntax"
-                className={buttonClasses({ variant: "outline", size: "md" })}
-              >
-                Read the format
-              </Link>
-            </div>
           </div>
 
           <McpFlow />
+        </div>
+
+        {/* BOTH ROUTES, on the page where the choice is actually made. The
+            landing page offered the MCP command alone, so the skill — the
+            cheaper option, and the one that needs no connector at all —
+            existed only for a reader who had already decided to add a server
+            and clicked through to `/mcp` to do it. That is exactly backwards:
+            the reader who would prefer a file never got as far as being told
+            there was one.
+
+            Both commands come from the catalogue `/mcp` renders, so neither
+            can drift from the one that works.
+
+            `md:` rather than `sm:` for the split: each command is one
+            unbreakable ~90-character line, and halving a 640px viewport gives
+            each column less room to scroll it in than the phone layout does. */}
+        <div className="mt-10 grid gap-5 md:grid-cols-2">
+          {CLAUDE_CODE_RECIPE === undefined ? null : (
+            <AgentRoute
+              title="Connect the MCP server"
+              detail="Hosted. Nothing to install, no key."
+              snippet={CLAUDE_CODE_RECIPE.snippet(endpoint)}
+              caption="Claude Code"
+              label="Claude Code install command"
+            />
+          )}
+          <AgentRoute
+            title="Or install the skill"
+            detail="The same grammar as files in your repo — no connector, nothing running."
+            snippet={SKILL_INSTALL}
+            caption="bash"
+            label="Install the .alab skill"
+          />
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Link href="/mcp" className={buttonClasses({ size: "md" })}>
+            Connect your agent
+            <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link
+            href="/syntax"
+            className={buttonClasses({ variant: "outline", size: "md" })}
+          >
+            Read the format
+          </Link>
         </div>
       </section>
 
@@ -819,7 +829,16 @@ export default function Home() {
               `CANVAS_EDITING_PASSAGE` rather than pasting its words. Moving it
               within the page keeps every one of those assertions true; pasting
               a shortened copy here would have broken the one property they
-              exist to defend. */}
+              exist to defend.
+
+              AND SHORTENING IT WAS DONE AT THE CONSTANT, for exactly that
+              reason. It reached 1,430 characters here — a single unbroken
+              sentence taller than the three steps under it — because it was
+              built by joining all nine of the grid's gesture clauses. The
+              enumeration now renders as a LIST in `/llms-full.txt`, which is
+              the document whose job is to be exhaustive, and this passage
+              answers the question instead: which notations, and what a drag
+              writes. */}
           {CANVAS_EDIT_ENABLED ? (
             <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
               {CANVAS_EDITING_PASSAGE}
@@ -943,6 +962,40 @@ export default function Home() {
 /* -------------------------------------------------------------------------- */
 /* Pieces                                                                      */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * One of the two ways to give an agent the format: a name, one line saying what
+ * it costs, and the command.
+ *
+ * A SHARED SHAPE ON PURPOSE. Two bare snippets stacked would have read as one
+ * setup in two steps — run this, then run that — which is the opposite of the
+ * truth: they are alternatives, and most readers want exactly one. Identical
+ * framing is what makes them look like a choice rather than a sequence.
+ */
+function AgentRoute({
+  title,
+  detail,
+  snippet,
+  caption,
+  label,
+}: {
+  title: string;
+  detail: string;
+  snippet: string;
+  caption: string;
+  label: string;
+}): React.JSX.Element {
+  return (
+    /* `min-w-0` for the reason the section around it carries one: the command
+       is a single unbreakable ~90-character line, and without it this block
+       sets the grid item's minimum width and the phone layout overflows. */
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-0.5 mb-2 text-sm text-muted-foreground">{detail}</p>
+      <CopySnippet snippet={snippet} caption={caption} label={label} />
+    </div>
+  );
+}
 
 /**
  * The page's ground: a wash, a line grid, a dot field over it, and two still

@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 
 import {
   MCP_SERVER_NAME,
-  MCP_STATUS_LABEL,
+  MCP_SERVER_VERSION,
   MCP_TOOLS,
 } from "@/features/mcp/catalog";
 import { McpGuide } from "@/features/mcp/components/mcp-guide";
@@ -18,12 +18,9 @@ import { APP_NAME } from "@/lib/constants";
  * page is for are searching for the CATEGORY, and page one of that search is
  * currently GitHub READMEs and directory listings, so a page that says plainly
  * what it is can be read as the first real answer.
- *
- * "(beta)" stays in the title. It is the honest status and it belongs where
- * someone decides whether to depend on this, not only inside the page.
  */
 export const metadata: Metadata = {
-  title: "MCP server for architecture diagrams (beta)",
+  title: "MCP server for architecture diagrams",
   description:
     "An MCP server for architecture diagrams: let Claude Code, Cursor or any client write C4, sequence, flowchart and use-case diagrams the real parser has checked.",
   alternates: { canonical: "/mcp" },
@@ -70,7 +67,7 @@ function mcpJsonLd(origin: string): string {
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Any (Model Context Protocol client)",
     url: `${origin}/mcp`,
-    softwareVersion: MCP_STATUS_LABEL,
+    softwareVersion: MCP_SERVER_VERSION,
     description:
       "A Model Context Protocol server that lets an AI agent read, validate " +
       "and convert arch-lab C4, sequence, flowchart and use-case documents " +

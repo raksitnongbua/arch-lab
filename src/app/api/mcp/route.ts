@@ -25,7 +25,7 @@ import { registerArchLabMcp } from "@/features/mcp";
 import {
   DOCUMENT_KIND_COUNT,
   KINDS_WITH_SYNTAX_SECTIONS,
-  MCP_BETA_NOTICE_SHORT,
+  MCP_STABILITY_NOTICE_SHORT,
   MCP_SERVER_NAME,
   MCP_SERVER_VERSION,
 } from "@/features/mcp/catalog";
@@ -78,10 +78,10 @@ const handler = createMcpHandler(
       "question and its numbered options to the person you are working for. " +
       "Do not choose for them unless the result names a default AND they " +
       "cannot be reached. " +
-      // A client may connect without any human ever opening `/mcp`, so the
-      // beta caveat travels with the handshake rather than living only on a
-      // page nobody in the loop has read.
-      MCP_BETA_NOTICE_SHORT,
+      // A client may connect without any human ever opening `/mcp`, so what
+      // is safe to pin travels with the handshake rather than living only on
+      // a page nobody in the loop has read.
+      MCP_STABILITY_NOTICE_SHORT,
   },
   {
     // `/api` + the file's own segment resolves to `/api/mcp`.

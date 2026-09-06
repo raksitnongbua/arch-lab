@@ -90,12 +90,17 @@ export function Validator(): React.JSX.Element {
       <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
         Validate a model
       </h1>
+      {/* TWO SENTENCES, where there were three. The middle one explained that
+          this uses the same parsers as the rest of the app — true, and the
+          reason the page is worth anything, but a reader pasting a document
+          wants the verdict, not the provenance of the checker. It survives as
+          the clause that carries the consequence: what passes here opens
+          anywhere. */}
       <p className="mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
         Paste <span className="font-mono text-base text-foreground">.alab</span>{" "}
-        text, arch-lab JSON, or Mermaid C4. It is checked by the same parsers
-        the editor and view mode use, so anything that passes here will open
-        anywhere in the app. Everything runs in your browser — nothing is
-        uploaded.
+        text, arch-lab JSON, or Mermaid C4 — checked by the same parsers the
+        rest of the app uses, so what passes here opens anywhere in it.
+        Everything runs in your browser; nothing is uploaded.
       </p>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -363,11 +368,21 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
 }
 
 /**
- * The C4 review notes, under the green tick and visually subordinate to it —
- * the document IS valid, and nothing here changes that. Grouped by rule so a
- * model missing twenty descriptions reads as one finding with twenty
- * instances rather than twenty findings, and each group leads with C4's own
- * reason so the note argues from the model rather than from our taste.
+ * The review notes, under the green tick and visually subordinate to it — the
+ * document IS valid, and nothing here changes that. Grouped by rule so a model
+ * missing twenty descriptions reads as one finding with twenty instances
+ * rather than twenty findings, and each group leads with the rule's own reason
+ * so the note argues from something written down rather than from our taste.
+ *
+ * THEY ARE NOT ALL C4 NOTES, and this panel used to say they were: the heading
+ * read "N C4 review notes" and the blurb told a reader every one came from
+ * c4model.com. Five rules are arch-lab's own — the title cap, the two path
+ * rules, and the two about a diagram being too crowded or too big to read once
+ * it is presented — and c4model.com has no opinion on any of them. A reader
+ * who followed that link looking for the rule they had just been shown would
+ * not have found it. `ADVISORY_RULES[rule].because` already names its own
+ * source per rule, so what this needed was for the blanket claim above it to
+ * stop overriding them.
  */
 function AdvisoryPanel({
   advisories,
@@ -383,7 +398,7 @@ function AdvisoryPanel({
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
         <Info aria-hidden="true" className="size-4 shrink-0 text-warning" />
         <span className="font-medium">
-          {count === 1 ? "1 C4 review note" : `${count} C4 review notes`}
+          {count === 1 ? "1 review note" : `${count} review notes`}
         </span>
         <span className="text-xs text-muted-foreground">
           — style, not validity
@@ -392,7 +407,8 @@ function AdvisoryPanel({
 
       <div className="space-y-4 px-4 pt-1 pb-4">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          These come from the review checklist at{" "}
+          The model is valid either way, and a diagram in progress is expected
+          to have some of these. Most come from the review checklist at{" "}
           <a
             href="https://c4model.com/diagrams/notation"
             target="_blank"
@@ -401,8 +417,7 @@ function AdvisoryPanel({
           >
             c4model.com
           </a>
-          . The model is valid either way — a diagram in progress is expected to
-          have some of these.
+          ; the rest are about how the document will be drawn and read.
         </p>
 
         {groups.map((group) => (

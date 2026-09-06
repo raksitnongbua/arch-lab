@@ -1,6 +1,5 @@
 import {
   MCP_ENDPOINT_PATH,
-  MCP_STATUS_LABEL,
   MCP_TOOLS,
   KINDS_WITH_SYNTAX_SECTIONS,
   KINDS_WITHOUT_SYNTAX_SECTIONS,
@@ -9,7 +8,10 @@ import {
 } from "@/features/mcp/catalog";
 import { syntaxReferenceMarkdown } from "@/features/mcp/content/syntax-sections";
 import { publicOrigin } from "@/features/mcp/lib/origin";
-import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
+import {
+  CANVAS_EDITING_PASSAGE,
+  CANVAS_GESTURE_CLAUSES,
+} from "@/features/playground/input/canvas-edit";
 /* Both derived, for the reason this whole file is: the one-line job is the
    passage an assistant quotes and it is served in these exact words by the
    home page, `/demo`, the playground and `/llms.txt`; the example ids are the
@@ -47,6 +49,13 @@ import { THEMES_PASSAGE } from "@/lib/theme-copy";
  * describes a text format and implies the answer is no. The passage is
  * `CANVAS_EDITING_PASSAGE`, derived from the capability grid and served in the
  * same words by the landing page, `/llms.txt` and `/faq`.
+ *
+ * THE NINE GESTURES ARE ENUMERATED HERE AND NOWHERE ELSE IN PROSE. They used
+ * to be joined into the passage itself, which made it 1,430 characters of one
+ * sentence on the landing page; as a list in the long-form document they are
+ * exhaustive without being unreadable, and this is the document whose whole
+ * job is to be exhaustive. `check:seo` pins each clause of the grid to this
+ * list, so a canvas that learns a gesture still cannot ship undocumented.
  *
  * NOTHING IS WRITTEN TWICE. The grammar is `syntaxReferenceMarkdown()`, the
  * exact document the MCP server hands agents through `archlab://syntax` and
@@ -96,6 +105,10 @@ a file you keep, and git is the collaboration layer.
 ## Editing a diagram: as text, or on the canvas
 
 ${CANVAS_EDITING_PASSAGE}
+
+Every gesture those canvases answer, and what each one writes:
+
+${CANVAS_GESTURE_CLAUSES.map((clause) => `- ${clause}`).join("\n")}
 
 A canvas gesture is not a second place the diagram lives: it derives new source
 text, re-parses it and patches only the lines it concerns, so comments and
@@ -242,8 +255,7 @@ ${listLifecycleExampleIds()
 
 ## Using it from an AI agent (MCP)
 
-Endpoint (${MCP_STATUS_LABEL}, Streamable HTTP, stateless, unauthenticated,
-read-only): ${origin}${MCP_ENDPOINT_PATH}
+Endpoint (Streamable HTTP, stateless, unauthenticated, read-only): ${origin}${MCP_ENDPOINT_PATH}
 
 Connect with, for example: \`claude mcp add --transport http arch-lab ${origin}${MCP_ENDPOINT_PATH}\`
 
