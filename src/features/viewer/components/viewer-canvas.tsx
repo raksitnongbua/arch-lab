@@ -66,7 +66,6 @@ import {
 } from "@xyflow/react";
 
 import { CanvasGroundLayers } from "@/components/ui/canvas-ground-layers";
-import { assignHops, parseCurve } from "@/lib/edge-crossings";
 import {
   edgeChipSize,
   placeEdgeLabels,
@@ -2427,16 +2426,6 @@ function ViewerCanvasInner({
       });
     }
 
-    /* Which connector steps over which, decided from the curves that will
-       actually be drawn — see `lib/edge-crossings.ts` for why the SHORTER one
-       hops and why the alternative was turned down. */
-    const hops = assignHops(
-      diagram.edges.flatMap((edge) => {
-        const curve = parseCurve(geometry.get(edge.id)?.path ?? "");
-        return curve === null ? [] : [{ id: edge.id, curve }];
-      }),
-    );
-
     const labelPlacements = placeEdgeLabels(
       diagram.edges.flatMap((edge) => {
         const laid = geometry.get(edge.id);
@@ -2514,7 +2503,6 @@ function ViewerCanvasInner({
           parallelIndex: group.index,
           parallelCount: group.count,
           fanSlots: fans.get(edge.id),
-          hops: hops.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
           /* Every element except this connector's own two, so the curve can
