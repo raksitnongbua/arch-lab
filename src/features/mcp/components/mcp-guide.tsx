@@ -31,13 +31,12 @@ import {
   MCP_STABILITY_NOTICE,
   MCP_TOOL_GROUPS,
   MCP_TOOLS,
-  SKILL_DESTINATION,
   SKILL_INSTALL,
-  SKILL_INSTALL_ALTERNATIVE,
   mcpEndpointUrl,
 } from "../catalog";
 import type { McpToolDoc } from "../catalog";
 import { MAX_SOURCE_CHARS } from "../lib/limits";
+import { Bullet, Code, P, Section } from "./guide-prose";
 import { CopySnippet } from "./copy-snippet";
 import { McpRoundTrip } from "./mcp-round-trip";
 
@@ -254,10 +253,19 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
 
       {/* ---- the skill ------------------------------------------------------- */}
       <Section id="skill" title="Or use the skill">
+        {/* A POINTER, NOT THE ARGUMENT. This section carried the whole case
+            for the skill — two commands, what lands on disk, why the folder
+            has several files, and the boundary — which meant the cheaper of
+            the two integrations was documented only on the page you reach by
+            having already chosen the other one. It has its own page now, and
+            duplicating it here would split the canonical between two URLs
+            competing for the same reader. What stays is the one command and
+            the one sentence that makes someone click. */}
         <P>
           Most of what this server gives an agent is <em>knowledge</em> — the
           grammar, in exact detail — and knowledge travels fine as a file. If
-          you would rather not add a connector:
+          you would rather not add a connector, the same grammar installs as an
+          Agent Skill:
         </P>
         <div className="mt-5">
           <CopySnippet
@@ -266,59 +274,18 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             label="Install the .alab skill"
           />
         </div>
-        {/* ONE PARAGRAPH, where there were three. It said what the command
-            writes, then that the files are ordinary, then why the folder has
-            several of them — and a reader who has already run a one-line
-            install does not need to be sold on it three times. What survives
-            is the part they cannot see for themselves: where the content comes
-            from, and why the entry file is short. */}
         <P className="mt-4">
-          That writes <Code>{SKILL_DESTINATION}</Code> and a{" "}
-          <Code>reference/</Code> folder beside it — plain markdown, generated
-          from the same syntax reference this server hands out and verified
-          against the real parser on every build. The entry file is short on
-          purpose: an agent writing a gantt reads the gantt reference and never
-          pays for the C4 grammar.
+          It carries the grammar, but not the verdict: a file in your repository
+          cannot tell you whether the model your agent just wrote parses, and
+          that is what this server is for.{" "}
+          <Link
+            href="/skill"
+            className="font-medium text-primary hover:underline"
+          >
+            What the skill installs, and what it cannot do
+          </Link>
+          .
         </P>
-
-        {/* THE SECOND COMMAND, offered rather than hidden. The CLI reports
-            installs to its own telemetry endpoint by default and links the
-            skill into every agent directory it recognises; both are reasonable
-            defaults and neither is something to hand a reader with no way out.
-            This is the same file by the plainest possible route. */}
-        <P className="mt-4">
-          Or copy the directory and nothing else — no CLI, no telemetry, no
-          symlinks into other agents&rsquo; folders:
-        </P>
-        <div className="mt-3">
-          <CopySnippet
-            snippet={SKILL_INSTALL_ALTERNATIVE}
-            caption="bash"
-            label="Install it by copying the directory instead"
-          />
-        </div>
-
-        {/* The honest boundary. Someone who thinks a skill replaces the server
-            will trust an invalid file because "the skill said so" — which is a
-            worse outcome than not offering the skill at all. */}
-        <div className="af-mcp-card mt-6 rounded-lg border border-border bg-card px-5 py-4">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">
-            What you give up
-          </h3>
-          <p className="mt-2 leading-relaxed text-muted-foreground">
-            The grammar, but not the verdict. A file cannot tell you whether the
-            model you just wrote parses — for that you need{" "}
-            <Code>validate_model</Code>, which means the server, or the{" "}
-            <Link
-              href="/validate"
-              className="font-medium text-primary hover:underline"
-            >
-              validator on this site
-            </Link>
-            . Plenty of people use the skill for everyday writing and the server
-            for the check at the end.
-          </p>
-        </div>
       </Section>
 
       {/* ---- tools ----------------------------------------------------------- */}
@@ -517,7 +484,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Layout primitives (kept local — the page is the only consumer)             */
+/* The one piece of furniture only this page has                              */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -583,78 +550,5 @@ function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
         </p>
       )}
     </div>
-  );
-}
-
-function Section({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <section
-      id={id}
-      aria-labelledby={`${id}-heading`}
-      className="mt-14 scroll-mt-20 border-t border-border/60 pt-10"
-    >
-      <h2
-        id={`${id}-heading`}
-        className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
-      >
-        {title}
-      </h2>
-      {/* Draws out from the left under the title. Decorative — the heading
-          above it already says where you are — so it is hidden from the
-          accessibility tree rather than announced as a separator. */}
-      <span
-        aria-hidden="true"
-        className="af-mcp-rule mt-3 block h-px w-16 rounded-full bg-primary/60"
-      />
-      {children}
-    </section>
-  );
-}
-
-function P({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}): React.JSX.Element {
-  return (
-    <p
-      className={`leading-relaxed text-muted-foreground ${className ?? "mt-4"}`}
-    >
-      {children}
-    </p>
-  );
-}
-
-function Bullet({
-  children,
-}: {
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <li className="flex gap-3 leading-relaxed">
-      <span
-        aria-hidden="true"
-        className="mt-2 size-1.5 shrink-0 rounded-full bg-accent"
-      />
-      <span className="min-w-0">{children}</span>
-    </li>
-  );
-}
-
-function Code({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-sm text-foreground">
-      {children}
-    </code>
   );
 }

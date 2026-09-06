@@ -80,6 +80,11 @@ const CARDS = [
      answering a different question. Listed here so the card cannot quietly
      disappear in a refactor and take the same silence back with it. */
   ["src/app/mcp/opengraph-image.tsx", "/mcp"],
+  /* `/skill` for the same reason one line up, and it is the reason a card
+     ships WITH a route rather than after the first bad preview: the page
+     exists for a reader who has decided not to run a server, and with no card
+     here their link would preview as the product's landing page. */
+  ["src/app/skill/opengraph-image.tsx", "/skill"],
 ];
 
 /**

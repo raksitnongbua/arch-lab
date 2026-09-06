@@ -163,7 +163,7 @@ ${THEMES_PASSAGE}
 - How to connect: ${origin}/mcp
 - The grammar, with every example verified against the real parser: ${origin}/syntax
 - The same grammar as an Agent Skill, no server involved:
-  \`${SKILL_INSTALL}\` (or \`${SKILL_INSTALL_ALTERNATIVE}\`)
+  \`${SKILL_INSTALL}\` (or \`${SKILL_INSTALL_ALTERNATIVE}\`) — ${origin}/skill
 
 Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote — there is a
@@ -191,6 +191,9 @@ you need the server, or the validator at ${origin}/validate.
   \`?e=<id>\` opens a bundled one (ids are listed on /demo)
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
+- ${origin}/mcp — how to connect an MCP client, and what each tool does
+- ${origin}/skill — the same grammar as an Agent Skill, installed as files
+  in your repository with no server involved
 - ${origin}/demo — finished examples of all nine kinds
 - ${origin}/faq — what this is, what it exports, what leaves the browser, and
   what an agent may do over MCP, as short self-contained answers

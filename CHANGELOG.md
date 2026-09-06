@@ -205,6 +205,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   says so plainly when a diagram's coordinates are hand-placed and a direction
   would not move them. It never edits your document.
 
+### Added
+
+- **The Agent Skill has a page of its own, at `/skill`.** It was a section on
+  `/mcp` — which reaches only a reader who has already decided they want a
+  server, and the two answer different questions. The page says what one
+  install puts in your repository, offers the copy-a-directory command for
+  anyone who would rather not run a CLI, and is plain about the one thing a
+  skill cannot do: tell you whether what your agent just wrote parses. `/mcp`
+  now points at it instead of repeating it.
+- **The skill is findable from outside the site.** It is in the sitemap, it has
+  its own social card and structured data, it is named in the site description,
+  in the home page's feature list and in both `llms*.txt` page listings, and
+  `/faq` answers "can I use this without connecting an MCP server?" — the
+  question somebody asks instead of the one about MCP, which until now had an
+  answer nowhere a search or an assistant could reach.
+
 ### Changed
 
 - **The MCP integration is out of beta, and says what you may depend on

@@ -358,6 +358,12 @@ function homeJsonLd(): string {
           `Presentation themes (${THEMES.length}, every one contrast-measured)`,
           "Mermaid import and export",
           `MCP server for AI agents (${MCP_TOOLS.length} read-only tools)`,
+          /* THE OTHER HALF OF THE AGENT STORY, and it was missing here while
+             the visible copy two screens down offered both. A `featureList`
+             that names only the connector tells an assistant the skill does
+             not exist — which is the same gap `/llms.txt` had, one surface
+             further in. */
+          "Agent Skill carrying the .alab grammar, no server required",
         ],
         offers: {
           "@type": "Offer",
@@ -791,6 +797,12 @@ export default function Home() {
           <Link href="/mcp" className={buttonClasses({ size: "md" })}>
             Connect your agent
             <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link
+            href="/skill"
+            className={buttonClasses({ variant: "outline", size: "md" })}
+          >
+            About the skill
           </Link>
           <Link
             href="/syntax"

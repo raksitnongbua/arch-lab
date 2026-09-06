@@ -13,7 +13,7 @@ import { listViewerModelIds } from "@/features/viewer";
 
 /**
  * Every page a crawler should know about. The static routes are written out
- * by hand — there are seven and they change with the router, not with data —
+ * by hand — there are eight and they change with the router, not with data —
  * and `check:seo` measures the description of every one of them, plus every
  * forwarding alias it finds on disk. The `/live/[modelId]` entries come from
  * the same registry that feeds `generateStaticParams`, so a bundled example
@@ -47,6 +47,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
        the starting text, not the page. */
     "/live",
     "/mcp",
+    /* THE SKILL IS A ROUTE, not a fragment on `/mcp`. It was `#skill` there
+       for one release, which is a URL a crawler cannot rank and an assistant
+       cannot cite — and the two pages answer different searches: an MCP
+       server for architecture diagrams against an agent skill that writes
+       them. `/mcp` now points here rather than repeating it, so nothing is
+       competing for one canonical.
+
+       NO QUOTED PROSE IN THIS ARRAY. `check:seo` extracts the routes by
+       reading every double-quoted string out of `staticRoutes`, so a comment
+       that quoted a phrase announced it as a route and failed the check with
+       half a sentence for a URL. */
+    "/skill",
     "/faq",
   ];
 

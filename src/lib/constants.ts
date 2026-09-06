@@ -102,7 +102,7 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
    and the sentence an assistant asked "what is arch-lab" is most likely to
    quote. */
 export const APP_DESCRIPTION =
-  "Beautiful architecture diagrams in nine notations, written as plain text or edited on the canvas, live in your browser. An AI agent can author them over MCP.";
+  "Beautiful architecture diagrams in nine notations, written as plain text or edited on the canvas. An AI agent can author them over MCP or an Agent Skill.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

@@ -397,9 +397,16 @@ check("an agent reading llms.txt is told the skill exists", () => {
   }
 });
 
-check("the /mcp page offers both commands", () => {
+check("the skill's own page offers both commands", () => {
+  /* MOVED FROM `/mcp`, with the route. The skill was a section on the connect
+     guide, which documented the cheaper integration only to readers who had
+     already chosen the other one; it has a page now, and the assertion
+     follows what it is asserting about. The second command is the load-bearing
+     half: the skills CLI reports installs to its own telemetry endpoint by
+     default, and a page that recommends it with no alternative gives the
+     reader no way around that. */
   const page = readFileSync(
-    path.join(ROOT, "src/features/mcp/components/mcp-guide.tsx"),
+    path.join(ROOT, "src/features/mcp/components/skill-guide.tsx"),
     "utf8",
   );
   assert.match(page, /snippet=\{SKILL_INSTALL\}/);
@@ -410,6 +417,71 @@ check("the /mcp page offers both commands", () => {
       "reader no way around it",
   );
 });
+
+check("/mcp offers the skill and sends the reader to its page", () => {
+  /* THE POINTER IS THE WHOLE REASON THE SPLIT IS SAFE. `/mcp` stopped carrying
+     the argument for the skill so the two pages would not compete for one
+     canonical — which is only an improvement while the pointer survives. Drop
+     the link and the connect guide silently becomes the page that never
+     mentions the cheaper option again. */
+  const page = readFileSync(
+    path.join(ROOT, "src/features/mcp/components/mcp-guide.tsx"),
+    "utf8",
+  );
+  assert.match(
+    page,
+    /snippet=\{SKILL_INSTALL\}/,
+    "/mcp names no install command",
+  );
+  assert.match(
+    page,
+    /href="\/skill"/,
+    "/mcp shows the skill's command and never links to what it installs",
+  );
+});
+
+check(
+  "the skill is offered where a reader has not chosen an integration",
+  () => {
+    /* THREE SURFACES, and none of them is `/mcp`: the landing page (where the
+     choice is actually made), the FAQ (which feeds this site's only `FAQPage`
+     structured data, so an answer there is the one an assistant can quote with
+     attribution), and the sitemap (a fragment is not a page a crawler ranks).
+     Every one of these was absent while the skill shipped, and none of them
+     fails on its own — the skill simply stayed undiscoverable. */
+    const home = readFileSync(path.join(ROOT, "src/app/page.tsx"), "utf8");
+    assert.match(
+      home,
+      /snippet=\{SKILL_INSTALL\}/,
+      "the landing page offers the MCP command alone, so the skill is reachable " +
+        "only by a reader who has already decided to add a server",
+    );
+    assert.match(
+      home,
+      /Agent Skill carrying the \.alab grammar/,
+      "the home page's JSON-LD featureList names the server and not the skill, " +
+        "which tells an assistant reading it that the skill does not exist",
+    );
+
+    const faq = readFileSync(
+      path.join(ROOT, "src/features/marketing/faq.ts"),
+      "utf8",
+    );
+    assert.match(
+      faq,
+      /SKILL_INSTALL/,
+      "no FAQ answer mentions the skill, so the site's most quotable page has " +
+        "nothing to say to somebody who does not want to run a server",
+    );
+
+    const sitemap = readFileSync(path.join(ROOT, "src/app/sitemap.ts"), "utf8");
+    assert.match(
+      sitemap,
+      /"\/skill"/,
+      "the skill page is not in the sitemap — a page nothing crawls",
+    );
+  },
+);
 
 /* ----------------------------------------------------------------------- */
 
