@@ -1,4 +1,4 @@
-import { MCP_TOOLS } from "@/features/mcp/catalog";
+import { MCP_TOOLS, SKILL_INSTALL } from "@/features/mcp/catalog";
 import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import { APP_NAME } from "@/lib/constants";
@@ -387,7 +387,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
   },
   {
     id: "agents",
-    title: "AI agents and MCP",
+    title: "AI agents, MCP and skills",
     entries: [
       {
         question: `Can an AI agent write ${APP_NAME} diagrams?`,
@@ -400,6 +400,28 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "lifecycle needs, which catch a subject that never terminates and states named as " +
           "actions rather than conditions.",
         links: [{ href: "/mcp", label: "Connect your agent" }],
+      },
+      {
+        /* THE QUESTION SOMEBODY ASKS INSTEAD OF THE ONE ABOVE, and it had no
+           answer anywhere a search or an assistant could reach: the skill was
+           named on `/mcp`, a page you arrive at by having already decided you
+           want a server. `/faq` is where it earns structured data — this topic
+           feeds the page's `FAQPage` node — and a self-contained answer is the
+           unit an assistant quotes. */
+        question: "Can I use this without connecting an MCP server?",
+        answer:
+          "Yes. The same grammar ships as an Agent Skill — markdown files installed into your " +
+          `repository with \`${SKILL_INSTALL}\`, or copied by hand if you would rather not run ` +
+          "a CLI. Nothing connects and nothing runs: your agent reads the grammar the way it " +
+          "reads any other file, and writes .alab with its own editing tools. What a skill " +
+          "cannot give you is the verdict — a file cannot tell you whether what was just " +
+          "written parses. For that, paste it into the validator, or connect the server so the " +
+          "agent can check its own work. Plenty of people do both: the skill for everyday " +
+          "writing, the server for the check at the end.",
+        links: [
+          { href: "/skill", label: "Install the skill" },
+          { href: "/validate", label: "Check a document by hand" },
+        ],
       },
       {
         question: "Can the MCP server change my files?",

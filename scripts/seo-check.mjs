@@ -208,6 +208,7 @@ const PAGES = [
   ["/ (and the site default)", "src/lib/constants.ts", "APP_DESCRIPTION"],
   ["/demo", "src/app/demo/page.tsx", null],
   ["/mcp", "src/app/mcp/page.tsx", null],
+  ["/skill", "src/app/skill/page.tsx", null],
   ["/live", "src/app/live/page.tsx", null],
   ["/validate", "src/app/validate/page.tsx", null],
   ["/syntax", "src/app/syntax/page.tsx", null],

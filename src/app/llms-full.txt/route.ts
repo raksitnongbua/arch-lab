@@ -271,7 +271,8 @@ ${MCP_TOOLS.map((tool) => `- \`${tool.name}\` — ${tool.title}`).join("\n")}
 ## Using it WITHOUT a server (the Agent Skill)
 
 The grammar below also ships as an Agent Skill — the same text, generated from
-the same source, installed as one markdown file:
+the same source, installed as markdown files in your repository. It is
+documented at ${origin}/skill and installed with:
 
 \`${SKILL_INSTALL}\`
 
