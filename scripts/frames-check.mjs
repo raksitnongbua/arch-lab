@@ -530,6 +530,62 @@ const innerId = store().createFrame({
     );
   }
 
+  /* THE CENTRE-POINT TEST WAS THE CRAMPED PICTURE. A stranger whose CENTRE
+   * sat outside a boundary passed, so up to half its box could be inside one
+   * — drawn as if it were a member, with the border running through it — and
+   * because the merge loop grows every rectangle to the largest size that
+   * still passes, boxes were reliably pushed until they rested against the
+   * elements they were not allowed to swallow. */
+  const halfIn = {
+    id: "d",
+    level: "container",
+    nodes: [
+      { ...node("a", 40, 40), frameId: "state" },
+      { ...node("b", 304, 40), frameId: "state" },
+      { ...node("c", 568, 40), frameId: "state" },
+      /* Box 768..944, clear of every member. Its CENTRE is 856, outside the
+         members' padded box, which ends at 772 — so the centre test called
+         this legal and the border was drawn through the stranger's first
+         four pixels. */
+      node("stranger", 768, 40),
+    ],
+    edges: [],
+    frames: [{ id: "state", label: "State" }],
+  };
+  const split = placeFrames(halfIn);
+  const overlaps = split.filter(
+    (rect) =>
+      rect.x < 768 + 176 &&
+      rect.x + rect.width > 768 &&
+      rect.y < 40 + 88 &&
+      rect.y + rect.height > 40,
+  );
+  if (overlaps.length === 0) {
+    ok("a boundary's border keeps off a stranger's box, not just its centre");
+  } else {
+    fail(
+      "a boundary's border keeps off a stranger's box, not just its centre",
+      `${overlaps.length} rectangle(s) overlap the stranger`,
+    );
+  }
+
+  /* AND IT KEEPS ITS DISTANCE. Touching is the failure this is really about:
+   * a border resting on an element it has nothing to do with reads as a
+   * boundary that meant to include it and missed. The pad gives the room up
+   * to make the clearance — it is a wish, not a right — down to the members'
+   * own edges, which no border may cross. */
+  const gaps = split.map((rect) =>
+    Math.max(768 - (rect.x + rect.width), rect.x - (768 + 176)),
+  );
+  if (gaps.every((gap) => gap >= 16)) {
+    ok("and clears it by the full clearance rather than resting against it");
+  } else {
+    fail(
+      "and clears it by the full clearance rather than resting against it",
+      `closest approach ${Math.min(...gaps)}px`,
+    );
+  }
+
   const twice = placeFrames(scattered);
   if (
     JSON.stringify(twice.map((r) => [r.key, r.x, r.y, r.width, r.height])) ===

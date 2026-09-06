@@ -40,7 +40,6 @@ import {
 import type { C4Diagram, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
-import { assignHops, parseCurve, pathWithHops } from "@/lib/edge-crossings";
 import { countOf, svgAccessibility } from "@/lib/svg-a11y";
 import {
   assignFanSlots,
@@ -525,10 +524,6 @@ function edgeMarkup(
      would go unnoticed longest. */
   const fans = assignFanSlots(diagram.edges, rectById);
 
-  /* THE SAME CROSSING PASS THE CANVAS RUNS, over every connector rather than
-     only the labelled ones — an unlabelled connector crosses just as opaquely.
-     Computed here from the same inputs, so a bridge lands on the same crossing
-     in the PNG as on screen. */
   const geometryFor = (edge: C4Diagram["edges"][number]) => {
     const source = rectById.get(edge.source);
     const target = rectById.get(edge.target);
@@ -548,13 +543,6 @@ function edgeMarkup(
       dirY: anchors.targetY - anchors.sourceY,
     };
   };
-  const hops = assignHops(
-    diagram.edges.flatMap((edge) => {
-      const laid = geometryFor(edge);
-      const curve = laid === null ? null : parseCurve(laid.path);
-      return curve === null ? [] : [{ id: edge.id, curve }];
-    }),
-  );
   const parts: string[] = [];
 
   /* Where every chip goes, decided before any of them is painted.
@@ -592,8 +580,7 @@ function edgeMarkup(
 
     const laid = geometryFor(edge);
     if (laid === null) continue;
-    const { labelX, labelY } = laid;
-    const path = pathWithHops(laid.path, hops.get(edge.id) ?? []);
+    const { path, labelX, labelY } = laid;
 
     const dash =
       edge.style === "dashed" ? ` stroke-dasharray="${EDGE_BASE_DASH}"` : "";

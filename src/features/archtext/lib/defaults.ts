@@ -65,6 +65,23 @@ const TARGET_RATIO = 16 / 9;
  * full size, and a two-box band reads worse than the straight run it replaced.
  */
 const MIN_LAYERS_PER_BAND = 4;
+/**
+ * Extra pitch inserted between two neighbours in a row that belong to
+ * DIFFERENT frames (or where one is framed and the other is not).
+ *
+ * A frame's rectangle is derived from its members' bounding box inflated by
+ * `PAD` on every side (`editor/lib/frame-layout.ts`), so two frames sitting on
+ * the ordinary pitch put their borders `COLUMN_STEP − 176 − 2·PAD` apart —
+ * thirty-two pixels, and under `lr` the vertical pitch leaves two. Boundaries
+ * that close to touching read as one shaded mass rather than as two groups,
+ * which is the thing frames exist to stop.
+ *
+ * The gutter is spent only where a boundary actually falls, so a diagram with
+ * no frames is laid out exactly where it always was — this constant cannot
+ * move a document that does not use them. A multiple of 8, like every other
+ * pitch here.
+ */
+const FRAME_GUTTER = 64;
 
 /** An edge as the layout sees it — endpoints only. */
 export interface DefaultLayoutEdge {
@@ -154,6 +171,71 @@ function layerOf(
 }
 
 /**
+ * Pull each frame's members together inside one already-ordered row, in place.
+ *
+ * A frame keeps the position its FIRST member earned from the barycentre, and
+ * members keep their order relative to one another; everything else keeps its
+ * order too. So the only rows this changes are the ones where a stranger sat
+ * between two members of the same boundary — the arrangement that makes a
+ * frame draw as two rectangles with unrelated elements standing between them.
+ */
+function regroupByFrame(
+  members: string[],
+  frameOf: ReadonlyMap<string, string>,
+): void {
+  if (frameOf.size === 0) return;
+  /* One entry per position in the output: a frame id stands for all of that
+     frame's members in this row, a node id for one unframed element. Loose
+     elements are deliberately NOT bucketed together — grouping them would drag
+     every unframed member in the row to wherever the first one sat, a
+     reordering the barycentre never asked for. */
+  const order: string[][] = [];
+  const grouped = new Map<string, string[]>();
+  for (const id of members) {
+    const frame = frameOf.get(id);
+    if (frame === undefined) {
+      order.push([id]);
+      continue;
+    }
+    const bucket = grouped.get(frame);
+    if (bucket === undefined) {
+      const started = [id];
+      grouped.set(frame, started);
+      order.push(started);
+    } else {
+      bucket.push(id);
+    }
+  }
+  const out = order.flat();
+  members.length = 0;
+  members.push(...out);
+}
+
+/**
+ * Where each member of a row sits along its own axis, in pixels from the
+ * first: the ordinary pitch, plus `FRAME_GUTTER` wherever the boundary a
+ * member belongs to differs from its neighbour's. The last entry is the row's
+ * span, which is what narrow rows are centred against.
+ */
+function offsetsFor(
+  members: readonly string[],
+  pitch: number,
+  frameOf: ReadonlyMap<string, string>,
+): number[] {
+  const out: number[] = [];
+  let at = 0;
+  members.forEach((id, index) => {
+    if (index > 0) {
+      at += pitch;
+      const previous = frameOf.get(members[index - 1]);
+      if (frameOf.get(id) !== previous) at += FRAME_GUTTER;
+    }
+    out.push(at);
+  });
+  return out;
+}
+
+/**
  * Default geometry when the text omits it: a layered layout derived from the
  * diagram's own relationships, running top-down by default and left-to-right
  * (folding a long flow into bands) when the document asks for it — sources on top, each target at least
@@ -170,6 +252,7 @@ export function defaultPositions(
   nodeIds: readonly string[],
   edges: readonly DefaultLayoutEdge[],
   direction: "tb" | "lr" = "tb",
+  frameOf: ReadonlyMap<string, string> = new Map(),
 ): Map<string, Point> {
   const ids = [...nodeIds].sort(compareStrings);
   const idSet = new Set(ids);
@@ -219,6 +302,13 @@ export function defaultPositions(
       if (ba === undefined && bb !== undefined) return 1;
       return (rank.get(a) ?? 0) - (rank.get(b) ?? 0);
     });
+    /* Members of one frame are pulled together, at the position the
+       first of them already earned. The barycentre decided the ORDER of this
+       row and it still does — this only stops a stranger being interleaved
+       between two members of the same boundary, which is what forces a frame
+       to draw as two rectangles with the diagram's own elements sitting
+       between them. Stable, so a row with no frames is untouched. */
+    regroupByFrame(members, frameOf);
     members.forEach((id, column) => columnOf.set(id, column));
   }
 
@@ -250,8 +340,19 @@ export function defaultPositions(
    * scan. */
   if (direction === "lr" && lastRow + 1 >= widest) {
     const layers = lastRow + 1;
-    const tallest = widest;
-    const bandPitch = tallest * MEMBER_STEP_Y + BAND_GAP_Y;
+    /* Measured in pixels rather than in members, because a layer carrying two
+       frames is taller than its member count says. With no frames every span
+       is `(n − 1)·MEMBER_STEP_Y` and the arithmetic below is the arithmetic
+       that was here before. */
+    const spans = new Map<number, number[]>();
+    let tallestSpan = 0;
+    for (let layer = 0; layer < layers; layer += 1) {
+      const offsets = offsetsFor(rows.get(layer) ?? [], MEMBER_STEP_Y, frameOf);
+      spans.set(layer, offsets);
+      const span = offsets[offsets.length - 1] ?? 0;
+      if (span > tallestSpan) tallestSpan = span;
+    }
+    const bandPitch = tallestSpan + MEMBER_STEP_Y + BAND_GAP_Y;
 
     let bands = 1;
     let closest = Number.POSITIVE_INFINITY;
@@ -277,28 +378,38 @@ export function defaultPositions(
 
     for (let layer = 0; layer < layers; layer += 1) {
       const members = rows.get(layer) ?? [];
+      const offsets = spans.get(layer) ?? [];
+      const span = offsets[offsets.length - 1] ?? 0;
       const band = Math.floor(layer / perBand);
       // Centre short layers within their band, back on the 8-px grid.
-      const inset =
-        Math.round(((tallest - members.length) * MEMBER_STEP_Y) / 2 / 8) * 8;
+      const inset = Math.round((tallestSpan - span) / 2 / 8) * 8;
       members.forEach((id, member) => {
         positions.set(id, {
           x: ORIGIN + (layer % perBand) * LAYER_STEP_X,
-          y: ORIGIN + band * bandPitch + inset + member * MEMBER_STEP_Y,
+          y: ORIGIN + band * bandPitch + inset + offsets[member],
         });
       });
     }
     return positions;
   }
 
+  const columns = new Map<number, number[]>();
+  let widestSpan = 0;
+  for (let row = 0; row <= lastRow; row += 1) {
+    const offsets = offsetsFor(rows.get(row) ?? [], COLUMN_STEP, frameOf);
+    columns.set(row, offsets);
+    const span = offsets[offsets.length - 1] ?? 0;
+    if (span > widestSpan) widestSpan = span;
+  }
   for (let row = 0; row <= lastRow; row += 1) {
     const members = rows.get(row) ?? [];
+    const offsets = columns.get(row) ?? [];
+    const span = offsets[offsets.length - 1] ?? 0;
     // Centre narrow rows under the widest one, snapped back to the 8-px grid.
-    const indent =
-      Math.round(((widest - members.length) * COLUMN_STEP) / 2 / 8) * 8;
+    const indent = Math.round((widestSpan - span) / 2 / 8) * 8;
     members.forEach((id, column) => {
       positions.set(id, {
-        x: ORIGIN + indent + column * COLUMN_STEP,
+        x: ORIGIN + indent + offsets[column],
         y: ORIGIN + row * ROW_STEP,
       });
     });

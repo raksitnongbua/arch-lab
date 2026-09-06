@@ -206,6 +206,33 @@ title "T"
 `,
   },
   {
+    rule: "split-boundary",
+    why: "a boundary whose two members sit at opposite ends of the diagram",
+    expect: 1,
+    /* GEOMETRY IS WRITTEN INTO THE DOCUMENT, as it is for `crowded-node` and
+       for the same reason: the rule is about what will be DRAWN, and the
+       default layout now places a boundary's members together on purpose —
+       so the scattered arrangement has to be stated rather than provoked. */
+    source: `archlab 1.0
+title "T"
+
+@context ctx-root "T"
+  frame edge "Edge and ingress"
+  inbound:system "Inbound Gateway" (40,40 176x88) in=edge
+    desc "Takes traffic from outside."
+  billing:system "Billing" (40,300 176x88)
+    desc "Charges for what was used."
+  reports:system "Reports" (40,560 176x88)
+    desc "Says what happened."
+  webhook:system "Webhook Gateway" (40,820 176x88) in=edge
+    desc "Takes callbacks from outside."
+
+  inbound -> billing : "Forwards the purchase request" [HTTPS]
+  billing -> reports : "Publishes the settled charge" [HTTPS]
+  reports -> webhook : "Asks for a delivery receipt" [HTTPS]
+`,
+  },
+  {
     rule: "crowded-node",
     why: "seven connectors leaving one side of one element",
     expect: 1,
@@ -663,6 +690,10 @@ for (const name of ["shopflow", "order-shop"]) {
        further down exists. It belongs here: the floor it measures against is
        arch-lab's own, in `lib/presentation-fit.ts`. */
     "unreadable-when-presented",
+    /* `split-boundary` is arch-lab's own: C4 says a boundary groups elements
+       and says nothing about how many rectangles that is. The reason cites
+       the format's rule that a frame carries no geometry. */
+    "split-boundary",
   ]);
 
   const uncited = declared.filter((rule) => {

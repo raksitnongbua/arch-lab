@@ -38,16 +38,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   ordered by where they are going so the lines do not cross on the way out. An
   element carrying one connector per side is exactly where it always was. The
   SVG and PNG exports fan identically, from the same module the canvas uses.
-- **Where two connectors cross, one of them now steps over the other.** A
-  crossing used to read as four lines leaving a junction, and the eye joins the
-  wrong pair. The shorter of the two is interrupted by a small arc, so the
-  crossing reads as a bridge — the shorter one because the arc stays inside the
-  smaller visual span, and because deciding it from the geometry means nothing
-  about how the file is written can move the bridge. Never both lines; never
-  within a twelfth of a connector's end, where an arc would land on an
-  arrowhead; and a connector crossing more than three others keeps its straight
-  line rather than becoming a row of bumps. Exports draw the same bridges in
-  the same places as the canvas.
 - **`validate_model` says when a diagram is too big to read once it is shown.**
   A diagram wider than the frame it is put in is not cropped, it is shrunk —
   and its labels shrink with it, so a diagram that reads perfectly at the size
@@ -223,6 +213,34 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **C4 boundaries are given room, and the elements inside one are kept
+  together.** A `frame` carries no coordinates — its rectangle is derived from
+  wherever its members landed — and the layout used to place those members
+  without knowing they belonged together, so a boundary could be stitched
+  around elements sitting on either side of a stranger, and two boundaries
+  meeting in one row left their borders thirty-two pixels apart, which reads
+  as one shaded mass rather than as two groups. A boundary's members are now
+  placed side by side, and a gap is spent wherever two boundaries meet. A
+  diagram that uses no frames is laid out exactly where it always was, so
+  nothing without them moves.
+- **A boundary's border no longer runs through an element that is not inside
+  it.** The rule was tested against a stranger's centre point, so an element
+  could have half its box inside a boundary it has nothing to do with — and
+  because each rectangle is grown to the largest size the rule allows, borders
+  were reliably pushed until they were resting against whatever they were not
+  allowed to swallow. The whole box is what counts now, with clearance around
+  it, and the padding is given up rather than the clearance when the two
+  compete.
+- **`validate_model` says when a boundary will be drawn in pieces.** A frame
+  whose members do not sit together draws one rectangle per cluster, which is
+  a real convention and rarely what the author of a single `frame` line
+  expected. The review notes now name it, and say the remedy is the grouping
+  rather than hand-written coordinates.
+- **The MCP model-authoring prompt warns about frames before they are
+  written.** An agent drafting a C4 model is now told to keep the count of
+  boundaries low and to put only elements that genuinely belong together in
+  one — the cost of getting it wrong is paid in a picture nobody can read, and
+  it is much cheaper to avoid while drafting than to notice afterwards.
 - **The MCP integration is out of beta, and says what you may depend on
   instead.** The "Beta" pill in the navbar, the callout above the endpoint on
   `/mcp` and the marker in the page title are gone. In their place is a plain

@@ -1170,6 +1170,87 @@ direction lr
     })(),
     "lr moved a pinned node, or the pin stopped round-tripping",
   );
+
+  /* ----- Frames get room, and a diagram without them does not move ------- */
+
+  const FRAMED = `archlab 1.0
+title "Framed"
+
+@context ctx-root "Framed"
+  frame owned "Owned"
+  frame third "Third party"
+  customer:person "Customer"
+  web:system "Web" in=owned
+  api:system "API" in=owned
+  pay:system "Payments" in=third
+  mail:system "Mail" in=third
+
+  customer -> web : "Uses"
+  customer -> api : "Uses"
+  customer -> pay : "Uses"
+  customer -> mail : "Uses"
+`;
+  const framedRow = (() => {
+    const nodes = parseArchText(FRAMED).diagrams[0].nodes;
+    const at = (id) => nodes.find((n) => n.id === id).position.x;
+    return { web: at("web"), api: at("api"), pay: at("pay"), mail: at("mail") };
+  })();
+
+  check(
+    "a boundary's members are placed together, not interleaved with strangers",
+    (() => {
+      const owned = [framedRow.web, framedRow.api].sort((a, b) => a - b);
+      const third = [framedRow.pay, framedRow.mail].sort((a, b) => a - b);
+      // The two boundaries occupy disjoint runs of the row.
+      return owned[1] < third[0] || third[1] < owned[0];
+    })(),
+    `an element of one boundary sits between two of another: ${JSON.stringify(framedRow)}`,
+  );
+
+  check(
+    "two boundaries meeting in one row are given more than the ordinary pitch",
+    (() => {
+      const xs = Object.values(framedRow).sort((a, b) => a - b);
+      const steps = xs.slice(1).map((x, i) => x - xs[i]);
+      /* Three gaps: two inside a boundary at the ordinary 264, and the one
+         between them at 264 + FRAME_GUTTER. Without the extra room the two
+         rectangles' borders would sit 32px apart and read as one mass. */
+      return (
+        steps.filter((step) => step === 264).length === 2 &&
+        steps.filter((step) => step > 264).length === 1
+      );
+    })(),
+    `row pitches: ${JSON.stringify(framedRow)}`,
+  );
+
+  check(
+    "a diagram with no frames is laid out exactly where it always was",
+    (() => {
+      /* THE GUTTER IS SPENT ONLY WHERE A BOUNDARY FALLS. Every document
+         without frames — which is most of them — has to be byte-identical, or
+         adding this constant moved coordinates people have on disk. */
+      const bare = FRAMED.split("\n")
+        .filter((line) => !/^\s*frame /.test(line))
+        .map((line) => line.replace(/ in=\w+/, ""))
+        .join("\n");
+      const nodes = parseArchText(bare).diagrams[0].nodes;
+      const xs = ["web", "api", "pay", "mail"]
+        .map((id) => nodes.find((n) => n.id === id).position.x)
+        .sort((a, b) => a - b);
+      const steps = xs.slice(1).map((x, i) => x - xs[i]);
+      return steps.every((step) => step === 264);
+    })(),
+    "an unframed diagram picked up the frame gutter",
+  );
+
+  check(
+    "a framed document still round-trips with its geometry omitted",
+    (() => {
+      const written = serializeArchText(parseArchText(FRAMED));
+      return written === FRAMED && !COORD.test(written);
+    })(),
+    "the serializer stopped agreeing with the parser once frames were in play",
+  );
 }
 
 /* ----------------------------------------------------------------------- */

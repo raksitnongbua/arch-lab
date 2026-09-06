@@ -625,6 +625,21 @@ function registerPrompts(server: McpServer): void {
               "   boundary, a deployment region). Do not wrap everything in",
               '   one "Internal" frame out of habit — a boundary nothing sits',
               "   outside of tells the reader nothing.",
+              /* A FRAME IS A CLAIM ABOUT THE PICTURE, not only about the
+                 model, and it is the one thing here whose cost is paid in
+                 legibility rather than in words. Each boundary is drawn as a
+                 rectangle around wherever its members landed; several small
+                 ones sitting against each other stop reading as grouping and
+                 start reading as shading, and a boundary whose members have
+                 nothing joining them is drawn in pieces. Both are cheap to
+                 avoid while drafting and expensive to notice afterwards, so
+                 the warning goes beside the `frame` advice rather than
+                 waiting for step 4 to raise it. */
+              "   Keep the count low — two or three boundaries on one diagram,",
+              "   each holding elements that genuinely belong together. Many",
+              "   small frames packed side by side read as shading rather than",
+              "   as grouping, and a boundary whose members have nothing",
+              "   joining them is drawn as several rectangles rather than one.",
               "4. Call `validate_model` on the draft. Fix every reported line",
               "   and column and call it again until it is valid. Do not",
               "   present an unvalidated model. It also returns C4 review",
