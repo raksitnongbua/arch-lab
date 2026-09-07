@@ -322,6 +322,70 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Clicking the empty canvas closes an ER focus panel again.** The backdrop
+  that clears a focus was a rectangle inside the drawing, so it covered the
+  diagram and not the ground around it — and the ground is most of what you see
+  and the first place anyone clicks to deselect. Worse, the pan gesture claimed
+  the pointer the instant you pressed, which re-targeted the click away from
+  whatever was under it, so even a click inside the drawing did nothing. The
+  pane is the backdrop now, as it already was on the flowchart and use-case
+  canvases, and panning claims the pointer only once the drag has actually
+  travelled — so a pan no longer throws away the table you had focused.
+- **The focused ER table is visible on the table.** Dimming everything else says
+  which tables are out; it never said which one is in, so the box you had just
+  clicked looked exactly like every other box and you found it by hunting for
+  the one that had not faded. It now lifts off the canvas on an accent shadow.
+  No stroke, fill or glyph the notation owns is touched — the recoloured
+  outline this replaced was removed twice for restyling half the schema on one
+  click, and it is not coming back.
+- **A focused ER relationship glows.** Dimming subtracts and the travelling
+  light moves, but neither of them points, so the chosen line was still the
+  same weight as the ones around it. Light now spills off it, hugging its route
+  — three widening strokes under the line rather than a shape boxing it, so
+  nothing washes over the notation and a bent connector is lit along its bends
+  instead of sitting inside a circle.
+- **A focused ER relationship stands out.** Dimming the rest was doing all the
+  work, and it borrowed the tables' own dimming floor — the opacity at which a
+  column name is still readable — for the connectors, which carry no text. So
+  the chosen line sat at the same weight as four others while its travelling
+  light, tuned for an ambient gesture, was absent from it two thirds of the
+  time. The unrelated lines now go further down than the tables do, and the
+  light on the focused line runs continuously instead of passing occasionally.
+  No stroke, width or arrowhead changes in either direction.
+- **Clicking an ER relationship no longer draws a violet rectangle round it.**
+  Nothing authored that rectangle: clicking an SVG element that carries a
+  `tabindex` gives it `:focus` without `:focus-visible`, the browser still
+  draws its own `outline: auto` for that, and the app tints every outline with
+  its focus colour — so the ring appeared, and an outline always boxes the
+  bounding box. On a three-segment orthogonal connector that is a rounded
+  rectangle around the whole route, with its fourth side hidden behind the
+  table it entered. Both the connector and the table now suppress the native
+  ring on `:focus` as well, which is what the use-case and flowchart canvases
+  already did.
+- **The ER keyboard focus ring is a shape rather than a repaint.** It used to
+  recolour the connector along its whole length, which is the third focus
+  repaint removed from this canvas; it is now its own outline riding the
+  connector's geometry, in the same focus colour every other ring in the app
+  uses. A table's ring is its own padded outline, so focus no longer thickens
+  its border.
+- **Two ER relationships leaving one table no longer leave from the same
+  point.** Every connector attached at the midpoint of the side facing the
+  other box, so `customer -> order` and `customer -> address` began at one
+  pixel, ran the same stub and turned in the same corridor — one going up and
+  one going down. Each line was correct and the pair drew three sides of a
+  rectangle around empty canvas, which is what a highlighted relationship
+  looked like. Connectors now fan along the side, ordered by where their target
+  sits so they do not cross on the way out, using the same rule the C4 canvas
+  fans by. A table carrying one connector per side is exactly where it was.
+- **The light travelling an ER relationship is a comet again, not a capsule.**
+  The connector's travelling mark was two hard-edged bands — a 2.5-wide head
+  under a 9-wide halo — and its length was fixed in diagram units, so it was a
+  stub on a long route and a belt on a short one. Focusing a table painted both
+  bands in the accent, which is where it read worst: a fat violet slab sliding
+  along the line you had just asked about. It is now the three-band comet the
+  flowchart and sequence canvases draw, sized as a fraction of the connector it
+  rides, so every relationship carries the same gesture whatever its length.
+
 - **The skill no longer claims to be the complete `.alab` grammar.** It teaches
   five of the nine notations; the flowchart, use-case diagram, ER diagram and
   data dictionary have no section in it and are taught by a worked example

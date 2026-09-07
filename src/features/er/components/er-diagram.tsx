@@ -176,14 +176,20 @@ function Entity({
 }): React.JSX.Element {
   const headerY = entity.y + ER.headerHeight;
   const interactive = onFocus !== undefined;
-  /* NO BORDER CHANGE ON FOCUS. A focused box used to take `--primary` and a
-     related one `--edge-drift`, which meant a single click recoloured the
-     outline of every table it touched — on a schema where most tables touch
-     most others, that is nearly the whole diagram changing colour to say one
-     thing. Focus is already carried by three quieter signals that do not
-     restyle the notation: everything unrelated DIMS, the lit connectors carry
-     the travelling glow, and the panel names the joins in words. Adding a
-     fourth made the canvas louder without making it clearer. */
+  /* NO BORDER CHANGE ON FOCUS, and no treatment at all on a RELATED box. A
+     focused box used to take `--primary` and a related one `--edge-drift`,
+     which meant a single click recoloured the outline of every table it
+     touched — on a schema where most tables touch most others, that is nearly
+     the whole diagram changing colour to say one thing.
+
+     What the correction got wrong was going to nothing: with the outline back
+     to normal, the box the reader had just clicked looked exactly like every
+     other box, and the only thing marking it was that its neighbours had gone
+     quiet. The focused box now takes a LIFT — an accent shadow on an
+     always-mounted overlay, drawn below — which raises one box off the canvas
+     without restyling any part of the notation. The related ones still take
+     nothing; they are told apart by not being dimmed, which is what the first
+     correction got right. */
 
   return (
     <g
@@ -221,6 +227,43 @@ function Entity({
         <title>{`${entity.label} — ${entity.description}`}</title>
       ) : null}
 
+      {/* THE KEYBOARD RING: the box's own outline, padded out so it reads as a
+          ring around the table rather than as its border thickening. The
+          shaped-ring rule in `globals.css` calls this shape by name. */}
+      <rect
+        className="af-er-entity-ring"
+        x={entity.x - 3}
+        y={entity.y - 3}
+        width={entity.width + 6}
+        height={entity.height + 6}
+        rx={15}
+        opacity="0"
+      />
+      {/* THE LIFT, and it is the ONLY thing focus adds to a box. Always
+          mounted, `opacity="0"` at rest, faded in by `.af-er-focused` — the
+          `.af-node-glow` construction the C4 canvases use, for its reason:
+          only opacity moves, so the fade stays on the compositor instead of
+          repainting a shadow every frame.
+
+          IT IS A SHADOW, NOT A BORDER. The reason is in the note above: a
+          recoloured outline was tried twice and removed twice, because the
+          related boxes took one too and a single click restyled most of the
+          schema. A shadow reads as the focused table coming FORWARD, which is
+          what focus means here, and it lands on exactly one box.
+
+          A rect has a real bounding box, so a filter is safe on it — unlike a
+          connector, whose box can be zero-height (see the note in `defs`). */}
+      <rect
+        className="af-er-entity-lift"
+        x={entity.x}
+        y={entity.y}
+        width={entity.width}
+        height={entity.height}
+        rx={12}
+        fill="var(--node)"
+        opacity="0"
+        filter="url(#af-er-lift)"
+      />
       <rect
         x={entity.x}
         y={entity.y}
@@ -402,6 +445,38 @@ function Relationship({
           style={{ cursor: "pointer", pointerEvents: "stroke" }}
         />
       ) : null}
+      {/* THE AURA, and it FOLLOWS THE LINE. The first cut was one big ellipse
+          over the focused item's bounding box, drawn once for the whole canvas
+          — which is a round blob sitting behind a thin bent line, not a glow
+          around it, and it had to MOVE whenever the focus moved. Clearing the
+          focus therefore snapped it to the drawing's centre and faded it out
+          from there, which is the flash-to-the-middle that got reported.
+
+          Both faults are the same fault: a shared element that has to be
+          re-aimed. The aura belongs to the connector, so it is a child of this
+          group riding this connector's own `d`. Nothing moves; a cleared focus
+          just fades it out where it already was.
+
+          THREE CONCENTRIC STROKES, NOT A BLUR. `new-diagram-type.md` forbids a
+          filter on a connector outright — a percentage filter region on a
+          zero-height bounding box degenerates, which shipped once as bands
+          painted across the diagram — and its own remedy is "if a soft edge is
+          wanted, draw a wider path". Widest and faintest first, so the falloff
+          is carried by geometry that cannot collapse. */}
+      <path className="af-er-edge-aura-far" d={d} opacity="0" />
+      <path className="af-er-edge-aura-mid" d={d} opacity="0" />
+      <path className="af-er-edge-aura-near" d={d} opacity="0" />
+      {/* THE KEYBOARD RING, as a SHAPE rather than a repaint. `globals.css`
+          states the canvas-wide rule beside `.af-uc-ring`: a CSS `outline`
+          boxes the bounding box, so on a canvas made of shapes it reads as a
+          rendering fault — and the ring is therefore a real SVG shape, one of
+          "a bigger ellipse, a capsule, the node's own padded outline, or a
+          halo along an edge's own path". This is the last of those. It also
+          retires the ring that recoloured this line to `--primary` at 2.5,
+          which was the one thing on this canvas still repainting the notation
+          to say "focused". `--ring` is the app's focus colour everywhere else,
+          so a focused connector matches a focused button. */}
+      <path className="af-er-edge-ring" d={d} opacity="0" />
       <path
         className="af-er-edge-line"
         d={d}
@@ -415,7 +490,7 @@ function Relationship({
            overwrite the dash that carries the meaning. */
         strokeDasharray={dashed ? "6 5" : undefined}
       />
-      {/* THE AMBIENT PULSE, a SECOND path over the first rather than a dash on
+      {/* THE AMBIENT PULSE, SECOND paths over the first rather than a dash on
           the line itself. Dashing the base line would destroy the notation — a
           solid line means identifying and a dashed one means it is not, so
           animating a solid line into a dashed one changes what the diagram
@@ -424,26 +499,32 @@ function Relationship({
           motion the other four canvases have, which
           `new-diagram-type.md` requires: "line connectors are always
           animated". */}
-      {/* The halo, under the sharp mark and sharing its dash so the two travel
-          as one. Drawn as a path rather than a blur for the reason in `defs`. */}
-      <path
-        className="af-er-edge-halo"
-        d={d}
-        fill="none"
-        stroke="var(--edge-drift)"
-        strokeWidth={9}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        className="af-er-edge-pulse"
-        d={d}
-        fill="none"
-        stroke="var(--edge-drift)"
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {/* THREE BANDS, widest and faintest first, which is the comet the
+          flowchart and sequence canvases already draw. The first cut had two
+          — a 2.5 mark under a hard-edged 9-wide halo at 0.3 — and that is not
+          a glow, it is a second line's worth of stroke: under focus it read as
+          a fat violet capsule sliding along the connector. A graded trio falls
+          off instead, the tail longest and faintest, so the eye reads a comet
+          rather than a slab.
+
+          `pathLength={1}` normalises the dash maths to fractions of THIS
+          path, the flowchart's own trick. The absolute `26 900` it replaces
+          made the mark a stub on a long route and a belt on a short one, so
+          no two connectors on a schema carried the same gesture.
+
+          NO BLUR, which is where this trio parts company with the flowchart's.
+          A CSS filter region is derived from the bounding box, and an ER
+          connector between a parent and a child at the same row is a straight
+          horizontal path whose box is ZERO-HEIGHT — the degenerate case this
+          canvas has already been bitten by once (see `check:er-motion`, "no
+          filter is applied to a connector"). The falloff is carried by width
+          and opacity instead.
+
+          Paint and geometry live in `../styles/er-motion.css`, so hover and
+          focus recolour all three from one rule. */}
+      <path className="af-er-edge-halo" d={d} pathLength={1} />
+      <path className="af-er-edge-glow" d={d} pathLength={1} />
+      <path className="af-er-edge-pulse" d={d} pathLength={1} />
       <EndGlyph end={relationship.fromEnd} stroke={stroke} />
       <EndGlyph end={relationship.toEnd} stroke={stroke} />
       {relationship.label !== undefined ? (
@@ -559,6 +640,19 @@ export function ErDiagram({
             floodOpacity="0.10"
           />
         </filter>
+        {/* THE FOCUS LIFT. An accent drop shadow, wide and soft enough to read
+            as elevation rather than as a second outline. Safe as a filter
+            where the connector glow was not: this is cast by a RECT, whose
+            bounding box always has both dimensions. */}
+        <filter id="af-er-lift" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow
+            dx="0"
+            dy="3"
+            stdDeviation="8"
+            floodColor="var(--primary)"
+            floodOpacity="0.55"
+          />
+        </filter>
         {/* THERE IS NO GLOW FILTER ANY MORE, and it must not come back as one.
             It was `<filter x="-50%" width="200%">`, which is objectBoundingBox
             units by default — and a HORIZONTAL CONNECTOR HAS A ZERO-HEIGHT
@@ -572,27 +666,15 @@ export function ErDiagram({
             needs `filterUnits="userSpaceOnUse"` with an explicit region. */}
       </defs>
 
-      {/* THE BACKDROP. A transparent rect over the whole canvas, FIRST so it
-          sits under everything, whose only job is to catch a click that hit
-          nothing and clear the focus. Without it the only ways out are the
-          panel's close button and clicking the focused item again, and neither
-          is what a reader reaches for — clicking the empty space around a
-          diagram to deselect is the convention every canvas tool shares, and
-          its absence reads as the focus being stuck. */}
-      {onFocus !== undefined ? (
-        <rect
-          x={0}
-          y={0}
-          width={layout.width}
-          height={layout.height}
-          fill="transparent"
-          onClick={() => onFocus(null)}
-          /* A click TARGET, not a control: keyboard users clear focus with
-             Escape, which the viewer owns, so putting this in the tab order
-             would announce "backdrop" for no gain. */
-          aria-hidden="true"
-        />
-      ) : null}
+      {/* NO BACKDROP RECT HERE, and its absence is deliberate. One used to sit
+          at the bottom of this drawing to catch a click that hit nothing — but
+          a rect inside the SVG covers the DIAGRAM, and the ground a fitted
+          schema floats on is the pane. Clicking the empty space around the
+          drawing therefore cleared nothing, which read as the focus panel
+          being stuck. The host owns the backdrop now (`ErViewer`), the way it
+          does on the use-case and flowchart canvases; every interactive
+          element in here stops propagation so the host only sees the misses.
+          A host that mounts this diagram interactively owes it that handler. */}
 
       {/* Relationships first, so a line can never be drawn over a box it
           merely passes. */}
