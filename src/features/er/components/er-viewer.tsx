@@ -170,6 +170,31 @@ export function ErViewer({
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}
+        /* THE PANE IS THE BACKDROP, which is how the use-case and flowchart
+           canvases already do it and is why this one felt stuck. The backdrop
+           used to be a `<rect>` inside the drawing, so it covered the DIAGRAM
+           and not the pane — and the empty ground around a fitted schema, which
+           is most of what a reader sees and the first place anyone clicks to
+           deselect, cleared nothing at all. Every interactive element inside
+           the SVG stops propagation, so this only ever sees a click that hit
+           nothing. */
+        onClick={(event) => {
+          /* A pan ends in a `click` the reader did not mean; clearing focus on
+             it would throw away the selection every time they dragged. */
+          if (camera.consumePanClick()) return;
+          /* The scrollbar gutters are part of the pane's box but not its
+             client area, and a click on a scrollbar is not a click on the
+             canvas. */
+          const pane = event.currentTarget;
+          const box = pane.getBoundingClientRect();
+          if (
+            event.clientX - box.left > pane.clientWidth ||
+            event.clientY - box.top > pane.clientHeight
+          ) {
+            return;
+          }
+          setRawFocus(null);
+        }}
       >
         {/* Sized in PIXELS from the camera's scale rather than `width="100%"`:
             a percentage width can only ever shrink to the pane, which is why

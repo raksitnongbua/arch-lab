@@ -84,13 +84,24 @@
   stroke-dashoffset: 0;
 }
 
-/* The pulse is INVISIBLE at rest. It exists in the DOM unconditionally so the
-   exported SVG and the no-JS reader get identical markup to the canvas, and
-   it is opacity-0 until the media query below turns it on — which makes
-   stillness the default rather than something switched off afterwards. */
-.af-er-edge-pulse,
-.af-er-edge-halo {
-  opacity: 0;
+/* The comet is ABSENT at rest, not parked. The three bands exist in the DOM
+   unconditionally so the exported SVG and the no-JS reader get identical
+   markup to the canvas, and they are `display: none` until the media query
+   below turns them on — which makes stillness the default rather than
+   something switched off afterwards. Hidden rather than transparent because a
+   band frozen by the idle toggle would be a bright stub parked on every
+   connector, which is not a resting state.
+
+   Their paint sits out here, inert while they are hidden, so the block inside
+   the media query contains only the things that move. */
+.af-er-edge-halo,
+.af-er-edge-glow,
+.af-er-edge-pulse {
+  display: none;
+  fill: none;
+  stroke: var(--edge-drift);
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -148,16 +159,24 @@
     }
   }
 
-  /* THE PULSE. A short lit segment travelling the line's whole length: the
-     dash pattern is one visible run followed by a gap long enough to cover
-     any connector this layout produces, so exactly one segment is on the line
-     at a time and it reads as a travelling pulse rather than as a dashed
-     line. The offset animates the full period, which is what makes the loop
-     seamless. */
-  .af-er-edge-pulse,
-  .af-er-edge-halo {
-    stroke-dasharray: 26 900;
-    stroke-dashoffset: 926;
+  /* THE COMET: a short lit run travelling the connector, drawn as three bands
+     over an untouched base line. The dash period is 3 PATH LENGTHS — the
+     paths carry `pathLength="1"`, so every number here is a fraction of the
+     connector whatever its real length — which leaves the line dark for two
+     thirds of every cycle. A pulse, not a belt; that ratio is the house rule
+     the flowchart states as "never a second line's worth of stroke".
+
+     Each band travels exactly ONE dash period per cycle and starts at its own
+     dash length, so the three fronts leave the source together and the wrap is
+     invisible: the loop can neither jerk nor accumulate phase. Starting the
+     run entirely BEFORE the path also means no band needs an opacity fade to
+     hide a stationary head — the old two-band version faded in and out on
+     every cycle, which is what made it read as a blob appearing rather than a
+     light arriving. */
+  .af-er-edge-halo,
+  .af-er-edge-glow,
+  .af-er-edge-pulse {
+    display: inline;
     animation: af-er-pulse var(--er-pulse) linear infinite;
     /* A NEGATIVE delay, which is the whole fix for a bug you could see: a
        POSITIVE delay makes the animation wait, and any class change on an
@@ -169,49 +188,75 @@
     animation-delay: calc(var(--er-edge, 0) * var(--er-pulse-beat) * -1);
   }
 
-  [data-idle-motion="off"] .af-er-edge-pulse,
-  [data-idle-motion="off"] .af-er-edge-halo {
-    animation: none;
-    opacity: 0;
-  }
+  /* THE BAND LENGTHS ARE THIS CANVAS'S OWN, and copying the flowchart's was a
+     bug you could see. Its tail is 0.6 — SIXTY PER CENT of the path — which
+     works there only because a 5px blur at 0.16 opacity turns that length into
+     a wash. These bands are not blurred (the zero-height bounding box, above),
+     so 0.6 painted a crisp pale band down the whole connector: the reader saw
+     a thick violet tube on hover, not a light travelling.
 
-  /* The halo never rises above a wash: it is the soft edge of the mark, and at
-     full strength it would simply be a second, fatter line. */
+     Length is doing the work blur does on the flowchart, so the trio is much
+     shorter and graded steeply: the tail is four times the head and carries an
+     eighth of its ink. Fronts still align at the source, so the tail trails
+     BEHIND the head rather than sitting around it. */
   .af-er-edge-halo {
+    stroke-width: 6;
+    opacity: 0.12;
+    stroke-dasharray: 0.2 2.8;
     animation-name: af-er-pulse-halo;
   }
 
+  .af-er-edge-glow {
+    stroke-width: 4;
+    opacity: 0.24;
+    stroke-dasharray: 0.11 2.89;
+    animation-name: af-er-pulse-glow;
+  }
+
+  /* The head, and the only band with real ink in it. A shade under twice the
+     1.5 line it rides — enough to be seen over it, not enough to be mistaken
+     for it. */
+  .af-er-edge-pulse {
+    stroke-width: 2.25;
+    opacity: 0.9;
+    stroke-dasharray: 0.045 2.955;
+  }
+
+  [data-idle-motion="off"] .af-er-edge-halo,
+  [data-idle-motion="off"] .af-er-edge-glow,
+  [data-idle-motion="off"] .af-er-edge-pulse {
+    animation: none;
+    display: none;
+  }
+
+  /* Each band starts at its OWN dash length and travels exactly one period, so
+     the three fronts leave the source together and the wrap is invisible. The
+     pair of numbers in each keyframe is that band's dasharray read back: if
+     one is edited above, both here move with it. */
   @keyframes af-er-pulse-halo {
-    0% {
-      opacity: 0;
-      stroke-dashoffset: 926;
+    from {
+      stroke-dashoffset: 0.2;
     }
-    12% {
-      opacity: 0.3;
+    to {
+      stroke-dashoffset: -2.8;
     }
-    75% {
-      opacity: 0.3;
+  }
+
+  @keyframes af-er-pulse-glow {
+    from {
+      stroke-dashoffset: 0.11;
     }
-    100% {
-      opacity: 0;
-      stroke-dashoffset: 0;
+    to {
+      stroke-dashoffset: -2.89;
     }
   }
 
   @keyframes af-er-pulse {
-    0% {
-      opacity: 0;
-      stroke-dashoffset: 926;
+    from {
+      stroke-dashoffset: 0.045;
     }
-    12% {
-      opacity: 0.85;
-    }
-    75% {
-      opacity: 0.85;
-    }
-    100% {
-      opacity: 0;
-      stroke-dashoffset: 0;
+    to {
+      stroke-dashoffset: -2.955;
     }
   }
 
@@ -256,8 +301,110 @@
     filter 140ms ease-out;
 }
 
-.af-er-has-focus .af-er-dimmed {
+/* TWO FLOORS, because the two things being dimmed are not alike. 0.28 is the
+   lowest opacity at which a COLUMN NAME is still readable against `--canvas`
+   on the default high-contrast theme, and a table full of unread text is
+   exactly what must stay legible — below that the diagram stops being a
+   diagram and becomes a spotlight.
+
+   A dimmed CONNECTOR carries no text, so that floor was never its floor: it
+   was borrowed, and it left the lit connector competing with four others at
+   the same weight. Taking the lines further down is what makes the focused
+   relationship read as chosen without repainting a single stroke. */
+.af-er-has-focus .af-er-entity.af-er-dimmed {
   opacity: 0.28;
+}
+
+.af-er-has-focus .af-er-edge.af-er-dimmed {
+  opacity: 0.14;
+}
+
+/* THE AURA: light spilling off the focused connector, hugging its route
+   rather than boxing it. Three concentric strokes on the connector's own
+   geometry — widest and faintest outermost — because a filter on a connector is
+   banned outright on this canvas (`new-diagram-type.md`: a percentage region on
+   a zero-height bounding box degenerates, and it shipped as bands painted
+   across the diagram) and drawing a wider path is that rule's own remedy.
+
+   IT LIVES INSIDE THE CONNECTOR'S GROUP, which is not a detail. The first cut
+   was one ellipse for the whole canvas, re-aimed at whatever was focused — so
+   clearing the focus retargeted it to the drawing's centre and faded it out
+   from THERE, a glow flashing to the middle of the screen on every deselect.
+   An aura that belongs to its connector never has to move, and a cleared focus
+   simply fades it out where it stands.
+
+   ONLY OPACITY MOVES, the `.af-node-glow` rule in globals.css: the strokes are
+   painted once and faded, so the transition stays on the compositor. The
+   resting value is an `opacity="0"` ATTRIBUTE on each path, so a canvas whose
+   stylesheet has not loaded draws no glow.
+
+   Longer than the 140ms state fade, because a glow that snaps reads as a flash
+   while one that swells reads as light arriving. A reader-triggered state
+   rather than an ambient gesture, so it is not gated on reduced motion — the
+   global backstop collapses it to instant and nothing is lost. */
+.af-er-edge-aura-far,
+.af-er-edge-aura-mid,
+.af-er-edge-aura-near {
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.af-er-canvas .af-er-edge-aura-far,
+.af-er-canvas .af-er-edge-aura-mid,
+.af-er-canvas .af-er-edge-aura-near {
+  transition: opacity 260ms ease-out;
+}
+
+.af-er-edge-aura-far {
+  stroke-width: 26;
+}
+
+.af-er-edge-aura-mid {
+  stroke-width: 16;
+}
+
+.af-er-edge-aura-near {
+  stroke-width: 9;
+}
+
+.af-er-has-focus .af-er-lit .af-er-edge-aura-far {
+  opacity: 0.07;
+}
+
+.af-er-has-focus .af-er-lit .af-er-edge-aura-mid {
+  opacity: 0.1;
+}
+
+.af-er-has-focus .af-er-lit .af-er-edge-aura-near {
+  opacity: 0.14;
+}
+
+/* THE FOCUSED BOX IS LIFTED, not outlined. Dimming everything else says which
+   tables are OUT; on its own it never said which table is IN — the box the
+   reader clicked kept exactly the paint it had, so the answer to "which one
+   did I pick" was only legible by scanning for the box that had not faded.
+   The lift is an accent shadow under the box (`af-er-entity-lift` in
+   er-diagram.tsx), which raises one table off the canvas without touching a
+   stroke, a fill or a glyph the notation owns — the twice-removed border
+   recolour is not coming back.
+
+   ONLY OPACITY MOVES, which is the `.af-node-glow` rule in globals.css: the
+   shadow is painted once and faded, so the transition stays on the compositor
+   instead of repainting a filter on every frame. The resting value is an
+   `opacity="0"` ATTRIBUTE on the rect rather than a rule here, so a canvas
+   with no stylesheet still hides it.
+
+   Not gated on reduced motion: this is a state a reader asked for, not an
+   ambient gesture, and the global backstop collapses the fade to instant
+   without losing which box is focused. */
+.af-er-canvas .af-er-entity-lift {
+  transition: opacity 160ms ease-out;
+}
+
+.af-er-focused .af-er-entity-lift {
+  opacity: 1;
 }
 
 .af-er-entity[role="button"],
@@ -279,8 +426,9 @@
    underneath it is untouched. Motion is the signal here as everywhere else on
    this canvas. */
 @media (prefers-reduced-motion: no-preference) {
-  .af-er-edge[role="button"]:hover .af-er-edge-pulse,
-  .af-er-edge[role="button"]:hover .af-er-edge-halo {
+  .af-er-edge[role="button"]:hover .af-er-edge-halo,
+  .af-er-edge[role="button"]:hover .af-er-edge-glow,
+  .af-er-edge[role="button"]:hover .af-er-edge-pulse {
     stroke: var(--primary);
   }
 }
@@ -294,17 +442,73 @@
   }
 }
 
+/* `:focus`, NOT ONLY `:focus-visible`, and the missing half was the defect.
+   Clicking an SVG element that carries a `tabindex` gives it `:focus` WITHOUT
+   `:focus-visible`, and Chrome still paints `outline: auto` for that — a
+   ROUNDED box, coloured `--ring` because `globals.css` puts `outline-ring/50`
+   on every element. An `outline` boxes the BOUNDING BOX, so on a
+   three-segment orthogonal connector it drew a violet rectangle around the
+   whole route, its fourth side hidden behind the box it entered. Reported as
+   "the focus highlight is a square"; suppressing `:focus-visible` alone left
+   every click showing it.
+
+   `globals.css` carries this same pair for `.af-uc-hit` and `.af-flow-hit`
+   with the full story, and `check:view-input` pins it for the canvases whose
+   hit target wears an `af-*-hit` class. This canvas puts `role`/`tabIndex` on
+   the connector GROUP instead, so that check could never see it — which is
+   why `check:er-motion` pins the pair here. */
+.af-er-edge[role="button"]:focus,
 .af-er-edge[role="button"]:focus-visible {
   outline: none;
 }
 
-/* KEYBOARD focus keeps its ring, and this is the one exception on the canvas.
-   A keyboard user has no pointer and no hover, so removing it would leave them
+.af-er-entity[role="button"]:focus,
+.af-er-entity[role="button"]:focus-visible {
+  outline: none;
+}
+
+/* KEYBOARD focus keeps a ring, and this is the one exception on the canvas: a
+   keyboard reader has no pointer and no hover, so removing it would leave them
    with no way to know where they are — an accessibility affordance, not a
-   reading aid, and the two are not interchangeable. */
-.af-er-edge[role="button"]:focus-visible .af-er-edge-line {
-  stroke: var(--primary);
-  stroke-width: 2.5;
+   reading aid, and the two are not interchangeable.
+
+   IT IS A SHAPE, NOT A REPAINT. This used to recolour the connector to
+   `--primary` at 2.5 along its whole length, which is exactly the "focus
+   repaints the notation" that `new-diagram-type.md` has removed from this
+   canvas twice. The ring is now its own path riding the connector's own
+   geometry — one of the shapes `globals.css` names beside `.af-uc-ring` — in
+   `--ring`, the app's focus colour, so a focused connector matches a focused
+   button. Wider than the line rather than a line's width, because a ring
+   AROUND something has to be visible past it, and drawn UNDER the line so the
+   notation still reads through the middle of it.
+
+   Resting opacity is an ATTRIBUTE on the element rather than a rule here, so a
+   canvas with no stylesheet does not paint a ring on every connector. */
+.af-er-edge-ring {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.af-er-entity-ring {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 2;
+}
+
+/* FULL STRENGTH, like `.af-uc-ring` and every other focus ring in the app. The
+   first cut sat at 0.45, which is a wash rather than an indicator — and a
+   focus ring is the one thing on this canvas that may not be subtle. It is
+   drawn UNDER the 1.5 line, so the notation still paints through the middle of
+   it and what the reader sees is a band either side. */
+.af-er-edge[role="button"]:focus-visible .af-er-edge-ring {
+  opacity: 1;
+}
+
+.af-er-entity[role="button"]:focus-visible .af-er-entity-ring {
+  opacity: 1;
 }
 
 /* The lift on hover is what makes a box feel like an object rather than a
@@ -313,15 +517,6 @@
    softens for the duration. */
 .af-er-entity[role="button"]:hover {
   filter: brightness(1.06);
-}
-
-.af-er-entity[role="button"]:focus-visible {
-  outline: none;
-}
-
-.af-er-entity[role="button"]:focus-visible rect {
-  stroke: var(--primary);
-  stroke-width: 2;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -343,8 +538,32 @@
      SAID. The lit treatment is a brighter, blurred travelling segment over
      an untouched base line instead: a glow, which adds emphasis without
      borrowing a glyph that already means something. */
-  .af-er-has-focus .af-er-lit .af-er-edge-pulse,
+  /* UNDER FOCUS THE COMET IS CONTINUOUS. At rest the dash period is 3 path
+     lengths, so a connector is dark for two thirds of every cycle — right for
+     an ambient gesture nobody is looking at, and wrong for the one line the
+     reader just asked about: most of the time it showed no mark at all, which
+     is why the focused relationship did not stand out. The period drops to ONE
+     path length here, so exactly one mark is always somewhere on the line.
+
+     The travel is untouched: the keyframes move the offset by 3, which is
+     three whole periods of this dasharray, so the loop is still seamless and
+     the reader sees three passes per cycle instead of one. */
   .af-er-has-focus .af-er-lit .af-er-edge-halo {
+    stroke-dasharray: 0.28 0.72;
+  }
+
+  .af-er-has-focus .af-er-lit .af-er-edge-glow {
+    stroke-dasharray: 0.16 0.84;
+  }
+
+  .af-er-has-focus .af-er-lit .af-er-edge-pulse {
+    stroke-dasharray: 0.07 0.93;
+    opacity: 1;
+  }
+
+  .af-er-has-focus .af-er-lit .af-er-edge-halo,
+  .af-er-has-focus .af-er-lit .af-er-edge-glow,
+  .af-er-has-focus .af-er-lit .af-er-edge-pulse {
     stroke: var(--primary);
     /* Slower than the ambient pulse. A focused line is being READ, and a mark
        that crosses it quickly is a flicker rather than a pointer. */
@@ -353,8 +572,9 @@
 
   /* A dimmed line keeps its pulse but loses the brightness, so the diagram
      does not go dead around the focus. */
-  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse,
-  .af-er-has-focus .af-er-dimmed .af-er-edge-halo {
+  .af-er-has-focus .af-er-dimmed .af-er-edge-halo,
+  .af-er-has-focus .af-er-dimmed .af-er-edge-glow,
+  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse {
     opacity: 0;
   }
 }

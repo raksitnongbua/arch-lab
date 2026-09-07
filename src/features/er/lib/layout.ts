@@ -52,6 +52,12 @@ import type {
   ErRelationshipKind,
 } from "@/types";
 
+import {
+  fanOffset,
+  isCrowded,
+  type FanSide,
+  type FanSlot,
+} from "@/lib/edge-fan";
 import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
 /**
@@ -318,10 +324,15 @@ interface Box {
  * line that left the right edge, doubled back across its own box, and
  * entered the other's right edge, crossing both boxes it joined.
  */
-function route(
+/**
+ * Which side of each box a connector uses. The ONE definition — the fan below
+ * groups by it and `route` draws from it, and a second opinion about which
+ * side a line leaves would fan a connector into a group it does not belong to.
+ */
+function connectorSides(
   from: Box,
   to: Box,
-): { points: { x: number; y: number }[]; fromEnd: Vec; toEnd: Vec } {
+): { fromSide: FanSide; toSide: FanSide } {
   const fromCx = from.x + from.width / 2;
   const toCx = to.x + to.width / 2;
   const fromCy = from.y + from.height / 2;
@@ -334,38 +345,198 @@ function route(
     from.x > to.x + to.width;
 
   if (horizontal) {
-    const leftToRight = toCx >= fromCx;
-    const startX = leftToRight ? from.x + from.width : from.x;
-    const endX = leftToRight ? to.x : to.x + to.width;
-    const dir = leftToRight ? 1 : -1;
+    return toCx >= fromCx
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
+  }
+  return toCy >= fromCy
+    ? { fromSide: "bottom", toSide: "top" }
+    : { fromSide: "top", toSide: "bottom" };
+}
+
+/** Where along a side this connector attaches, given its slot on that side. */
+function attachAt(box: Box, side: FanSide, slot: FanSlot): number {
+  const length = side === "top" || side === "bottom" ? box.width : box.height;
+  return fanOffset(slot.index, slot.count, length);
+}
+
+function route(
+  from: Box,
+  to: Box,
+  fromSlot: FanSlot,
+  toSlot: FanSlot,
+): { points: { x: number; y: number }[]; fromEnd: Vec; toEnd: Vec } {
+  const { fromSide, toSide } = connectorSides(from, to);
+
+  if (fromSide === "left" || fromSide === "right") {
+    const dir = fromSide === "right" ? 1 : -1;
+    const startX = fromSide === "right" ? from.x + from.width : from.x;
+    const endX = toSide === "left" ? to.x : to.x + to.width;
+    const startY = from.y + attachAt(from, fromSide, fromSlot);
+    const endY = to.y + attachAt(to, toSide, toSlot);
     const midX = (startX + dir * ER.stub + (endX - dir * ER.stub)) / 2;
     return {
       points: [
-        { x: startX, y: fromCy },
-        { x: midX, y: fromCy },
-        { x: midX, y: toCy },
-        { x: endX, y: toCy },
+        { x: startX, y: startY },
+        { x: midX, y: startY },
+        { x: midX, y: endY },
+        { x: endX, y: endY },
       ],
-      fromEnd: { x: startX, y: fromCy, dx: dir, dy: 0 },
-      toEnd: { x: endX, y: toCy, dx: -dir, dy: 0 },
+      fromEnd: { x: startX, y: startY, dx: dir, dy: 0 },
+      toEnd: { x: endX, y: endY, dx: -dir, dy: 0 },
     };
   }
 
-  const topToBottom = toCy >= fromCy;
-  const startY = topToBottom ? from.y + from.height : from.y;
-  const endY = topToBottom ? to.y : to.y + to.height;
-  const dir = topToBottom ? 1 : -1;
+  const dir = fromSide === "bottom" ? 1 : -1;
+  const startY = fromSide === "bottom" ? from.y + from.height : from.y;
+  const endY = toSide === "top" ? to.y : to.y + to.height;
+  const startX = from.x + attachAt(from, fromSide, fromSlot);
+  const endX = to.x + attachAt(to, toSide, toSlot);
   const midY = (startY + dir * ER.stub + (endY - dir * ER.stub)) / 2;
   return {
     points: [
-      { x: fromCx, y: startY },
-      { x: fromCx, y: midY },
-      { x: toCx, y: midY },
-      { x: toCx, y: endY },
+      { x: startX, y: startY },
+      { x: startX, y: midY },
+      { x: endX, y: midY },
+      { x: endX, y: endY },
     ],
-    fromEnd: { x: fromCx, y: startY, dx: 0, dy: dir },
-    toEnd: { x: toCx, y: endY, dx: 0, dy: -dir },
+    fromEnd: { x: startX, y: startY, dx: 0, dy: dir },
+    toEnd: { x: endX, y: endY, dx: 0, dy: -dir },
   };
+}
+
+/**
+ * Every connector's slot at both ends, so two lines leaving one table do not
+ * leave from one pixel.
+ *
+ * THE DEFECT THIS EXISTS FOR, and it was visible on the bundled example. Both
+ * ends attached at the side's MIDPOINT, so `customer -> order` and
+ * `customer -> address` began at exactly the same point, ran the same stub,
+ * and turned at the same corridor x — one line above and one below. Focusing
+ * the table lit both, and the two together drew three sides of a RECTANGLE
+ * around empty canvas. Each line was correct; the picture was a box.
+ *
+ * THE FORMULA AND THE ORDERING RULE ARE `lib/edge-fan`'s, not a second copy:
+ * attach at `L·k/(N+1)`, ordered by where the far end sits along this side's
+ * own axis so the lines leave without crossing. `assignFanSlots` itself is NOT
+ * used, and that is deliberate — it derives the side from `facingSide`, which
+ * normalises by the node's half-extents, while this canvas has its own
+ * documented side rule (`connectorSides`). Two opinions about which side a
+ * connector uses is exactly how a fan puts a line in the wrong group, so the
+ * grouping is done here against the one rule this layout draws from, and only
+ * the geometry is shared.
+ */
+function fanSlots(
+  relationships: readonly { from: string; to: string }[],
+  boxes: ReadonlyMap<string, Box>,
+): Map<number, { from: FanSlot; to: FanSlot }> {
+  interface Attachment {
+    at: number;
+    end: "from" | "to";
+    /** Where the OTHER end sits along this side's axis — the sort key. */
+    along: number;
+  }
+  const bySide = new Map<string, Attachment[]>();
+  const push = (id: string, side: FanSide, attachment: Attachment): void => {
+    const key = `${id}|${side}`;
+    const list = bySide.get(key);
+    if (list === undefined) bySide.set(key, [attachment]);
+    else list.push(attachment);
+  };
+
+  relationships.forEach((relationship, at) => {
+    const from = boxes.get(relationship.from);
+    const to = boxes.get(relationship.to);
+    if (from === undefined || to === undefined) return;
+    /* A SELF-RELATIONSHIP IS IN THE FAN, on the two sides its hook actually
+       uses. Leaving it out was tried and `check:er-layout` caught it on
+       `course-catalogue`: the hook kept the side's midpoint while the one
+       other connector on that side was fanned to the midpoint too, and the two
+       left the box from the same pixel. A connector that is drawn occupies its
+       side whether or not it goes anywhere else. */
+    if (relationship.from === relationship.to) {
+      push(relationship.from, "right", {
+        at,
+        end: "from",
+        along: from.y + from.height / 2,
+      });
+      push(relationship.from, "top", {
+        at,
+        end: "to",
+        along: from.x + from.width / 2,
+      });
+      return;
+    }
+    const { fromSide, toSide } = connectorSides(from, to);
+    const alongAxis = (side: FanSide, box: Box): number =>
+      side === "top" || side === "bottom"
+        ? box.x + box.width / 2
+        : box.y + box.height / 2;
+    push(relationship.from, fromSide, {
+      at,
+      end: "from",
+      along: alongAxis(fromSide, to),
+    });
+    push(relationship.to, toSide, {
+      at,
+      end: "to",
+      along: alongAxis(toSide, from),
+    });
+  });
+
+  const centre: FanSlot = { index: 0, count: 1 };
+  const slots = new Map<number, { from: FanSlot; to: FanSlot }>();
+  for (const attachments of bySide.values()) {
+    /* Declaration order is the tie-break, so the result is stable across
+       renders and two connectors to targets at the same height do not swap. */
+    attachments.sort((a, b) => a.along - b.along || a.at - b.at);
+    attachments.forEach((attachment, index) => {
+      const existing = slots.get(attachment.at) ?? { from: centre, to: centre };
+      slots.set(attachment.at, {
+        ...existing,
+        [attachment.end]: { index, count: attachments.length },
+      });
+    });
+  }
+  return slots;
+}
+
+/**
+ * The sides carrying more connectors than they can separate, as
+ * `"<entity> <side>"`. Reported rather than repaired, which is the call
+ * `lib/edge-fan` documents: squeezing the gap below the floor hides a
+ * too-dense diagram behind attachments that merely look placed.
+ */
+export function crowdedErSides(
+  relationships: readonly { from: string; to: string }[],
+  boxes: ReadonlyMap<string, Box>,
+): string[] {
+  const counts = new Map<string, { count: number; length: number }>();
+  relationships.forEach((relationship) => {
+    const from = boxes.get(relationship.from);
+    const to = boxes.get(relationship.to);
+    if (from === undefined || to === undefined) return;
+    const bump = (id: string, side: FanSide, box: Box): void => {
+      const key = `${id} ${side}`;
+      const length =
+        side === "top" || side === "bottom" ? box.width : box.height;
+      const seen = counts.get(key);
+      counts.set(key, { count: (seen?.count ?? 0) + 1, length });
+    };
+    /* The self-join's hook occupies a right and a top, the same two the fan
+       gives it. */
+    if (relationship.from === relationship.to) {
+      bump(relationship.from, "right", from);
+      bump(relationship.from, "top", from);
+      return;
+    }
+    const { fromSide, toSide } = connectorSides(from, to);
+    bump(relationship.from, fromSide, from);
+    bump(relationship.to, toSide, to);
+  });
+  return [...counts.entries()]
+    .filter(([, side]) => isCrowded(side.count, side.length))
+    .map(([key]) => key);
 }
 
 /**
@@ -545,8 +716,12 @@ export function layoutEr(file: ErLabFile): ErLayout {
     }
   }
 
+  /* Slots first, because a connector's attachment depends on how many OTHERS
+     share its side — which is not knowable one relationship at a time. */
+  const slots = fanSlots(relationships, boxById);
+
   const drawn: LaidErRelationship[] = [];
-  for (const relationship of relationships) {
+  for (const [at, relationship] of relationships.entries()) {
     const from = boxById.get(relationship.from);
     const to = boxById.get(relationship.to);
     /* A relationship naming an entity the document never declared cannot be
@@ -558,6 +733,12 @@ export function layoutEr(file: ErLabFile): ErLayout {
       /* A self-relationship: a hook out of the right side and back into the
          top, beside the box rather than through it — the flowchart's loop
          rule, which exists so a returning line never crosses what it left. */
+      const selfSlot = slots.get(at) ?? {
+        from: { index: 0, count: 1 },
+        to: { index: 0, count: 1 },
+      };
+      const exitY = from.y + attachAt(from, "right", selfSlot.from);
+      const returnX = from.x + attachAt(from, "top", selfSlot.to);
       const hookX = from.x + from.width + ER.stub;
       const midY = from.y - ER.stub;
       drawn.push({
@@ -568,33 +749,37 @@ export function layoutEr(file: ErLabFile): ErLayout {
           ? { label: relationship.label }
           : {}),
         points: [
-          { x: from.x + from.width, y: from.y + from.height / 2 },
-          { x: hookX, y: from.y + from.height / 2 },
+          { x: from.x + from.width, y: exitY },
+          { x: hookX, y: exitY },
           { x: hookX, y: midY },
-          { x: from.x + from.width / 2, y: midY },
-          { x: from.x + from.width / 2, y: from.y },
+          { x: returnX, y: midY },
+          { x: returnX, y: from.y },
         ],
         fromEnd: {
           x: from.x + from.width,
-          y: from.y + from.height / 2,
+          y: exitY,
           dx: 1,
           dy: 0,
           cardinality: relationship.fromCardinality,
         },
         toEnd: {
-          x: from.x + from.width / 2,
+          x: returnX,
           y: from.y,
           dx: 0,
           dy: -1,
           cardinality: relationship.toCardinality,
         },
         labelX: hookX + 8,
-        labelY: midY + (from.y + from.height / 2 - midY) / 2,
+        labelY: midY + (exitY - midY) / 2,
       });
       continue;
     }
 
-    const { points, fromEnd, toEnd } = route(from, to);
+    const slot = slots.get(at) ?? {
+      from: { index: 0, count: 1 },
+      to: { index: 0, count: 1 },
+    };
+    const { points, fromEnd, toEnd } = route(from, to, slot.from, slot.to);
     /* WHERE THE LABEL GOES, and why the obvious answer was wrong. It used to
        sit at the midpoint of the middle segment, which keeps it off a BOX but
        nothing else — and on a real schema that is not enough:
