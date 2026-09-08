@@ -35,7 +35,7 @@ import { SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { InvalidNodeTypeError, useEditorStore } from "../../state";
 import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 
 import { resolveIcon } from "../../lib/icons/registry";
 import { IconPicker } from "../icon-picker";

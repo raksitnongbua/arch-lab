@@ -64,6 +64,7 @@ import {
   type C4Sharpness,
   type C4Smoothness,
 } from "./frames";
+import { embeddedIconSvg } from "./icon-markup-client";
 import { renderDiagramSvg } from "./render-svg";
 import { resolveExportTheme, resolveTagPaint } from "./theme";
 import { createZip, type ZipEntry } from "./zip";
@@ -196,6 +197,7 @@ export function ViewerExportButton({
         const theme = resolveExportTheme();
         const render = (target: C4Diagram) =>
           renderDiagramSvg(target, modelTitle, theme, {
+            embedIcon: embeddedIconSvg,
             tagColors,
             paintForTagColor: (tagColor) => resolveTagPaint(tagColor, theme),
           });

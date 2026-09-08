@@ -46,7 +46,7 @@ import { useId, useRef, useState } from "react";
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
 import { ICONS } from "@/features/editor/lib/icons/registry";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
 import { TINT_WASH_OPACITY } from "@/lib/tint";

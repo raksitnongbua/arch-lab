@@ -11,3 +11,8 @@ node_modules/
 pnpm-lock.yaml
 next-env.d.ts
 public/**/*.svg
+
+# Written by `pnpm gen:export-palette`, byte-compared by
+# `pnpm check:export-palette`. Prettier reformatting it makes that check fail
+# on a diff nobody made — which it did, once.
+src/features/viewer/export/palette.generated.ts

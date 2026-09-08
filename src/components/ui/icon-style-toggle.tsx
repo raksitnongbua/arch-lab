@@ -30,7 +30,7 @@ import { useSyncExternalStore } from "react";
 
 import { ZOOM_READOUT_CLASSES } from "@/components/ui/zoom-pill";
 import { iconsWithoutMono } from "@/features/editor/lib/icons/registry";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 import { cn } from "@/lib/utils";
 
 const NOOP_SUBSCRIBE = () => () => {};

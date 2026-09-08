@@ -67,7 +67,7 @@ import {
   shapeAddsInformation,
 } from "../lib/labels";
 import { resolveExportGround } from "./ground";
-import { embeddedIconSvg } from "./icon-markup";
+import type { EmbedIcon } from "./icon-markup";
 import { TextureRegistry } from "./texture-registry";
 import type { ExportTheme } from "./theme";
 import { EDGE_BASE_DASH } from "../lib/canvas-constants";
@@ -394,6 +394,7 @@ function nodeContent(
   shape: ShapeResult,
   paint: { fill: string; stroke: string },
   iconStyle: IconStyle,
+  embedIcon: EmbedIcon,
 ): string {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
@@ -442,7 +443,7 @@ function nodeContent(
   const nameCenterX = rowLeft + ICON_SIZE + ICON_GAP + nameBlockWidth / 2;
   const nameBlockHeight = nameLines.length * nameLineHeight;
   parts.push(
-    embeddedIconSvg(
+    embedIcon(
       node,
       rowLeft,
       cursorY + nameBlockHeight / 2 - ICON_SIZE / 2,
@@ -966,6 +967,19 @@ export interface RenderDiagramOptions {
    * (server-side card rendering, tests).
    */
   iconStyle?: IconStyle;
+  /**
+   * How a node's icon becomes markup — REQUIRED, and deliberately not
+   * defaulted.
+   *
+   * A default meant importing one, and the browser embedder imports
+   * `react-dom/client`, which made this whole module client-only: the render
+   * route could not import it. Nor can the right answer be inferred here —
+   * only the caller knows whether it has a document. So the browser passes
+   * `embeddedIconSvg` (`icon-markup-client.ts`) and the route passes
+   * `embeddedIconSvgServer` (`icon-markup-server.ts`), and a new caller has to
+   * make the choice rather than inherit a wrong one.
+   */
+  embedIcon: EmbedIcon;
 }
 
 /**
@@ -977,7 +991,7 @@ export function renderDiagramSvg(
   diagram: C4Diagram,
   modelTitle: string,
   theme: ExportTheme,
-  options: RenderDiagramOptions = {},
+  options: RenderDiagramOptions,
 ): RenderedSvg {
   // Bounds over the model geometry (the viewer's own fit logic).
   let minX = Infinity;
@@ -1009,6 +1023,7 @@ export function renderDiagramSvg(
 
   const markerId = "af-arrow";
   const iconStyle = options.iconStyle ?? DEFAULT_ICON_STYLE;
+  const { embedIcon } = options;
 
   // The key is laid out BEFORE the page is sized: it can widen a narrow
   // diagram (a two-node context view is narrower than one legend column) and
@@ -1113,7 +1128,7 @@ export function renderDiagramSvg(
         : colorRoleForNode(node) === "external"
           ? ` opacity="${EXTERNAL_NODE_OPACITY}"`
           : "";
-      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint, iconStyle)}</g>`;
+      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint, iconStyle, embedIcon)}</g>`;
     })
     .join("");
 
