@@ -154,14 +154,22 @@ export {
   // a barrel that carries four grammars.
   GROUP_KEYWORD as FLOWCHART_GROUP_KEYWORD,
 } from "./lib/flowchart/keywords";
-export { parseUseCaseText } from "./lib/usecase/parse";
-export { serializeUseCaseText } from "./lib/usecase/serialize";
+export {
+  parseUseCaseText,
+  parseUseCaseTextWithSpans,
+} from "./lib/usecase/parse";
+export type { UseCaseSpans } from "./lib/usecase/parse";
+export {
+  canonicalUseCaseElementBlock,
+  serializeUseCaseText,
+} from "./lib/usecase/serialize";
 export {
   DEPENDENCY_STEREOTYPES,
   ELEMENT_KIND_BY_KEYWORD,
 } from "./lib/usecase/keywords";
-export { parseErText } from "./lib/er/parse";
-export { serializeErText } from "./lib/er/serialize";
+export { parseErText, parseErTextWithSpans } from "./lib/er/parse";
+export type { ErSpans } from "./lib/er/parse";
+export { canonicalErEntityBlock, serializeErText } from "./lib/er/serialize";
 export {
   ATTRIBUTE_KEYS,
   ER_HEADER_WORD,

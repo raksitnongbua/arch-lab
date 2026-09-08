@@ -79,7 +79,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
 import { USECASE_HEADER_WORD } from "../usecase/keywords";
@@ -117,6 +117,11 @@ interface PendAttribute extends Loc {
   type: string;
   keys?: ErAttributeKey[];
   description?: string;
+  /** The last line of this column's own block — its `attr` line until a
+   *  `desc` or an `!` escape extends it. Rolled into the OWNING ENTITY's span
+   *  (see `ErSpans`); a column has no span of its own because no gesture
+   *  addresses one. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -137,6 +142,10 @@ interface PendEntity extends Loc {
   /** True once an `attr` has been read, which is what closes the window for
    * this entity's `desc` (see the file header). */
   sawAttribute: boolean;
+  /** The last line of this entity's BLOCK — its own declaration line until a
+   *  `desc`, an `!` escape or an `attr` (with any continuation of its own)
+   *  extends it. See `ErSpans`. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -212,7 +221,55 @@ function relationshipTokenHint(): string {
  * Throws `ArchTextParseError` (line + column) on any problem —
  * all-or-nothing.
  */
+/**
+ * Where each entity of a parse sits in the source text.
+ *
+ * The ER counterpart of `ArchTextSpans`, `SequenceSpans` and
+ * `FlowchartSpans`, and it exists for the same one reason: an edit to an ER
+ * diagram on the canvas has to be a LINE PATCH. `serializeErText` writes
+ * canonical text, which has no `//` comments, no author blank lines and no
+ * field the author spelled out that the canonical form omits at its default —
+ * so a re-emit is lossy in a way that passes every assertion, because
+ * canonical text re-emitted IS canonical text. Splicing by span keeps every
+ * byte the edit did not touch.
+ *
+ * ENTITIES ARE KEYED BY ID, which the parser already proves unique per file.
+ *
+ * THE SPAN COVERS THE WHOLE BLOCK, columns included. An entity's `attr` lines
+ * are part of its declaration rather than siblings of it, so a patch that
+ * replaced only the opener would leave the columns orphaned under a line that
+ * no longer introduces them — and `emitEntity` writes the columns too, so the
+ * replacement and the span have to agree about where the entity ends.
+ *
+ * RELATIONSHIPS AND ATTRIBUTES CARRY NO SPAN. No gesture addresses either
+ * yet, and untested bookkeeping guarding nothing is what `SequenceSpans`
+ * declines to write for a fragment — add them with the first gesture that
+ * needs them. A relationship would also need the index-aligned array
+ * `FlowchartSpans.edges` uses rather than a map, for the same reason: it has
+ * no id, and two relationships between the same pair are legal text.
+ */
+export interface ErSpans {
+  entities: ReadonlyMap<string, LineSpan>;
+}
+
+/**
+ * Parses `.alab` ER source into an `ErLabFile`. Pure and deterministic.
+ * Throws `ArchTextParseError` (line + column) on any problem —
+ * all-or-nothing.
+ */
 export function parseErText(source: string): ErLabFile {
+  return parseErTextWithSpans(source).file;
+}
+
+/**
+ * `parseErText`, plus where every entity came from — the SAME parse, so the
+ * spans cannot describe a different reading of the text than the model does.
+ * Callers that only want the model use `parseErText`.
+ */
+export function parseErTextWithSpans(source: string): {
+  file: ErLabFile;
+  spans: ErSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -416,7 +473,31 @@ export function parseErText(source: string): ErLabFile {
     );
   }
 
-  return resolve(header, entities, entityById, relationships);
+  const file = resolve(header, entities, entityById, relationships);
+  /* Built from the SAME pending array `resolve` just read, AFTER it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. */
+  return {
+    file,
+    spans: {
+      entities: new Map(
+        entities.map((entity) => [
+          entity.id,
+          {
+            start: entity.line,
+            /* The MAX over the entity's own lines and every column's, rather
+               than the entity's own `endLine` alone: a column's `desc` is the
+               last line of the block and is two levels deeper than the
+               opener, so nothing but a max can see it. */
+            end: entity.attributes.reduce(
+              (last, attribute) => Math.max(last, attribute.endLine),
+              entity.endLine,
+            ),
+          },
+        ]),
+      ),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -761,6 +842,7 @@ function parseEntityOpener(
     attributes: [],
     attributeByName: new Map(),
     sawAttribute: false,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -915,6 +997,7 @@ function parseAttributeLine(
     ...loc,
     name,
     type,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -951,6 +1034,12 @@ function parseAttributeLine(
 
   entity.attributes.push(attribute);
   entity.attributeByName.set(name, attribute);
+  /* THE COLUMN'S LINE EXTENDS THE ENTITY'S BLOCK. An `attr` is part of its
+     entity's declaration rather than a sibling of it — `emitEntity` writes
+     the columns too — so a span that ended at the opener would make a patch
+     leave the columns orphaned under a line that no longer introduces them.
+     See `ErSpans`. */
+  entity.endLine = cursor.line;
   entity.sawAttribute = true;
   return {
     kind: "attribute",
@@ -1031,6 +1120,12 @@ function parseRelationshipLine(
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each of the accepting paths, because a span that stopped short by one
+     line would make a patch overwrite an author's `!` escape. A relationship
+     has no span of its own, and setting one costs nothing over branching. */
+  if (target.kind !== "relationship") target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     const loc = { line: cursor.line, column: cursor.column };
     cursor.pos += "desc".length;

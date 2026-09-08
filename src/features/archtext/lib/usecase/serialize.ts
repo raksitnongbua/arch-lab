@@ -202,6 +202,44 @@ export function serializeUseCaseText(file: UseCaseLabFile): string {
  * run is unrepresentable in this text, so it is refused here rather than
  * written as something the parser would read back differently.
  */
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks, for the editable canvas                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE ELEMENT'S CANONICAL LINES — declaration plus its `desc` and `!`
+ * continuations — at `pad` indentation, or `null` when `elementId` is not in
+ * `file`. `canonicalNodeBlock` (C4), `canonicalParticipantBlock` (sequence),
+ * `canonicalFlowNodeBlock` (flowchart) and `canonicalErEntityBlock` (ER) are
+ * the same idea, and `line-patch.ts` holds the argument for why every gesture
+ * must go through one of them.
+ *
+ * `pad` IS THE CALLER'S, exactly as in the flowchart grammar, and unlike the
+ * ER one — where an entity is pinned to a single indent and a parameter could
+ * only ever hold one value. A use-case element sits at two spaces outside a
+ * boundary and four inside one, and this function cannot tell which from the
+ * model alone without re-deriving the boundary walk. The caller reads it off
+ * the leading whitespace of the block it is replacing, which is the only
+ * source that cannot be wrong about membership: re-deriving it could move an
+ * element out of the boundary that encloses it.
+ */
+export function canonicalUseCaseElementBlock(
+  file: UseCaseLabFile,
+  elementId: string,
+  pad: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const elements = file.elements;
+  if (!Array.isArray(elements)) invalid("elements", elements);
+  const element = elements.find(
+    (candidate) => isRecord(candidate) && candidate.id === elementId,
+  );
+  if (element === undefined) return null;
+  const lines: string[] = [];
+  emitElement(lines, element, pad);
+  return lines;
+}
+
 function emitElements(
   lines: string[],
   elements: unknown[],

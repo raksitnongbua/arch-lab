@@ -68,7 +68,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { readTintAttribute } from "../sequence/parse";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
@@ -106,6 +106,9 @@ interface PendElement extends Loc {
   position?: { x: number; y: number };
   pinned?: boolean;
   description?: string;
+  /** The last line of this element's BLOCK — its own declaration line until a
+   *  `desc` or an `!` escape extends it. See `UseCaseSpans`. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -181,7 +184,56 @@ function edgeTokenList(): string {
  * deterministic. Throws `ArchTextParseError` (line + column) on any problem
  * — all-or-nothing.
  */
+/**
+ * Where each element of a parse sits in the source text.
+ *
+ * The use-case counterpart of `ArchTextSpans`, `SequenceSpans`,
+ * `FlowchartSpans` and `ErSpans`, and it exists for the same one reason: an
+ * edit to a use-case diagram on the canvas has to be a LINE PATCH.
+ * `serializeUseCaseText` writes canonical text, which has no `//` comments,
+ * no author blank lines and no field the author spelled out that the
+ * canonical form omits at its default — so a re-emit is lossy in a way that
+ * passes every assertion, because canonical text re-emitted IS canonical
+ * text. Splicing by span keeps every byte the edit did not touch.
+ *
+ * ELEMENTS ARE KEYED BY ID, which the parser already proves unique per file.
+ *
+ * BOUNDARIES AND EDGES CARRY NO SPAN. No gesture addresses either yet, and
+ * untested bookkeeping guarding nothing is what `SequenceSpans` declines to
+ * write for a fragment — add them with the first gesture that needs them. An
+ * edge would also need the index-aligned array `FlowchartSpans.edges` uses
+ * rather than a map: it has no id, and two associations between the same pair
+ * are legal text.
+ *
+ * A BOUNDARY'S MEMBERS ARE NOT PART OF ITS SPAN, and an element's span never
+ * reaches its boundary's line. The two nest in the TEXT but an element is
+ * addressed on its own, and a patch that swallowed the opener would move the
+ * element out of the boundary that encloses it — which is exactly why the
+ * caller reads the indentation off the block it is replacing rather than
+ * re-deriving membership.
+ */
+export interface UseCaseSpans {
+  elements: ReadonlyMap<string, LineSpan>;
+}
+
+/**
+ * Parses `.alab` use-case source into a `UseCaseLabFile`. Pure and
+ * deterministic. Throws `ArchTextParseError` (line + column) on any problem —
+ * all-or-nothing.
+ */
 export function parseUseCaseText(source: string): UseCaseLabFile {
+  return parseUseCaseTextWithSpans(source).file;
+}
+
+/**
+ * `parseUseCaseText`, plus where every element came from — the SAME parse, so
+ * the spans cannot describe a different reading of the text than the model
+ * does. Callers that only want the model use `parseUseCaseText`.
+ */
+export function parseUseCaseTextWithSpans(source: string): {
+  file: UseCaseLabFile;
+  spans: UseCaseSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -382,7 +434,21 @@ export function parseUseCaseText(source: string): UseCaseLabFile {
     );
   }
 
-  return resolve(header, elements, elementById, boundaries, edges);
+  const file = resolve(header, elements, elementById, boundaries, edges);
+  /* Built from the SAME pending array `resolve` just read, AFTER it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. */
+  return {
+    file,
+    spans: {
+      elements: new Map(
+        elements.map((element) => [
+          element.id,
+          { start: element.line, end: element.endLine },
+        ]),
+      ),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -712,6 +778,7 @@ function parseElementLine(
     id,
     kind,
     label,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -1024,6 +1091,11 @@ function parseBoundaryBang(cursor: LineCursor, boundary: PendBoundary): void {
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each accepting path, because a span that stopped short by one line
+     would make a patch overwrite an author's `!` escape. */
+  if (target.kind === "element") target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     /* `desc` — elements only. An edge has no description field: an
        association's label is the whole annotation a line carries, and

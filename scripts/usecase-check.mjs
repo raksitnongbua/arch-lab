@@ -81,11 +81,20 @@ const {
   parseSequenceText,
   parseFlowchartText,
   parseUseCaseText,
+  parseUseCaseTextWithSpans,
+  canonicalUseCaseElementBlock,
   serializeUseCaseText,
   detectAlabKind,
   ArchTextParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+
+/* The REAL patcher the canvas uses, not a copy of it — the whole point of the
+   section below is that this module and the spans agree. */
+const { applyPatches, indentOf } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/line-patch.ts"))
+    .href
 );
 
 /* ----------------------------------------------------------------------- */
@@ -523,6 +532,128 @@ console.log("a stated position, and the pin that keeps it");
     ) === JSON.stringify({ x: 1, y: 2, z: 3 }),
     "the escape did not survive the round trip",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Spans, and the line patch they exist for                                */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THESE ARE HERE AT ALL. A canvas gesture must be a LINE PATCH, never a
+   re-emit: `serializeUseCaseText` writes canonical text, so re-emitting the
+   file deletes every `//` comment and every author blank line — and passes
+   every round-trip assertion while doing it, because canonical text
+   re-emitted IS canonical text. `0a9cbf1` bought that rule on the flowchart
+   canvas.
+
+   The fixture is DELIBERATELY NON-CANONICAL, which `canvas-editing.md`
+   requires. It also carries the case this notation has and ER does not: an
+   element INSIDE a boundary, indented one level deeper than one outside it.
+   A helper that re-derived its own indentation instead of reading the
+   caller's would move that element out of its boundary, and the changed-line
+   count is what catches it. */
+
+const MESSY = `archlab 1.0 usecase
+title "Food delivery"
+
+// Guests can look but not buy.
+@usecase
+  actor guest "Guest"
+  actor customer "Customer"
+    desc "Has an account and a card on file."
+
+  // Everything inside here is the system's own behaviour.
+  boundary "Delivery platform"
+    usecase browse "Browse restaurants"
+    usecase pay "Pay for the order" [Stripe]
+      desc "Stripe hosted checkout."
+
+  guest -- browse
+  customer -- pay
+`;
+
+console.log("");
+console.log("spans, and the line patch they exist for");
+
+{
+  const { file, spans } = parseUseCaseTextWithSpans(MESSY);
+  const ids = ["guest", "customer", "browse", "pay"];
+  const sourceLines = MESSY.split("\n");
+
+  check(
+    "every element the model holds has a span",
+    ids.every((id) => spans.elements.get(id) !== undefined) &&
+      spans.elements.size === ids.length,
+    `spans: ${[...spans.elements.keys()].join(", ")}`,
+  );
+  check(
+    "a span STARTS on the declaration line it names",
+    ids.every((id) =>
+      sourceLines[spans.elements.get(id).start - 1].includes(id),
+    ),
+    "a span pointing at the wrong line patches the wrong element",
+  );
+  check(
+    "a span reaches an element's own `desc` and stops there",
+    spans.elements.get("pay").end === 14 &&
+      sourceLines[13].includes("Stripe hosted checkout") &&
+      spans.elements.get("browse").end === 12,
+    `pay: ${JSON.stringify(spans.elements.get("pay"))}`,
+  );
+  /* AND NEVER REACHES THE BOUNDARY THAT ENCLOSES IT. The two nest in the
+     text, but an element is addressed on its own; a span that swallowed the
+     opener would move the element out of its boundary on the first drag. */
+  check(
+    "an element's span never reaches its boundary's own line",
+    ids.every(
+      (id) =>
+        spans.elements.get(id).start > 11 ||
+        !sourceLines[spans.elements.get(id).start - 1].includes("boundary"),
+    ),
+    "a member's span reached its boundary opener",
+  );
+
+  for (const [id, at, expectPad] of [
+    ["pay", { x: 316, y: 428 }, "    "],
+    ["customer", { x: 84, y: 268 }, "  "],
+  ]) {
+    const moved = {
+      ...file,
+      elements: file.elements.map((element) =>
+        element.id === id ? { ...element, position: at } : element,
+      ),
+    };
+    const span = spans.elements.get(id);
+    const pad = indentOf(sourceLines[span.start - 1]);
+    check(
+      `${id}'s indentation is read off the source, not re-derived`,
+      pad === expectPad,
+      `pad is ${JSON.stringify(pad)}, expected ${JSON.stringify(expectPad)}`,
+    );
+    const patched = applyPatches(MESSY, [
+      { span, lines: canonicalUseCaseElementBlock(moved, id, pad) },
+    ]);
+    const changed = MESSY.split("\n").filter(
+      (line, index) => line !== patched.split("\n")[index],
+    );
+    check(
+      `moving ${id} rewrites exactly one line`,
+      changed.length === 1 && changed[0].includes(id),
+      `${changed.length} lines changed: ${JSON.stringify(changed)}`,
+    );
+    check(
+      `and the patched text still parses to the same ${id} position`,
+      parseUseCaseText(patched).elements.find((e) => e.id === id)?.position
+        ?.x === at.x,
+      "the gesture wrote text its own parser reads differently",
+    );
+    check(
+      `and ${id} is still inside the boundary it was written in`,
+      patched.includes('  boundary "Delivery platform"') &&
+        (patched.match(/^\s*\/\//gm) ?? []).length ===
+          (MESSY.match(/^\s*\/\//gm) ?? []).length,
+      "the patch moved the element out of its boundary, or ate a comment",
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */

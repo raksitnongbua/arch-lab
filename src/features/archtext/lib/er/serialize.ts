@@ -226,6 +226,50 @@ export function serializeErText(file: ErLabFile): string {
 /* Entities                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks, for the editable canvas                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE ENTITY'S CANONICAL LINES — declaration, `desc`, `!` escapes and every
+ * column — so a canvas gesture can splice them into the author's own text
+ * instead of re-emitting the file. `canonicalNodeBlock` (C4),
+ * `canonicalParticipantBlock` (sequence) and `canonicalFlowNodeBlock`
+ * (flowchart) are the same idea, and `line-patch.ts` holds the argument for
+ * why every gesture must go through one of them.
+ *
+ * A BLOCK, NOT A LINE: an entity's columns and continuations are lines an
+ * edit may add, replace or remove, so the unit has to be the whole block.
+ * Continuations inside the replaced block come back in canonical ORDER even
+ * where the author wrote them the other way round; every byte OUTSIDE it is
+ * untouched, which is the guarantee that matters.
+ *
+ * NO `pad` PARAMETER, and this is where it differs from its three siblings.
+ * A flowchart node sits at two spaces or four depending on whether a `group`
+ * encloses it, so its helper cannot know its own indentation; an ER entity is
+ * pinned by the parser to exactly one level (`itemIndent` is 2 whenever no
+ * entity is open, and entities do not nest), so there is one possible answer
+ * and a parameter could only ever hold it. Configuration for a fixed value is
+ * a place for the two to disagree, not flexibility.
+ *
+ * Returns `null` when `entityId` is not in `file`.
+ */
+export function canonicalErEntityBlock(
+  file: ErLabFile,
+  entityId: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const entities = file.entities;
+  if (!Array.isArray(entities)) invalid("entities", entities);
+  const entity = entities.find(
+    (candidate) => isRecord(candidate) && candidate.id === entityId,
+  );
+  if (entity === undefined) return null;
+  const lines: string[] = [];
+  emitEntity(lines, entity);
+  return lines;
+}
+
 function emitEntity(lines: string[], value: unknown): void {
   if (!isRecord(value)) invalid("an entity", value);
   const id = value.id;

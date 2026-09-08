@@ -97,11 +97,20 @@ const {
   parseFlowchartText,
   parseUseCaseText,
   parseErText,
+  parseErTextWithSpans,
+  canonicalErEntityBlock,
   serializeErText,
   detectAlabKind,
   ArchTextParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+
+/* The REAL patcher the canvas uses, not a copy of it — the whole point of the
+   section below is that this module and the spans agree. */
+const { applyPatches, indentOf } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/line-patch.ts"))
+    .href
 );
 
 const { LEFT_CARDINALITY, RIGHT_CARDINALITY, CONNECTOR_BY_KIND } = await import(
@@ -482,7 +491,8 @@ console.log("a stated position, and the pin that keeps it");
     byId("address")?.position?.x === 296 &&
       !("pinned" in (byId("address") ?? {})),
     "absent and explicitly-false are different documents, and a bare " +
-      "position must not invent a pin: " + JSON.stringify(byId("address")),
+      "position must not invent a pin: " +
+      JSON.stringify(byId("address")),
   );
   check(
     "`pin=false` reaches the model as false, not as absent",
@@ -494,7 +504,8 @@ console.log("a stated position, and the pin that keeps it");
     !("position" in (byId("customer") ?? {})) &&
       !("pinned" in (byId("customer") ?? {})),
     "absent is the normal case, and a solved entity must round-trip as an " +
-      "absent key rather than as a coordinate: " + JSON.stringify(byId("customer")),
+      "absent key rather than as a coordinate: " +
+      JSON.stringify(byId("customer")),
   );
 
   /* THE INFORMATION-LOSING TRANSITION, which is the one `canvas-editing.md`
@@ -538,6 +549,122 @@ console.log("a stated position, and the pin that keeps it");
     ) === JSON.stringify({ x: 1, y: 2, z: 3 }),
     "the escape did not survive the round trip",
   );
+}
+
+/* Deliberately non-canonical: comments, author blank lines, and a column
+   `desc` two levels deeper than its entity's opener. */
+const MESSY = `archlab 1.0 er
+title "Shop orders"
+
+// The customer is the root of the graph — everything hangs off it.
+@er
+  entity customer "Customer" [PostgreSQL]
+    desc "Anyone who has ever placed an order"
+    attr id uuid pk
+    attr email string uk
+      desc "Lowercased on write, so it can be a unique key"
+
+  // Orders are what the whole schema exists for.
+  entity order "Order"
+    attr id uuid pk
+    attr total numeric(10,2)
+
+  customer ||--o{ order : places
+`;
+
+/* ----------------------------------------------------------------------- */
+/* Spans, and the line patch they exist for                                */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THESE ARE HERE AT ALL. A canvas gesture must be a LINE PATCH, never a
+   re-emit: `serializeErText` writes canonical text, so re-emitting the
+   file deletes every `//` comment and every author blank line — and passes
+   every round-trip assertion while doing it, because canonical text
+   re-emitted IS canonical text. `0a9cbf1` bought that rule on the flowchart
+   canvas.
+
+   So the fixture below is DELIBERATELY NON-CANONICAL, which
+   `canvas-editing.md` requires: comments in three places, author blank lines,
+   and a continuation two levels deep. A span that stopped one line short, or
+   a helper that re-derived its own indentation, shows up here as a changed
+   line count. */
+
+console.log("");
+console.log("spans, and the line patch they exist for");
+
+{
+  const { file, spans } = parseErTextWithSpans(MESSY);
+  const ids = ["customer", "order"];
+
+  check(
+    "every entity the model holds has a span",
+    ids.every((id) => spans.entities.get(id) !== undefined) &&
+      spans.entities.size === 2,
+    `model: ${ids.join(", ")} / spans: ${[...spans.entities.keys()].join(", ")}`,
+  );
+
+  const sourceLines = MESSY.split("\n");
+  check(
+    "a span STARTS on the declaration line it names",
+    ids.every((id) =>
+      sourceLines[spans.entities.get(id).start - 1].includes(id),
+    ),
+    "a span pointing at the wrong line patches the wrong element",
+  );
+
+  /* THE SPAN COVERS THE WHOLE BLOCK, columns included — `emitEntity` writes
+     the columns, so a span ending at the opener would leave them orphaned
+     under a line that no longer introduces them. `customer` ends on its
+     second column's `desc`, which is the deepest line in the file and the
+     one an entity-only span cannot see. */
+  check(
+    "an entity's span reaches its last column's own continuation",
+    spans.entities.get("customer").end === 10 &&
+      sourceLines[9].includes("Lowercased on write"),
+    `customer span: ${JSON.stringify(spans.entities.get("customer"))}`,
+  );
+
+  /* THE GUARANTEE, measured: one gesture, one changed line, every other byte
+     identical. Counted as a line diff rather than by searching for the
+     comments, because a patch that duplicated the block would keep the
+     comments too. */
+  for (const [id, at] of [
+    ["order", { x: 320, y: 96 }],
+    ["customer", { x: 24, y: 186 }],
+  ]) {
+    const moved = {
+      ...file,
+      entities: file.entities.map((element) =>
+        element.id === id ? { ...element, position: at } : element,
+      ),
+    };
+    const span = spans.entities.get(id);
+    const pad = indentOf(sourceLines[span.start - 1]);
+    const patched = applyPatches(MESSY, [
+      { span, lines: canonicalErEntityBlock(moved, id) },
+    ]);
+    const changed = MESSY.split("\n").filter(
+      (line, index) => line !== patched.split("\n")[index],
+    );
+    check(
+      `moving ${id} rewrites exactly one line`,
+      changed.length === 1 && changed[0].includes(id),
+      `${changed.length} lines changed: ${JSON.stringify(changed)}`,
+    );
+    check(
+      `and the patched text still parses to the same ${id} position`,
+      parseErText(patched).entities.find((element) => element.id === id)
+        ?.position?.x === at.x,
+      "the gesture wrote text its own parser reads differently",
+    );
+    check(
+      `and every comment and blank line survives moving ${id}`,
+      patched.split("\n").length === MESSY.split("\n").length &&
+        (MESSY.match(/^\s*\/\//gm) ?? []).length ===
+          (patched.match(/^\s*\/\//gm) ?? []).length,
+      "a re-emit would pass every round-trip assertion and still do this",
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */
