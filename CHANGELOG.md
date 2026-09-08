@@ -7,6 +7,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **A relationship line can be reworded.** Clicking one opened its detail
+  panel with nothing to edit in it; the verb on the join — the `: places` in
+  `customer ||--o{ order : places` — is editable there now. The cardinalities
+  and the identifying/non-identifying kind stay read-only on purpose: each
+  restates what the schema allows rather than what the diagram says about it.
+- **The dictionary's title editor opened in the wrong place, and its Apply
+  button did nothing.** The form was centred on the title's own line of text
+  instead of anchored to the band it edits, so it opened in the canvas's top
+  margin — and because SVG has no z-index and the title was painted first, the
+  first section's hover strip lay over the form's buttons and swallowed the
+  click that commits the edit.
+- **The use-case title editor was much bigger than the heading it replaces.**
+  It was sized from a fixed constant that ignored the heading the layout had
+  already measured.
+- **Clicking the background leaves focus mode on the ER canvas.** The press was
+  being retargeted away from the diagram, so only Escape worked. On the
+  use-case canvas a cancelled gesture left a flag set that swallowed the _next_
+  background click.
+- **Pressing Apply leaves focus mode on the ER and use-case canvases**, so a
+  finished edit no longer strands you in a dimmed diagram. The other three
+  canvases keep their panel open on Apply, which is a deliberate difference —
+  the cost is that a wording edit there is one per selection.
+- **Typing in a heading or detail form no longer pans the canvas underneath
+  it**, and no longer clears the selection you were editing.
+- **Retyping an element's wording no longer discards what the edit could not
+  name.** An ER entity or a flowchart step carrying a hand-written `!` field
+  from a newer format version lost that line when its label was edited, and a
+  flowchart step you had dragged lost its position.
+
 ### Added
 
 - **The use-case, ER and dictionary canvases can be edited by pointing at the
