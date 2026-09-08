@@ -1695,6 +1695,58 @@ console.log("\nThe capability grid answers every notation for every ability");
     "the flipped cell leaked into the rest of the run",
   );
 
+  /* AN OFFERING CELL MUST REACH A CONTROL — AND THIS ASSERTION DID NOT EXIST
+     EITHER, which is how a false claim shipped past a green run.
+
+     `canvas-editing.md` requires that "a gesture no control invokes" fails
+     here. Three assertions do enforce it — "the playground wires X into the
+     canvas / sequence / flowchart bundle" — and all three are keyed to a
+     bundle by name, so the ER, use-case and dictionary bundles were covered by
+     none of them, and the fifth ability by nothing at all. `retitle` was
+     committed offering on two notations while no reader could retype anything,
+     with 909 assertions green.
+
+     So: every notation whose cell offers an ability must have its viewer handed
+     an `edit`/heading prop by the playground. Mechanical rather than
+     per-gesture on purpose — naming each handler would be a fourth hand-kept
+     list, and the failure this catches is the absence of the whole hop, not a
+     missing member of it. */
+  {
+    const host = read("src/features/playground/components/view-playground.tsx");
+    const VIEWER = {
+      c4: "canvasEdit",
+      sequence: "sequenceEdit",
+      flowchart: "flowchartEdit",
+      usecase: "usecaseEdit",
+      er: "erEdit",
+      dict: "dictEdit",
+    };
+    for (const kind of Object.keys(CANVAS_EDIT_OFFERS.move)) {
+      const offersAnything = Object.values(CANVAS_EDIT_OFFERS).some(
+        (cells) => cells[kind].offers,
+      );
+      if (!offersAnything) continue;
+      const bundle = VIEWER[kind];
+      check(
+        `the playground hands the ${kind} canvas its edit bundle`,
+        typeof bundle === "string" && host.includes(bundle),
+        `${kind} offers an ability and no bundle named ${bundle ?? "?"} ` +
+          "reaches its viewer — the gesture exists and nothing invokes it",
+      );
+    }
+    /* AND THE FIFTH ABILITY'S OWN HOP, which no bundle above carries: the
+       heading is not an element, so it is handed over on its own. */
+    const retitling = Object.keys(CANVAS_EDIT_OFFERS.retitle).filter(
+      (kind) => CANVAS_EDIT_OFFERS.retitle[kind].offers,
+    );
+    check(
+      "a canvas that offers `retitle` is handed a retitle handler",
+      retitling.length === 0 || /onRetitle/.test(host),
+      `${retitling.join(", ")} offer retitle and the playground passes no ` +
+        "onRetitle — the heading claims an editor no reader can reach",
+    );
+  }
+
   /* ONE NOTATION, ONE `shortNoun` — AND THIS ASSERTION DID NOT EXIST.
      `CANVAS_EDITING_PASSAGE` reads `shortNoun` off "the first offering cell"
      of each notation and its comment said "`check:canvas-edit` pins every cell

@@ -119,6 +119,7 @@ import {
   resetUseCaseElementPositionEdit,
   resetUseCasePositionsEdit,
 } from "../input/usecase-edit";
+import { retitledEdit, type RetitleFields } from "../input/retitle-edit";
 import {
   dictReorderRefusal,
   reorderedDictFieldEdit,
@@ -215,6 +216,29 @@ export interface UseCaseEditHandlerSet extends PlacementEditHandlers {
 }
 
 /**
+ * What a canvas that draws the document's heading needs from the host.
+ *
+ * ONE CALLBACK TAKING BOTH FIELDS, not one per field: the two lines are typed
+ * in one place and submitted together, so taking them separately would make
+ * "retype the title and clear the description" two undo entries for one thing
+ * the reader did once.
+ *
+ * NOT PART OF ANY NOTATION'S BUNDLE, and that is the fifth ability's shape
+ * rather than an oversight — the heading is not an element, so it belongs to
+ * the document rather than to whatever the canvas draws. One handler serves
+ * every canvas that offers `retitle`, and each viewer takes it as an optional
+ * member of its own bundle.
+ *
+ * `RetitleFields` DISTINGUISHES ABSENT FROM EMPTY — `undefined` leaves the
+ * line alone, `""` removes it. That distinction has to survive the trip
+ * through here, which is why this is the gesture module's own type and not a
+ * pair of strings.
+ */
+export interface RetitleEditHandlers {
+  onRetitle: (fields: RetitleFields) => void;
+}
+
+/**
  * What the dictionary canvas needs from the host.
  *
  * NOT `PlacementEditHandlers`, and the difference is the whole point: a
@@ -251,6 +275,8 @@ export interface CanvasEditingHost {
   usecaseEditable: boolean;
   /** Whether dictionary reorder gestures are offered at all. */
   dictEditable: boolean;
+  /** Whether the document's own heading may be retyped on this canvas. */
+  retitleEditable: boolean;
   setText: (value: string) => void;
   /** Drops a queued keystroke that would otherwise land after the edit. */
   setPending: (pending: null) => void;
@@ -268,6 +294,7 @@ export function useCanvasEditing({
   erEditable,
   usecaseEditable,
   dictEditable,
+  retitleEditable,
   setText,
   setPending,
   setAnnouncement,
@@ -280,6 +307,7 @@ export function useCanvasEditing({
   erEdit: ErEditHandlerSet | undefined;
   usecaseEdit: UseCaseEditHandlerSet | undefined;
   dictEdit: DictEditHandlers | undefined;
+  retitleEdit: RetitleEditHandlers | undefined;
   /**
    * Apply or clear a layout direction, at the diagram's scope or the file's.
    * Beside the handler sets rather than inside `canvasEdit`, because the
@@ -1601,6 +1629,48 @@ export function useCanvasEditing({
     ],
   );
 
+  /* ---------------------------------------------------------------------- */
+  /* The heading: the document's own title and description                  */
+  /* ---------------------------------------------------------------------- */
+
+  const handleRetitle = useCallback(
+    (fields: RetitleFields) => {
+      const next = retitledEdit(doc, text, fields);
+      /* SAID WHEN IT REFUSES, unlike a drag. A reader who cleared the title
+         and pressed Apply watched a field they typed into snap back, and
+         silence there reads as a broken form — whereas a drag that moves
+         nothing is self-evident. The field is `required`, so the browser
+         catches this first; the announcement is what a screen-reader user
+         gets if it ever reaches here another way. */
+      if (next === null) {
+        if (fields.title !== undefined && fields.title.trim() === "") {
+          setAnnouncement(
+            "A diagram needs a title — every .alab document requires one, so the heading was left as it was.",
+          );
+        }
+        return;
+      }
+      const said = [
+        fields.title === undefined ? null : `titled "${fields.title}"`,
+        fields.description === undefined
+          ? null
+          : fields.description.trim() === ""
+            ? "description removed"
+            : "description rewritten",
+      ].filter((part) => part !== null);
+      applyCanvasEdit(
+        next,
+        `Heading updated — ${said.join(", ")}. The source text follows.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  const retitleEdit = useMemo<RetitleEditHandlers | undefined>(
+    () => (retitleEditable ? { onRetitle: handleRetitle } : undefined),
+    [retitleEditable, handleRetitle],
+  );
+
   const dictEdit = useMemo<DictEditHandlers | undefined>(
     () =>
       dictEditable
@@ -1727,6 +1797,7 @@ export function useCanvasEditing({
     erEdit,
     usecaseEdit,
     dictEdit,
+    retitleEdit,
     applyDirection,
     clearDirection,
     resetLayerPositions,

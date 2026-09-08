@@ -1185,6 +1185,20 @@ export function ViewPlayground({
    */
   const dictEditable =
     CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
+  /**
+   * Whether the document's HEADING may be retyped here — the fifth ability.
+   *
+   * Its own flag rather than any of the four beside it, because it asks a
+   * different question: not "can this element be moved or reworded" but "does
+   * this canvas draw the heading, and is there anywhere on it to type". The ER
+   * canvas answers `move` and `revise` and refuses this, which is the
+   * combination no single flag could express.
+   */
+  const retitleEditable =
+    CANVAS_EDIT_ENABLED &&
+    canvasEditability(doc, "retitle").editable &&
+    !canvasLocked;
+
   /* ONE TALLY PER RENDER, not one per control that names it. Counted from the
      source's own answer — see `placementCount`. */
   const placements = useMemo(() => placementCount(doc), [doc]);
@@ -1196,6 +1210,7 @@ export function ViewPlayground({
     erEdit,
     usecaseEdit,
     dictEdit,
+    retitleEdit,
     applyDirection,
     clearDirection,
     resetLayerPositions,
@@ -1208,6 +1223,7 @@ export function ViewPlayground({
     erEditable,
     usecaseEditable,
     dictEditable,
+    retitleEditable,
     setText,
     setPending,
     setAnnouncement,
@@ -2234,6 +2250,13 @@ export function ViewPlayground({
                             onReleaseElement: usecaseEdit.onRelease,
                             // Same per-pane offer as the ER panel beside it.
                             onReviseElement: usecaseEdit.onRevise,
+                            /* THE HEADING, which is the document's and not
+                               this element's — one handler serves every canvas
+                               that draws one, so it comes from its own bundle
+                               rather than from `usecaseEdit`. Undefined when
+                               the canvas is locked or the pane cannot take
+                               the edit, and the heading then draws no form. */
+                            onRetitle: retitleEdit?.onRetitle,
                             editable: usecaseEditable,
                           }
                         : undefined
@@ -2324,7 +2347,27 @@ export function ViewPlayground({
                        passed UNBOUND — the viewer binds the file it is
                        rendering, so the handle's paint and the press's verdict
                        cannot ask about two different models. */
-                    edit={dictEdit}
+                    edit={
+                      /* KEYED ON THE REORDER BUNDLE, and that is provable
+                         rather than convenient: this notation's `revise` and
+                         `retitle` cells both offer, neither carries an
+                         `unlessPane`, and `DictSourceFormat` is `"alab"` alone
+                         — Mermaid has no dictionary — so the two offers can
+                         only be true or false together, both gating on the
+                         same lock. A dictionary can therefore never reach the
+                         heading editor without the reorder handles, and this
+                         viewer's bundle requires them. If a Mermaid
+                         dictionary ever exists, the two come apart and this
+                         needs the bundle's reorder members to go optional. */
+                      dictEdit === undefined
+                        ? undefined
+                        : {
+                            ...dictEdit,
+                            // The title only: this table draws no document
+                            // description, which is what its cell promises.
+                            onRetitle: retitleEdit?.onRetitle,
+                          }
+                    }
                     /* THE LOCK, in the fourth branch that can act on it. This
                        canvas answers `revise` — a section or a field drags to
                        a new place in the reading order — so it is lockable and

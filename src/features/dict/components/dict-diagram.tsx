@@ -30,6 +30,9 @@
  */
 
 import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
+// The house glyph-width estimate, which the layout's own columns are measured
+// with — so the title's press target ends where its words do.
+import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import { cn } from "@/lib/utils";
 import type { DictLabFile } from "@/types";
 
@@ -120,6 +123,63 @@ export interface DictReorderSurface {
   ) => string | null;
   onPress: (target: DictReorderTarget, direction: DictReorderDirection) => void;
 }
+
+/* -------------------------------------------------------------------------- */
+/* The heading surface                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the canvas needs in order to make the drawn title the affordance for
+ * rewriting it, as the VIEWER assembles it.
+ *
+ * THE TITLE, AND NOTHING ELSE. The gesture writes the shared header's `title`
+ * and `description` lines, but this canvas draws only a title band — the
+ * "description" in `layoutDict` is a FIELD's meaning, the table's widest
+ * column, and has nothing to do with the document's own. A description box
+ * here would edit a line the reader cannot see the effect of, which is why
+ * `CANVAS_EDIT_OFFERS` promises the title alone for this notation.
+ *
+ * DECLARED HERE RATHER THAN IMPORTED, on `DictReorderSurface`'s terms above:
+ * both sides are structural, so the host satisfies this without the dictionary
+ * naming the playground.
+ *
+ * THE FORM IS THE VIEWER'S. This renderer is pure and server-renderable, which
+ * is what lets the crawlable pages ship the whole table; an editor is state.
+ * What it contributes is the one thing only the layout knows — where the title
+ * is drawn.
+ */
+export interface DictRetitleSurface {
+  /** Begin editing — pressing the drawn title. */
+  onOpen: () => void;
+  /** The viewer's field while it is open, and `null` while the title is only
+   *  pressable. */
+  form: React.ReactNode | null;
+}
+
+/**
+ * The document title's type size, in LAYOUT UNITS.
+ *
+ * NAMED because the press target has to be measured from the size the title is
+ * actually drawn at: an estimate off a different size gives a control that
+ * ends before the words do, and a reader pointing at the tail of their own
+ * title would hit the canvas instead.
+ */
+const DICT_TITLE_SIZE = 22;
+
+/**
+ * The room the title's editor asks for, in LAYOUT UNITS — a field and its
+ * Apply row.
+ *
+ * CLAMPED INTO THE DRAWING rather than trusted: an `<svg>` clips its viewport,
+ * so an editor hanging past the edge of a one-section dictionary would have
+ * its Apply button shaved off with nothing on screen to say so. The form
+ * scrolls inside whatever room it is given.
+ *
+ * MAINTAINED BY HAND against `HEADING_EDITOR` in `usecase-diagram.tsx`, which
+ * a feature may not deep-import from. Only the reasoning is shared — that
+ * canvas edits two lines and needs the room for both.
+ */
+const DICT_TITLE_EDITOR = { width: 300, height: 112 };
 
 /**
  * A handle's identity in the DOM, so focus can be put back on the control the
@@ -302,6 +362,99 @@ function ReorderHandles({
     </foreignObject>
   );
 }
+
+/**
+ * The document title's press target, and the viewer's field once it is open.
+ *
+ * A NATIVE `<button>` IN A `foreignObject`, on the terms `ReorderHandles`
+ * above sets out — and the same thing is at stake here: a real control brings
+ * the keyboard behaviour, the focus ring the theme already paints and the
+ * hover state, and it keeps this canvas out of `check:view-input`'s selection
+ * sweep honestly. Giving a SHAPE the button role would put the dictionary in
+ * that sweep, which asks every member for a focus selection and a way to
+ * deselect — and the viewer's header argues why a dictionary has neither.
+ *
+ * THAT SWEEP READS THE SOURCE WITH ITS COMMENTS INTACT, so the role's own
+ * spelling is deliberately not written out anywhere in this file: a sentence
+ * explaining why the dictionary is not in the sweep put it in the sweep, and
+ * four assertions failed on a comment.
+ *
+ * ONE BOX, TWO SIZES. Closed, it covers the title as drawn — measured from
+ * `DICT_TITLE_SIZE` with the estimate the layout's own columns are measured
+ * with, so it ends where the words do. Open, it is `DICT_TITLE_EDITOR` pulled
+ * back inside the drawing; see that constant for the clip the clamp avoids.
+ */
+function TitleControl({
+  title,
+  x,
+  centerY,
+  maxRight,
+  canvas,
+  retitle,
+}: {
+  title: string;
+  x: number;
+  centerY: number;
+  /** The table's right edge — the press target never reaches past it, so a
+   *  long title cannot hand the reader a control wider than the drawing. */
+  maxRight: number;
+  canvas: { width: number; height: number };
+  retitle: DictRetitleSurface;
+}): React.JSX.Element {
+  const fields = retitle.form;
+  const width =
+    fields === null
+      ? Math.min(
+          maxRight - x,
+          title.length * DICT_TITLE_SIZE * CHAR_WIDTH_RATIO + DICT.padX * 2,
+        )
+      : Math.min(DICT_TITLE_EDITOR.width, canvas.width);
+  const height =
+    fields === null
+      ? DICT_TITLE_SIZE * TITLE_HIT_LEADING
+      : Math.min(DICT_TITLE_EDITOR.height, canvas.height);
+  return (
+    <foreignObject
+      x={Math.max(0, Math.min(x, canvas.width - width))}
+      y={Math.max(0, Math.min(centerY - height / 2, canvas.height - height))}
+      width={width}
+      height={height}
+    >
+      {fields ?? (
+        <button
+          type="button"
+          /* The identity focus is put back on after the edit — `dict-viewer.tsx`
+             explains why a re-parse blurs whatever the reader pressed. */
+          data-af-dict-heading=""
+          /* A DASHED HAIRLINE, NEVER A FILL, and drawn at rest rather than only
+             on hover: the title is the affordance, so a reader has to see that
+             it is one without pointing at it first. A fill of any strength
+             would sit over the `<text>` beneath this box and dim the very title
+             it offers to change.
+
+             THE RING IS INSET for the reason the handle stylesheet records: a
+             `foreignObject` clips to its own box, and an outline paints outside
+             the border box, so the indicator would be shaved off at the
+             corners — where a keyboard reader is looking. */
+          className="size-full cursor-text rounded-md border border-dashed border-node-border/50 bg-transparent hover:border-node-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+          aria-label={`Rewrite the dictionary title — currently “${title}”`}
+          title="Rewrite the title"
+          onClick={(event) => {
+            /* The press is the title's, not the pane's — see the reorder
+               handle's own note on a click a backdrop would otherwise eat. */
+            event.stopPropagation();
+            retitle.onOpen();
+          }}
+        />
+      )}
+    </foreignObject>
+  );
+}
+
+/** How much taller than its type size the title's press target is drawn — the
+ *  leading a single line of text sits in, so the control covers the words
+ *  rather than only their x-height. */
+const TITLE_HIT_LEADING = 1.6;
 
 /** The reveal's hit area — the whole band or row, so hovering the white space
  * between two columns counts as pointing at it. An SVG group is hovered only
@@ -520,6 +673,13 @@ export interface DictDiagramProps {
    * rather than a table of controls that cannot change anything.
    */
   reorder?: DictReorderSurface;
+  /**
+   * The title, made typeable, or absent for a read-only drawing — the same
+   * offer-by-presence the `reorder` surface above is, and for the same reason:
+   * an export renders from the model and passes nothing, so no `foreignObject`
+   * is ever serialised.
+   */
+  retitle?: DictRetitleSurface;
 }
 
 export function DictDiagram({
@@ -527,9 +687,13 @@ export function DictDiagram({
   className,
   availableWidth,
   reorder,
+  retitle,
 }: DictDiagramProps): React.JSX.Element {
   const layout = layoutDict(file, { availableWidth });
   const right = layout.columnX.source + layout.columnWidth.source;
+  /* The title's two states, read once: pressable, or open with the viewer's
+     field in it. */
+  const titleFields = retitle?.form ?? null;
 
   return (
     <svg
@@ -548,21 +712,51 @@ export function DictDiagram({
          subtree of a `role="img"` — so leaving it here would have left every
          handle's accessible name unreadable while the handles themselves
          stayed in the tab order, which is the worst of both. */
-      role={reorder === undefined ? "img" : "group"}
-      aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections${reorder === undefined ? "" : ". Every section and field carries move-earlier and move-later buttons — Tab reaches them."}`}
+      role={reorder === undefined && retitle === undefined ? "img" : "group"}
+      aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections${reorder === undefined ? "" : ". Every section and field carries move-earlier and move-later buttons — Tab reaches them."}${retitle === undefined ? "" : " The title is a button — press it to rewrite it."}`}
     >
+      {/* ---- the title band, and the one control that edits the DOCUMENT
+            rather than a row.
+
+            THE DRAWN TITLE IS THE AFFORDANCE. It is already at the top of the
+            table in the place a reader would point at to change it, so the
+            press target is laid over it and the `<text>` keeps the typography
+            the export ships — an HTML copy in the `foreignObject` would drift
+            from it at every zoom.
+
+            NOTHING IS OFFERED WHEN THERE IS NO TITLE, and that is not a gap to
+            fill: the gesture patches the header's existing `title` line, and a
+            document without one never parsed. */}
       {layout.title !== null ? (
-        <text
-          className="af-dict-title"
-          x={layout.columnX.name - DICT.padX}
-          y={layout.titleY}
-          dominantBaseline="central"
-          fontSize={22}
-          fontWeight={700}
-          fill="var(--foreground)"
-        >
-          {layout.title}
-        </text>
+        <g>
+          <text
+            className={cn(
+              "af-dict-title",
+              /* The field is opaque and stands where the title does, so the
+                 drawn copy would only show at its edges — and would be going
+                 stale as the reader types. */
+              titleFields !== null && "hidden",
+            )}
+            x={layout.columnX.name - DICT.padX}
+            y={layout.titleY}
+            dominantBaseline="central"
+            fontSize={DICT_TITLE_SIZE}
+            fontWeight={700}
+            fill="var(--foreground)"
+          >
+            {layout.title}
+          </text>
+          {retitle === undefined ? null : (
+            <TitleControl
+              title={layout.title}
+              x={layout.columnX.name - DICT.padX}
+              centerY={layout.titleY}
+              maxRight={right}
+              canvas={{ width: layout.width, height: layout.height }}
+              retitle={retitle}
+            />
+          )}
+        </g>
       ) : null}
 
       {layout.sections.map((section) => (

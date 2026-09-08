@@ -160,6 +160,30 @@ export interface UseCaseEditHandlers {
     elementId: string,
     revision: UseCaseElementRevision,
   ) => void;
+  /**
+   * Rewrite the DOCUMENT's own heading — the `title` and `description` lines
+   * of the shared `.alab` header, which is the one gesture on this canvas that
+   * addresses no element.
+   *
+   * `undefined` LEAVES A LINE ALONE; `""` REMOVES IT. The two are not the same
+   * request, which is why this takes a pair of optional fields rather than two
+   * strings: an untouched description must survive the edit byte for byte,
+   * while an emptied one takes its line out of the file — the grammar has no
+   * meaning for `description ""`. An emptied TITLE is refused outright,
+   * because every grammar here requires one, so the form never submits an
+   * empty one (its field is `required`) and the reader is told where the
+   * problem is instead of watching a press do nothing.
+   *
+   * STRUCTURAL, NOT IMPORTED, exactly as `DictReorderSurface` is declared
+   * beside the canvas that draws it: the host's `RetitleFields` satisfies this
+   * without this feature naming the playground, so the dependency keeps
+   * running one way.
+   *
+   * OPTIONAL FOR THE REASON `onReviseElement` IS — a separate cell of
+   * `CANVAS_EDIT_OFFERS`, so `editable` cannot answer for it, and the heading
+   * becomes typeable only for a host that hands this over.
+   */
+  onRetitle?: (fields: { title?: string; description?: string }) => void;
   /** False while the host holds the handlers but must not run them. */
   editable: boolean;
 }
@@ -514,7 +538,84 @@ export function UseCaseViewer({
      already seen is there. See `UseCaseEditHandlers.onReviseElement` for why
      it is not `editing` that answers for this. */
   const onReviseElement = edit?.onReviseElement;
+  /* THE HEADING GESTURE IS A THIRD OFFER, held the same way and for the same
+     reason — see `UseCaseEditHandlers.onRetitle`. */
+  const onRetitle = edit?.onRetitle;
   const svgRef = useRef<SVGSVGElement>(null);
+
+  /* ---- the heading's own editor ------------------------------------------- */
+
+  const [retitling, setRetitling] = useState(false);
+
+  /**
+   * THE PRESS THAT MUST GET ITS FOCUS BACK.
+   *
+   * An edit here re-parses the whole document, so the heading is laid out
+   * again and the control the reader pressed is a node the reconciler has
+   * moved — which blurs it. Closing the fields on Apply then leaves DOM focus
+   * at the top of the page, and the whole gesture is pointer-only in practice:
+   * a keyboard reader cannot rename twice without tabbing back in from
+   * nowhere. So the submit records a claim and the commit that answers it puts
+   * focus on the heading, which is the dictionary canvas's mechanism for its
+   * reorder handles and for the same reason.
+   *
+   * NO EXPIRY IS NEEDED, unlike there: a claim is always consumed by the very
+   * next commit, because closing the fields is itself a state change this
+   * component makes. A refused edit — the host declining to patch a pane whose
+   * line numbers describe another document — lands on that same commit and
+   * still returns the reader to the heading they pressed.
+   */
+  const headingFocusClaim = useRef(false);
+  useEffect(() => {
+    if (!headingFocusClaim.current) return;
+    headingFocusClaim.current = false;
+    paneRef.current
+      ?.querySelector<HTMLElement>("[data-af-uc-heading]")
+      ?.focus();
+  });
+
+  const closeRetitle = useCallback(() => {
+    headingFocusClaim.current = true;
+    setRetitling(false);
+  }, []);
+
+  const handleRetitle = useCallback(
+    (fields: { title?: string; description?: string }) => {
+      closeRetitle();
+      onRetitle?.(fields);
+    },
+    [closeRetitle, onRetitle],
+  );
+
+  /* THE FIELDS ARE MOUNTED FRESH ON EVERY OPEN, which is what keeps them
+     honest about the document: they read the heading's current text as their
+     initial state, and a half-typed title from a previous open is not
+     something a reader should be able to submit against a file that has
+     changed underneath it. */
+  const retitle = useMemo(
+    () =>
+      onRetitle === undefined
+        ? undefined
+        : {
+            onOpen: () => setRetitling(true),
+            form: retitling ? (
+              <HeadingForm
+                title={file.metadata.title}
+                description={file.metadata.description}
+                onSubmitFields={handleRetitle}
+                onCancel={closeRetitle}
+              />
+            ) : null,
+          },
+    [
+      onRetitle,
+      retitling,
+      file.metadata.title,
+      file.metadata.description,
+      handleRetitle,
+      closeRetitle,
+    ],
+  );
 
   /**
    * THE LAYOUT'S OWN SHIFT — what has to come off a dropped point before it
@@ -618,7 +719,17 @@ export function UseCaseViewer({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
-      if ((event.target as Element).closest?.(".af-uc-hit") != null) return;
+      /* THE HEADING STANDS THE PAN DOWN TOO. A pan claims the pointer and
+         preventDefaults the press, so without this the click that opens the
+         fields never reaches the heading's own button — the same arbitration
+         the hit rects have always had, extended to the one control that is
+         not a shape. */
+      if (
+        (event.target as Element).closest?.(".af-uc-hit, .af-uc-heading") !=
+        null
+      ) {
+        return;
+      }
       const pane = event.currentTarget;
       const scrollable =
         pane.scrollWidth > pane.clientWidth ||
@@ -838,6 +949,7 @@ export function UseCaseViewer({
               onFocusEdge={handleFocusEdge}
               svgRef={svgRef}
               onElementDragStart={editing ? handleElementDragStart : undefined}
+              retitle={retitle}
               /* Only a drag that has really travelled reaches the canvas, so a
                  press that stays a click never nudges the shape it focuses. */
               elementDrag={elementDrag?.moved === true ? elementDrag : null}
@@ -1289,6 +1401,118 @@ function ElementWordingForm({
       >
         Apply
       </button>
+    </form>
+  );
+}
+
+/**
+ * The document's own heading, typed into WHERE IT IS DRAWN.
+ *
+ * IT IS MOUNTED INSIDE THE CANVAS, in a `foreignObject` over the heading's own
+ * box — see `UseCaseRetitleSurface`. The renderer owns the geometry because
+ * only the layout knows where the measured title sits; this owns the fields,
+ * because an editor is state and that renderer is pure.
+ *
+ * SUBMIT, NOT KEYSTROKE, the same call `ElementWordingForm` above makes: every
+ * gesture on this canvas is a source-text patch that lands in the undo ring,
+ * and committing per character would fill the ring a letter at a time and
+ * rewrite the pane under a reader who is still mid-word.
+ *
+ * AN EMPTIED TITLE IS REFUSED BY THE FIELD ITSELF, `required`, rather than
+ * announced after the fact. The gesture module refuses it too — every grammar
+ * here requires a title — but a press that completes and silently changes
+ * nothing is the thing this must not present, and the browser's own message
+ * lands ON the field that is wrong. That is why no announcement is made from
+ * in here: the host owns the single polite live region, a second channel would
+ * race it, and there is no refusal left for it to carry.
+ *
+ * AN EMPTIED DESCRIPTION REMOVES THE LINE, which is why it is submitted as
+ * `""` and not dropped: `undefined` means "leave that line exactly as it is",
+ * and the two answers differ for a reader who cleared the box on purpose.
+ */
+function HeadingForm({
+  title,
+  description,
+  onSubmitFields,
+  onCancel,
+}: {
+  title: string;
+  description?: string;
+  onSubmitFields: (fields: { title?: string; description?: string }) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [nextTitle, setNextTitle] = useState(title);
+  const [nextDescription, setNextDescription] = useState(description ?? "");
+
+  return (
+    <form
+      /* THE FIELDS SCROLL INSIDE THEIR BOX. A `foreignObject` clips to its own
+         rectangle and the box is clamped to stay inside the drawing, so on a
+         diagram shorter than the editor the Apply row would otherwise be
+         shaved off with nothing on screen to say so. */
+      className="flex size-full flex-col gap-2 overflow-auto rounded-md border border-node-border bg-node p-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmitFields({
+          title: nextTitle.trim(),
+          description: nextDescription.trim(),
+        });
+      }}
+      /* ESCAPE CLOSES THE FIELDS AND NOTHING ELSE. The window-level Escape
+         ladder deliberately stands down inside an input, so the key would
+         otherwise do nothing at all here — and a reader who opened this by
+         pressing the heading expects the same key that clears a focus to put
+         the heading back. */
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-title">
+          Title
+        </label>
+        <input
+          id="af-uc-title"
+          className={FIELD_CLASS}
+          value={nextTitle}
+          required
+          /* The reader pressed the heading to type in it — landing them in the
+             field is what the press asked for. */
+          autoFocus
+          onChange={(event) => setNextTitle(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-description">
+          Description
+        </label>
+        <textarea
+          id="af-uc-description"
+          className={FIELD_CLASS}
+          rows={2}
+          value={nextDescription}
+          placeholder="What this diagram is about"
+          onChange={(event) => setNextDescription(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

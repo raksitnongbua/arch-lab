@@ -24,7 +24,7 @@
  * is a reference nobody finds.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DictLabFile } from "@/types";
 
@@ -92,6 +92,31 @@ export interface DictEditHandlers {
     target: DictReorderTarget,
     direction: DictReorderDirection,
   ) => string | null;
+  /**
+   * Rewrite the DOCUMENT's own title — the `title` line of the shared `.alab`
+   * header, and the one gesture here that addresses no row.
+   *
+   * THE TITLE ONLY, deliberately. The gesture can also write a `description`
+   * line, but this canvas draws no document description — `layoutDict`
+   * measures a title band and nothing else, and the "description" in this
+   * layout is a FIELD's meaning. Offering a box for a line the reader cannot
+   * see the effect of is the stale claim `CANVAS_EDIT_OFFERS` warns about, so
+   * `description` is left `undefined` here, which the gesture reads as "leave
+   * that line exactly as it is".
+   *
+   * AN EMPTIED TITLE IS REFUSED — every grammar here requires one — so the
+   * field is `required` and the press never completes, rather than completing
+   * and changing nothing.
+   *
+   * STRUCTURAL, NOT IMPORTED, as `DictReorderSurface` is: the host's
+   * `RetitleFields` satisfies it without this feature naming the playground.
+   *
+   * OPTIONAL WHERE THE THREE ABOVE ARE NOT: retitling is its own cell of
+   * `CANVAS_EDIT_OFFERS`, so a host that offers reordering has not thereby
+   * answered for the heading, and the title becomes typeable only for a host
+   * that hands this over.
+   */
+  onRetitle?: (fields: { title?: string; description?: string }) => void;
 }
 
 export interface DictViewerProps {
@@ -229,6 +254,57 @@ export function DictViewer({
     };
   }, [edit, file, onAnnounce]);
 
+  /* ---- the title's own editor -------------------------------------------- */
+
+  const onRetitle = edit?.onRetitle;
+  const [retitling, setRetitling] = useState(false);
+
+  /* THE PRESS THAT MUST GET ITS FOCUS BACK, for the reason the reorder claim
+     above exists: the edit re-parses the document, so the control the reader
+     pressed is a node the reconciler has moved and the browser blurs it.
+
+     THIS CLAIM NEEDS NO EXPIRY, unlike that one. Closing the field is itself a
+     state change this component makes, so the claim is always answered by the
+     very next commit — including when the host declines an edit it cannot
+     patch safely, which returns the reader to the title they pressed. */
+  const pendingTitleFocus = useRef(false);
+
+  const closeRetitle = useCallback(() => {
+    pendingTitleFocus.current = true;
+    setRetitling(false);
+  }, []);
+
+  /* MOUNTED FRESH ON EVERY OPEN, so the field always reads the title the table
+     is drawing rather than a half-typed one left over from a document that has
+     changed underneath it. */
+  const retitle = useMemo(
+    () =>
+      onRetitle === undefined
+        ? undefined
+        : {
+            onOpen: () => setRetitling(true),
+            form: retitling ? (
+              <TitleForm
+                title={file.metadata?.title ?? ""}
+                onSubmitTitle={(title) => {
+                  closeRetitle();
+                  onRetitle({ title });
+                }}
+                onCancel={closeRetitle}
+              />
+            ) : null,
+          },
+    [onRetitle, retitling, file.metadata?.title, closeRetitle],
+  );
+
+  useEffect(() => {
+    if (!pendingTitleFocus.current) return;
+    pendingTitleFocus.current = false;
+    paneRef.current
+      ?.querySelector<HTMLElement>("[data-af-dict-heading]")
+      ?.focus();
+  });
+
   /* Deliberately on EVERY commit rather than on `[file]`: the reorder arrives
      as a new file, but so does an edit typed in the pane, and only a press
      that set a claim above is answered here. Matched by reading the attribute
@@ -281,6 +357,7 @@ export function DictViewer({
             availableWidth={paneWidth - 32}
             className="block"
             reorder={reorder}
+            retitle={retitle}
           />
         </div>
       </div>
@@ -328,5 +405,113 @@ export function DictViewer({
         </div>
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The title's editor                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The field styling for a control floating over a diagram.
+ *
+ * `bg-canvas/60` IS THE SHARED ANSWER rather than a shade picked here: it is
+ * the fill the flowchart dock, the C4 details panel and the use-case dock all
+ * use for this job. `check:canvas-chrome` lets that strength through and fails
+ * a viewer reaching for a full-strength `bg-canvas` or `bg-background`,
+ * because a notation grounding itself is how the ground behind a diagram came
+ * to change shade when the reader changed notation.
+ *
+ * MAINTAINED BY HAND against `FIELD_CLASS` in `usecase-viewer.tsx` and
+ * `flowchart-viewer.tsx`, which a feature may not deep-import from. The token
+ * is the part that has to agree, and `check:canvas-chrome` is what watches it.
+ */
+const FIELD_CLASS =
+  "w-full rounded-md border border-border bg-canvas/60 px-2 py-1 text-sm text-foreground " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const LABEL_CLASS = "text-xs font-medium text-muted-foreground";
+
+/**
+ * The document's title, typed into WHERE IT IS DRAWN.
+ *
+ * IT IS MOUNTED INSIDE THE CANVAS, in a `foreignObject` over the title band —
+ * see `DictRetitleSurface`. The renderer owns the geometry, because only the
+ * layout knows where the title sits; this owns the field, because an editor is
+ * state and that renderer is pure.
+ *
+ * SUBMIT, NOT KEYSTROKE. Every gesture on this canvas is a source-text patch
+ * that lands in the undo ring, so committing per character would fill the ring
+ * a letter at a time and rewrite the pane under a reader still mid-word — the
+ * call the reorder handles and every other editable canvas here make.
+ *
+ * THE REFUSAL IS SURFACED BY THE FIELD, `required`, rather than announced. An
+ * emptied title is refused by the gesture too — every grammar requires one —
+ * but the thing this must not do is let a press look like it worked, and the
+ * browser's own message lands ON the box that is wrong. Nothing is announced
+ * from in here: the host owns the single polite live region, a second sentence
+ * for one event would race it, and there is no refusal left to carry.
+ */
+function TitleForm({
+  title,
+  onSubmitTitle,
+  onCancel,
+}: {
+  title: string;
+  onSubmitTitle: (title: string) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [next, setNext] = useState(title);
+
+  return (
+    <form
+      /* THE FIELD SCROLLS INSIDE ITS BOX. A `foreignObject` clips to its own
+         rectangle and that box is clamped to stay inside the drawing, so on a
+         one-section dictionary the Apply row would otherwise be shaved off
+         with nothing on screen to say so. */
+      className="flex size-full flex-col gap-2 overflow-auto rounded-md border border-node-border bg-node p-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmitTitle(next.trim());
+      }}
+      /* Escape closes the field and nothing else — the key a reader who
+         pressed the title expects to put it back. */
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-dict-title">
+          Title
+        </label>
+        <input
+          id="af-dict-title"
+          className={FIELD_CLASS}
+          value={next}
+          required
+          /* The reader pressed the title to type in it — landing them in the
+             field is what the press asked for. */
+          autoFocus
+          onChange={(event) => setNext(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
