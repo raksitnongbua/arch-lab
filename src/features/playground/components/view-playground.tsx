@@ -2306,6 +2306,7 @@ export function ViewPlayground({
                                of the four fields, so the panel draws none
                                rather than one whose Apply is declined. */
                             onReviseEntity: erEdit.onRevise,
+                            onReviseRelationship: erEdit.onReviseRelationship,
                             editable: erEditable,
                           }
                         : undefined

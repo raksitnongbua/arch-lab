@@ -684,7 +684,7 @@ export const CANVAS_EDIT_OFFERS: Record<
       noun: "ER diagrams",
       shortNoun: "ER",
       onCanvas:
-        "a selected ER entity's wording, technology and tags are edited in the detail panel",
+        "a selected ER entity's wording, technology and tags are edited in the detail panel, and a relationship's verb in its own",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidEr`

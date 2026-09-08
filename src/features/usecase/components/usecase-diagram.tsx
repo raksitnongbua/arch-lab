@@ -75,7 +75,7 @@ import type {
   LaidUseCaseEllipse,
   UseCaseLayout,
 } from "../lib/layout";
-import { UC } from "../lib/layout";
+import { UC, usecaseHeadingEditorBox } from "../lib/layout";
 import { usecaseBreathPhase } from "../lib/motion";
 import {
   actorFigure,
@@ -216,35 +216,28 @@ export interface UseCaseRetitleSurface {
 const HEADING_HIT_PAD = { x: 6, y: 4 };
 
 /**
- * The room the editor asks for, in LAYOUT UNITS — a title field, a
- * description box and the Apply row.
+ * The LEAST room the editor's own HTML needs, in LAYOUT UNITS — one unit is
+ * one CSS pixel at 100% zoom, which is what a `foreignObject` lays its
+ * contents out in.
  *
- * IT IS CLAMPED INTO THE FRAME rather than trusted, and that is not caution:
- * an `<svg>` clips its viewport, and a `foreignObject` reaching past the
- * bottom edge of a one-actor document would have its Apply button shaved off
- * with nothing on screen to say so. `headingEditorBox` is where the clamp
- * happens, and the form scrolls inside whatever room it is given.
+ * A FLOOR, NOT A SIZE, and it used to be the size — which is the bug a reader
+ * reported as "the edit box is too big". At a fixed 300×208 the form ignored
+ * the heading it replaced entirely, so a diagram with a short title got a box
+ * half again as wide as its own words. `usecaseHeadingEditorBox` measures the
+ * heading and only falls back to these numbers when the heading is smaller
+ * than the fields can live in.
+ *
+ * WHY A FLOOR IS STILL NEEDED. The height is the form's rows added up — the
+ * padding, the two label-plus-field groups (the description is a two-row
+ * textarea) and the Apply/Cancel row — and a one-line heading is a third of
+ * that. The width is what leaves a title readable while it is being typed.
+ * Below either, the box scrolls rather than clipping, but a reader would be
+ * typing into a slot.
+ *
+ * MAINTAINED BY HAND against `DICT_TITLE_EDITOR` in `dict-diagram.tsx`, which
+ * is the same shape one field shorter and which names this constant back.
  */
-const HEADING_EDITOR = { width: 300, height: 208 };
-
-/** The editor's box: `HEADING_EDITOR` at the heading, pulled back inside the
- *  drawn frame — see the constant for the clip this avoids. */
-function headingEditorBox(
-  bounds: UseCaseLayout["bounds"],
-  anchor: { x: number; y: number },
-): { x: number; y: number; width: number; height: number } {
-  const width = Math.min(HEADING_EDITOR.width, bounds.width);
-  const height = Math.min(HEADING_EDITOR.height, bounds.height);
-  return {
-    x: Math.max(bounds.x, Math.min(anchor.x, bounds.x + bounds.width - width)),
-    y: Math.max(
-      bounds.y,
-      Math.min(anchor.y, bounds.y + bounds.height - height),
-    ),
-    width,
-    height,
-  };
-}
+const HEADING_EDITOR = { width: 240, height: 184 };
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
 const DIMMABLE =
@@ -476,10 +469,7 @@ export function UseCaseDiagram({
                 width: layout.heading.width + HEADING_HIT_PAD.x * 2,
                 height: layout.heading.height + HEADING_HIT_PAD.y * 2,
               }
-            : headingEditorBox(layout.bounds, {
-                x: UC.marginX - HEADING_HIT_PAD.x,
-                y: UC.marginTop - HEADING_HIT_PAD.y,
-              }))}
+            : usecaseHeadingEditorBox(layout, HEADING_HIT_PAD, HEADING_EDITOR))}
         >
           {headingFields ?? (
             <button

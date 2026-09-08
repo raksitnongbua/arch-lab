@@ -105,6 +105,8 @@ import {
 } from "../input/flowchart-edit";
 import {
   movedErEntityEdit,
+  revisedErRelationshipEdit,
+  type ErRelationshipRevision,
   pinnedErEntityEdit,
   resetErEntityPositionEdit,
   resetErPositionsEdit,
@@ -187,6 +189,25 @@ export interface ErEditHandlerSet extends PlacementEditHandlers {
    * from drawing fields whose Apply the gesture would decline.
    */
   onRevise?: (entityId: string, revision: ErEntityRevision) => void;
+  /**
+   * Rewrite one relationship's verb — the `: label` on the join line.
+   *
+   * ADDRESSED BY INDEX, not by its ends. A relationship has no id, and the
+   * parser refuses a duplicate entity id and a duplicate column while saying
+   * nothing about two joins between the same pair — so `customer ||--o{ order`
+   * twice is legal text, and a `from`/`to` key would rewrite whichever came
+   * first. `ErSpans.relationships` is an index-aligned array for exactly that
+   * reason, built from the same pending array `resolve` maps into the model.
+   *
+   * THE LABEL ALONE. The cardinalities and the identifying/non-identifying
+   * kind are the crow's-foot glyphs and the `--`/`..` token, and each restates
+   * what the schema allows rather than what the diagram says about it —
+   * `ErRelationshipRevision` argues both.
+   */
+  onReviseRelationship?: (
+    index: number,
+    revision: ErRelationshipRevision,
+  ) => void;
 }
 
 /**
@@ -1569,6 +1590,20 @@ export function useCanvasEditing({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleReviseErRelationship = useCallback(
+    (index: number, revision: ErRelationshipRevision) => {
+      const next = revisedErRelationshipEdit(doc, text, index, revision);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        revision.label === undefined || revision.label.trim() === ""
+          ? "Removed the relationship's verb — the source text follows."
+          : `Reworded the relationship to "${revision.label}" — the source text follows.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const erEdit = useMemo<ErEditHandlerSet | undefined>(
     () =>
       erEditable
@@ -1587,6 +1622,11 @@ export function useCanvasEditing({
             onRevise: canvasEditability(doc, "revise").editable
               ? handleReviseErEntity
               : undefined,
+            // The same per-pane offer: a Mermaid pane cannot spell three of
+            // the four entity fields, and refuses the join's verb with them.
+            onReviseRelationship: canvasEditability(doc, "revise").editable
+              ? handleReviseErRelationship
+              : undefined,
           }
         : undefined,
     [
@@ -1597,6 +1637,7 @@ export function useCanvasEditing({
       handleReleaseErEntity,
       handleReleaseErPositions,
       handleReviseErEntity,
+      handleReviseErRelationship,
     ],
   );
 

@@ -158,6 +158,11 @@ interface PendRelationship extends Loc {
   toLoc: Loc;
   toCardinality: ErCardinality;
   kind: ErRelationshipKind;
+  /** The last line of this relationship's BLOCK — its own line until an `!`
+   *  escape extends it. A relationship takes no `desc` (the parser says so
+   *  and names the reason), so an escape is the only continuation there is,
+   *  and it is enough to make the block more than one line. See `ErSpans`. */
+  endLine: number;
   label?: string;
   raw: Map<string, Pend>;
   unknowns: Pend[];
@@ -241,15 +246,28 @@ function relationshipTokenHint(): string {
  * no longer introduces them — and `emitEntity` writes the columns too, so the
  * replacement and the span have to agree about where the entity ends.
  *
- * RELATIONSHIPS AND ATTRIBUTES CARRY NO SPAN. No gesture addresses either
- * yet, and untested bookkeeping guarding nothing is what `SequenceSpans`
- * declines to write for a fragment — add them with the first gesture that
- * needs them. A relationship would also need the index-aligned array
- * `FlowchartSpans.edges` uses rather than a map, for the same reason: it has
- * no id, and two relationships between the same pair are legal text.
+ * RELATIONSHIPS ARE AN INDEX-ALIGNED ARRAY, NOT A MAP, and the shape is
+ * forced rather than chosen — it is `FlowchartSpans.edges`' shape for
+ * `FlowchartSpans.edges`' reason. This grammar gives a relationship no id,
+ * and NOTHING here refuses a second relationship between the same pair: the
+ * only duplicate the parser rejects among relationships is none, where an
+ * entity id is proved unique on line 830. So `customer ||--o{ order` twice,
+ * once labelled `places` and once `returns`, is legal text a reader can and
+ * does write, and a `from`/`to` key would address whichever came first —
+ * silently rewriting the wrong line, a screen away from where the reader
+ * pressed. The index is the model's own addressing: `resolve` maps this same
+ * pending array in order, so `spans.relationships[i]` and
+ * `file.relationships[i]` are the same line by construction rather than by a
+ * lookup that could drift.
+ *
+ * ATTRIBUTES STILL CARRY NO SPAN. No gesture addresses a column — the detail
+ * panel refuses them on purpose (`ErEntityRevision`) — and untested
+ * bookkeeping guarding nothing is what `SequenceSpans` declines to write for
+ * a fragment. Add them with the first gesture that needs one.
  */
 export interface ErSpans {
   entities: ReadonlyMap<string, LineSpan>;
+  relationships: readonly LineSpan[];
 }
 
 /**
@@ -496,6 +514,13 @@ export function parseErTextWithSpans(source: string): {
           },
         ]),
       ),
+      /* IN THE SAME ORDER `resolve` READ THEM, which is what makes the index
+         an address rather than a coincidence — the model's
+         `file.relationships` is this array mapped one for one. */
+      relationships: relationships.map((relationship) => ({
+        start: relationship.line,
+        end: relationship.endLine,
+      })),
     },
   };
 }
@@ -1082,6 +1107,7 @@ function parseRelationshipLine(
     toLoc,
     toCardinality: RIGHT_CARDINALITY[rightGlyph],
     kind: KIND_BY_CONNECTOR[connector],
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -1123,9 +1149,12 @@ function parseContinuation(cursor: LineCursor, target: Continuable): void {
   /* FIRST, before any refusal below can throw: this line belongs to the
      target's block, so it extends the target's span. Written here rather than
      at each of the accepting paths, because a span that stopped short by one
-     line would make a patch overwrite an author's `!` escape. A relationship
-     has no span of its own, and setting one costs nothing over branching. */
-  if (target.kind !== "relationship") target.item.endLine = cursor.line;
+     line would make a patch overwrite an author's `!` escape. EVERY kind of
+     target now, relationships included: the wording gesture addresses a
+     relationship by index and splices its block, so a relationship whose
+     `endLine` stayed on its opener would have its escapes eaten by the first
+     Apply. */
+  target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     const loc = { line: cursor.line, column: cursor.column };
     cursor.pos += "desc".length;

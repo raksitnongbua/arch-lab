@@ -270,6 +270,41 @@ export function canonicalErEntityBlock(
   return lines;
 }
 
+/**
+ * ONE RELATIONSHIP'S CANONICAL LINES — its own line plus any `!` escapes it
+ * carries — so the canvas can splice a re-worded join into the author's text
+ * instead of re-emitting the file.
+ *
+ * BY INDEX, matching `ErSpans.relationships` and the model's own array. A
+ * relationship has no id and two between the same pair are legal text, so a
+ * `from`/`to` pair does not name one; `canonicalFlowEdgeBlock` addresses a
+ * flowchart arrow by index for the same reason.
+ *
+ * A BLOCK, NOT A LINE, for the reason its entity sibling gives: an `!` escape
+ * is a line an edit may replace, so the unit has to be everything the span
+ * covers.
+ *
+ * NO `pad` PARAMETER, and for a stronger reason than the entity helper's: a
+ * relationship line sits at the ER body's one indent always — the parser
+ * refuses one nested inside an entity block at all — so there is exactly one
+ * answer and a parameter could only hold it.
+ *
+ * Returns `null` when `index` names no relationship in `file`.
+ */
+export function canonicalErRelationshipBlock(
+  file: ErLabFile,
+  index: number,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const relationships = file.relationships;
+  if (!Array.isArray(relationships)) invalid("relationships", relationships);
+  const relationship = relationships[index];
+  if (relationship === undefined) return null;
+  const lines: string[] = [];
+  emitRelationship(lines, relationship);
+  return lines;
+}
+
 function emitEntity(lines: string[], value: unknown): void {
   if (!isRecord(value)) invalid("an entity", value);
   const id = value.id;

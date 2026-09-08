@@ -56,7 +56,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:dict-reorder
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -111,6 +111,11 @@ const { dictReorderRefusal, reorderedDictFieldEdit, reorderedDictSectionEdit } =
   await load("src/features/playground/input/dict-edit.ts");
 const { CANVAS_EDIT_OFFERS, canvasEditability } = await load(
   "src/features/playground/input/canvas-edit.ts",
+);
+/* The REAL geometry, for the surface section at the foot of this file: what a
+   control covers decides whether a press reaches it. */
+const { DICT, layoutDict, dictTitleEditorBox } = await load(
+  "src/features/dict/lib/layout.ts",
 );
 
 /* ----------------------------------------------------------------------- */
@@ -629,6 +634,66 @@ check(
     canonicalDictFieldBlock(MESSY_FILE, "Customer", "total") === null,
   "the gesture drops an edit it cannot build; it must not surface an exception",
 );
+
+/* ----------------------------------------------------------------------- */
+/* 5. The surfaces, and which of them wins a press                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("");
+console.log("the canvas's two surfaces do not eat each other's presses");
+
+{
+  /* THE BUG THIS SECTION EXISTS FOR: "cannot edit text via click". Pressing
+     the title opened the field, and then the Apply row under it did nothing.
+     SVG HAS NO z-index — paint order is document order — and the title's
+     group was written FIRST, where a heading belongs in reading order and
+     exactly the wrong place here: every section is painted after it, and each
+     one lays a full-width `RevealArea` across its heading band to make the
+     band hoverable. That rect is `fill="transparent"`, which still hit-tests,
+     so it covered the bottom of the open editor and took the press.
+
+     The overlap is not a mistake to design away — the editor is
+     `DICT_TITLE.editorHeight` tall and the band it replaces is
+     `DICT.titleHeight`, so it MUST reach into the first section. What can be
+     fixed is which surface is painted last. Both halves are asserted: the
+     overlap is measured off the real layout, and the ordering is read off the
+     canvas that has to honour it. */
+  const diagram = readFileSync(
+    path.join(ROOT, "src/features/dict/components/dict-diagram.tsx"),
+    "utf8",
+  );
+  const layout = layoutDict(MESSY_FILE);
+  const editor = dictTitleEditorBox(layout);
+  const firstBand = { top: layout.sections[0].y, height: DICT.sectionHeight };
+
+  check(
+    "the open editor really does reach into the first section's heading band",
+    editor !== null && editor.y + editor.height > firstBand.top,
+    `editor bottom ${editor === null ? "—" : editor.y + editor.height} vs band top ${firstBand.top} — if this ever stops being true, say so before deleting the assertion below rather than after`,
+  );
+
+  const sectionsAt = diagram.indexOf("layout.sections.map(");
+  const titleAt = diagram.indexOf("af-dict-title");
+  check(
+    "the title's group is painted AFTER every section, so nothing later can take its press",
+    sectionsAt > 0 && titleAt > sectionsAt,
+    "the title is drawn before the sections again — a section's reveal area is painted over the editor's Apply row and swallows the click",
+  );
+  /* AND THE REVEAL AREA IS STILL THERE. The other way to stop it eating the
+     press would be to make it inert, which would take the reorder handles
+     with it: an SVG group is hovered only through a painted child, and a row
+     is mostly gaps. */
+  check(
+    "the bands and rows keep the painted area their handles are revealed through",
+    /<RevealArea/.test(diagram) && /fill="transparent"/.test(diagram),
+    "without a painted hit area the chip only ever appears for a keyboard reader",
+  );
+  check(
+    "and the chip is still drawn last within its own row, over the columns it overlaps",
+    diagram.lastIndexOf("<ReorderHandles") > diagram.indexOf("field.cells.map"),
+    "a chip painted before the cells it covers is a control the text takes the press from",
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 

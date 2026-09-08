@@ -24,15 +24,15 @@
  * dictionary is a reference document, and a reference that needs JavaScript is
  * one a search engine cannot quote.
  *
- * THE ONE INTERACTIVE THING IT DRAWS is the reorder chip, and only when the
- * viewer hands it a `reorder` surface — a static render, an export and the
- * `/demo` preview pass nothing and get the table they always got.
+ * THE TWO INTERACTIVE THINGS IT DRAWS are the reorder chip and the title's own
+ * press target, and each appears only when the viewer hands over the matching
+ * surface — a static render, an export and the `/demo` preview pass neither and
+ * get the table they always got. Both are painted AFTER everything they sit
+ * over, because SVG has no z-index and the surface that owns a press has to be
+ * the last one painted there.
  */
 
 import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
-// The house glyph-width estimate, which the layout's own columns are measured
-// with — so the title's press target ends where its words do.
-import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import { cn } from "@/lib/utils";
 import type { DictLabFile } from "@/types";
 
@@ -41,10 +41,13 @@ import {
   COLUMN_LABEL,
   DICT,
   DICT_HANDLE,
+  DICT_TITLE,
   dictHandleChip,
+  dictTitleBox,
+  dictTitleEditorBox,
   layoutDict,
 } from "../lib/layout";
-import type { DictColumn, LaidDictField } from "../lib/layout";
+import type { DictBox, DictColumn, LaidDictField } from "../lib/layout";
 
 /**
  * Which token paints each flag.
@@ -155,31 +158,6 @@ export interface DictRetitleSurface {
    *  pressable. */
   form: React.ReactNode | null;
 }
-
-/**
- * The document title's type size, in LAYOUT UNITS.
- *
- * NAMED because the press target has to be measured from the size the title is
- * actually drawn at: an estimate off a different size gives a control that
- * ends before the words do, and a reader pointing at the tail of their own
- * title would hit the canvas instead.
- */
-const DICT_TITLE_SIZE = 22;
-
-/**
- * The room the title's editor asks for, in LAYOUT UNITS — a field and its
- * Apply row.
- *
- * CLAMPED INTO THE DRAWING rather than trusted: an `<svg>` clips its viewport,
- * so an editor hanging past the edge of a one-section dictionary would have
- * its Apply button shaved off with nothing on screen to say so. The form
- * scrolls inside whatever room it is given.
- *
- * MAINTAINED BY HAND against `HEADING_EDITOR` in `usecase-diagram.tsx`, which
- * a feature may not deep-import from. Only the reasoning is shared — that
- * canvas edits two lines and needs the room for both.
- */
-const DICT_TITLE_EDITOR = { width: 300, height: 112 };
 
 /**
  * A handle's identity in the DOM, so focus can be put back on the control the
@@ -379,48 +357,31 @@ function ReorderHandles({
  * explaining why the dictionary is not in the sweep put it in the sweep, and
  * four assertions failed on a comment.
  *
- * ONE BOX, TWO SIZES. Closed, it covers the title as drawn — measured from
- * `DICT_TITLE_SIZE` with the estimate the layout's own columns are measured
- * with, so it ends where the words do. Open, it is `DICT_TITLE_EDITOR` pulled
- * back inside the drawing; see that constant for the clip the clamp avoids.
+ * ONE BOX, TWO SIZES, AND NEITHER IS SOLVED HERE. Closed it is
+ * `dictTitleBox` — the title as drawn, measured with the estimate the layout's
+ * own columns are measured with, so it ends where the words do. Open it is
+ * `dictTitleEditorBox` — the title BAND's top-left corner, that measured
+ * width, and the room a labelled field with an Apply row needs. Both live in
+ * `lib/layout.ts` beside `dictHandleChip`, for that function's reason: a box
+ * drawn over the table has to be measured against the table, and this one was
+ * solved here from a hand-typed 300×112 centred on the title's own line —
+ * which put the form's top edge off the top of the drawing and left the clamp
+ * deciding where it landed. `check:dict-layout` measures both boxes now.
  */
 function TitleControl({
   title,
-  x,
-  centerY,
-  maxRight,
-  canvas,
+  box,
   retitle,
 }: {
   title: string;
-  x: number;
-  centerY: number;
-  /** The table's right edge — the press target never reaches past it, so a
-   *  long title cannot hand the reader a control wider than the drawing. */
-  maxRight: number;
-  canvas: { width: number; height: number };
+  /** Where this box goes, solved by the layout — the drawn title's own box, or
+   *  its editor's. */
+  box: DictBox;
   retitle: DictRetitleSurface;
 }): React.JSX.Element {
-  const fields = retitle.form;
-  const width =
-    fields === null
-      ? Math.min(
-          maxRight - x,
-          title.length * DICT_TITLE_SIZE * CHAR_WIDTH_RATIO + DICT.padX * 2,
-        )
-      : Math.min(DICT_TITLE_EDITOR.width, canvas.width);
-  const height =
-    fields === null
-      ? DICT_TITLE_SIZE * TITLE_HIT_LEADING
-      : Math.min(DICT_TITLE_EDITOR.height, canvas.height);
   return (
-    <foreignObject
-      x={Math.max(0, Math.min(x, canvas.width - width))}
-      y={Math.max(0, Math.min(centerY - height / 2, canvas.height - height))}
-      width={width}
-      height={height}
-    >
-      {fields ?? (
+    <foreignObject x={box.x} y={box.y} width={box.width} height={box.height}>
+      {retitle.form ?? (
         <button
           type="button"
           /* The identity focus is put back on after the edit — `dict-viewer.tsx`
@@ -450,11 +411,6 @@ function TitleControl({
     </foreignObject>
   );
 }
-
-/** How much taller than its type size the title's press target is drawn — the
- *  leading a single line of text sits in, so the control covers the words
- *  rather than only their x-height. */
-const TITLE_HIT_LEADING = 1.6;
 
 /** The reveal's hit area — the whole band or row, so hovering the white space
  * between two columns counts as pointing at it. An SVG group is hovered only
@@ -694,6 +650,10 @@ export function DictDiagram({
   /* The title's two states, read once: pressable, or open with the viewer's
      field in it. */
   const titleFields = retitle?.form ?? null;
+  /* And the box each state takes, solved by the layout — the drawn title's own
+     when it is only pressable, its editor's once the field is in it. */
+  const titleBox =
+    titleFields === null ? dictTitleBox(layout) : dictTitleEditorBox(layout);
 
   return (
     <svg
@@ -715,50 +675,6 @@ export function DictDiagram({
       role={reorder === undefined && retitle === undefined ? "img" : "group"}
       aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections${reorder === undefined ? "" : ". Every section and field carries move-earlier and move-later buttons — Tab reaches them."}${retitle === undefined ? "" : " The title is a button — press it to rewrite it."}`}
     >
-      {/* ---- the title band, and the one control that edits the DOCUMENT
-            rather than a row.
-
-            THE DRAWN TITLE IS THE AFFORDANCE. It is already at the top of the
-            table in the place a reader would point at to change it, so the
-            press target is laid over it and the `<text>` keeps the typography
-            the export ships — an HTML copy in the `foreignObject` would drift
-            from it at every zoom.
-
-            NOTHING IS OFFERED WHEN THERE IS NO TITLE, and that is not a gap to
-            fill: the gesture patches the header's existing `title` line, and a
-            document without one never parsed. */}
-      {layout.title !== null ? (
-        <g>
-          <text
-            className={cn(
-              "af-dict-title",
-              /* The field is opaque and stands where the title does, so the
-                 drawn copy would only show at its edges — and would be going
-                 stale as the reader types. */
-              titleFields !== null && "hidden",
-            )}
-            x={layout.columnX.name - DICT.padX}
-            y={layout.titleY}
-            dominantBaseline="central"
-            fontSize={DICT_TITLE_SIZE}
-            fontWeight={700}
-            fill="var(--foreground)"
-          >
-            {layout.title}
-          </text>
-          {retitle === undefined ? null : (
-            <TitleControl
-              title={layout.title}
-              x={layout.columnX.name - DICT.padX}
-              centerY={layout.titleY}
-              maxRight={right}
-              canvas={{ width: layout.width, height: layout.height }}
-              retitle={retitle}
-            />
-          )}
-        </g>
-      ) : null}
-
       {layout.sections.map((section) => (
         <g
           key={section.label}
@@ -891,6 +807,60 @@ export function DictDiagram({
           ))}
         </g>
       ))}
+
+      {/* ---- the title band, and the one control that edits the DOCUMENT
+            rather than a row.
+
+            THE DRAWN TITLE IS THE AFFORDANCE. It is already at the top of the
+            table in the place a reader would point at to change it, so the
+            press target is laid over it and the `<text>` keeps the typography
+            the export ships — an HTML copy in the `foreignObject` would drift
+            from it at every zoom.
+
+            PAINTED LAST, AFTER EVERY SECTION, and that is a fix rather than a
+            tidy-up. It used to be drawn first, which is where a heading
+            belongs in reading order and exactly the wrong place in PAINT
+            order: SVG has no z-index, so the first section's own reveal area —
+            a full-width transparent rect, which still hit-tests — was laid
+            over the bottom of the open editor and swallowed the press on its
+            Apply row. The editor is 112 units tall and the band it replaces is
+            54, so that overlap cannot be designed away; the surface that owns
+            the press has to be the one painted last. `check:dict-reorder`
+            holds the ordering, and `check:dict-layout` measures the overlap
+            that makes it necessary. Nothing moves visually: the band sits in
+            the canvas's top margin, where no section draws.
+
+            NOTHING IS OFFERED WHEN THERE IS NO TITLE, and that is not a gap to
+            fill: the gesture patches the header's existing `title` line, and a
+            document without one never parsed. */}
+      {layout.title !== null ? (
+        <g>
+          <text
+            className={cn(
+              "af-dict-title",
+              /* The field is opaque and stands where the title does, so the
+                 drawn copy would only show at its edges — and would be going
+                 stale as the reader types. */
+              titleFields !== null && "hidden",
+            )}
+            x={layout.columnX.name - DICT.padX}
+            y={layout.titleY}
+            dominantBaseline="central"
+            fontSize={DICT_TITLE.size}
+            fontWeight={700}
+            fill="var(--foreground)"
+          >
+            {layout.title}
+          </text>
+          {retitle === undefined || titleBox === null ? null : (
+            <TitleControl
+              title={layout.title}
+              box={titleBox}
+              retitle={retitle}
+            />
+          )}
+        </g>
+      ) : null}
     </svg>
   );
 }

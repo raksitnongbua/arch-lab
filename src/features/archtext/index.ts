@@ -174,7 +174,11 @@ export {
 } from "./lib/usecase/keywords";
 export { parseErText, parseErTextWithSpans } from "./lib/er/parse";
 export type { ErSpans } from "./lib/er/parse";
-export { canonicalErEntityBlock, serializeErText } from "./lib/er/serialize";
+export {
+  canonicalErEntityBlock,
+  canonicalErRelationshipBlock,
+  serializeErText,
+} from "./lib/er/serialize";
 export {
   ATTRIBUTE_KEYS,
   ER_HEADER_WORD,

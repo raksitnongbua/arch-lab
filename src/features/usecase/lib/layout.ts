@@ -1565,3 +1565,60 @@ function layoutHeading(
     metrics: UC_HEADING,
   });
 }
+
+/**
+ * Where the heading's EDITOR goes, in LAYOUT UNITS — the box the canvas hands
+ * the viewer's fields when the drawn heading has been pressed.
+ *
+ * IT IS MEASURED OFF THE HEADING, not off a constant, and that is the whole
+ * point of it living here. A fixed size ignored `heading.width`/`height`
+ * entirely, so a diagram with a short title handed the reader a form half
+ * again as wide as the words it replaced — the reported "the edit box looks
+ * too big". The heading's own box is already solved from the wrapped title, so
+ * the editor tracks it and the swap reads as the same thing becoming typeable
+ * rather than a panel landing on top of it.
+ *
+ * `min` IS A FLOOR, NOT A SIZE. Two labelled fields and the Apply row have a
+ * genuine minimum below which they stop being usable, and a one-line heading
+ * is smaller than that — so the caller states the room its own HTML needs and
+ * this grows past it whenever the heading is bigger. The floor belongs to the
+ * component, because it is a measurement of form chrome and not of the
+ * drawing.
+ *
+ * THE CLAMP IS NOT CAUTION. An `<svg>` clips its viewport, so a box reaching
+ * past the bottom edge of a one-actor document would have its Apply button
+ * shaved off with nothing on screen to say so; the returned box is always
+ * inside `bounds`, and the form scrolls inside whatever room it is given.
+ * `check:usecase-layout` asserts both halves — that the box tracks the
+ * heading, and that it never leaves the frame.
+ *
+ * Pure, and here rather than in the renderer, so the check script can measure
+ * it on real documents instead of reading it out of a `.tsx` file.
+ */
+export function usecaseHeadingEditorBox(
+  layout: Pick<UseCaseLayout, "bounds" | "heading">,
+  /** The press target's overhang past the glyphs — the editor starts where the
+   *  pressable heading started, so the box does not jump on the swap. */
+  pad: UCPoint,
+  min: { width: number; height: number },
+): UCRect {
+  const { bounds, heading } = layout;
+  const width = Math.min(
+    Math.max(min.width, heading.width + pad.x * 2),
+    bounds.width,
+  );
+  const height = Math.min(
+    Math.max(min.height, heading.height + pad.y * 2),
+    bounds.height,
+  );
+  const anchor = { x: UC.marginX - pad.x, y: UC.marginTop - pad.y };
+  return {
+    x: Math.max(bounds.x, Math.min(anchor.x, bounds.x + bounds.width - width)),
+    y: Math.max(
+      bounds.y,
+      Math.min(anchor.y, bounds.y + bounds.height - height),
+    ),
+    width,
+    height,
+  };
+}

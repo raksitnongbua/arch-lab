@@ -44,7 +44,10 @@ import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 // refuses is that module's verdict — and re-declaring it here would be a
 // second definition free to drift from the gesture that honours it. The
 // flowchart viewer imports `FlowNodeRevision` the same way.
-import type { ErEntityRevision } from "@/features/playground/input/er-edit";
+import type {
+  ErEntityRevision,
+  ErRelationshipRevision,
+} from "@/features/playground/input/er-edit";
 
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
@@ -116,6 +119,28 @@ export interface ErEditHandlers {
    * whole-bundle contract above gives.
    */
   onReviseEntity?: (entityId: string, revision: ErEntityRevision) => void;
+  /**
+   * Rewrite one relationship's verb — the label on the line, and only that.
+   * What this may NOT rewrite, and why each refusal is a refusal rather than
+   * an omission, is `ErRelationshipRevision`'s verdict.
+   *
+   * BY INDEX, WHERE THE ENTITY GESTURES TAKE AN ID, and the asymmetry is the
+   * grammar's: a relationship has no id and two between the same pair of
+   * tables are legal text, so a `from`/`to` pair does not name one. It is
+   * also how the focus model already addresses a line
+   * (`ErFocus`'s `{ kind: "relationship", index }`), so the panel hands back
+   * the address it was opened with rather than deriving a second one.
+   *
+   * OPTIONAL, for the same reason `onReviseEntity` is: `revise` is one cell
+   * of `CANVAS_EDIT_OFFERS` answered per notation and per pane, and an absent
+   * handler is how this bundle spells "not offered" — the aside then names
+   * the join in words and offers no field, rather than a form that submits
+   * into nothing.
+   */
+  onReviseRelationship?: (
+    index: number,
+    revision: ErRelationshipRevision,
+  ) => void;
   /** False while the host holds the handlers but must not run them. */
   editable: boolean;
 }
@@ -336,6 +361,72 @@ function EntityWordingForm({
   );
 }
 
+/**
+ * A focused relationship's verb, editable in the aside the canvas already
+ * opens for it — the same `"surface"` move `EntityWordingForm` is, into the
+ * panel that was already there.
+ *
+ * ONE FIELD, and the aside above it is where the reader learns why: the
+ * cardinalities and the identifying/non-identifying kind are spelled out in
+ * prose two lines up and are NOT editable here, because each is a statement
+ * about the schema rather than a caption on it. `ErRelationshipRevision`
+ * argues each refusal; this component only has to not offer them.
+ *
+ * `key`ed ON THE INDEX by its caller, so focusing another line REMOUNTS this
+ * with that line's verb. A shared instance would submit the half-typed verb
+ * of the previous join against this one — the bug every dock and panel in
+ * this product carries a `key` for.
+ *
+ * AN EMPTY BOX IS A REAL SUBMISSION, not a refused one: an unlabelled line is
+ * a real choice in a dense diagram (`ErRelationship.label` says so), so
+ * clearing the field STRIPS the `: verb` rather than being declined. That is
+ * the opposite of the entity form's label, which is refused when empty
+ * because the parser refuses a nameless table.
+ */
+function RelationshipWordingForm({
+  index,
+  label,
+  onRevise,
+}: {
+  index: number;
+  label?: string;
+  onRevise: (index: number, revision: ErRelationshipRevision) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(label ?? "");
+
+  return (
+    <form
+      className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onRevise(index, { label: orAbsent(draft) });
+      }}
+    >
+      <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        Wording
+      </p>
+      <EntityField term="Verb">
+        <input
+          className={FIELD_CLASS}
+          value={draft}
+          placeholder="places"
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </EntityField>
+      <button
+        type="submit"
+        className="mt-0.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        The crow&rsquo;s feet and the solid or dashed line are edited in the
+        source text — each states what the schema allows, not what it is called.
+      </p>
+    </form>
+  );
+}
+
 export function ErViewer({
   file,
   onAnnounce,
@@ -452,6 +543,10 @@ export function ErViewer({
      controls read it. `ErEditHandlers.onReviseEntity` carries why this one
      may be absent while the other three are not. */
   const revise = editing ? edit?.onReviseEntity : undefined;
+  /* The relationship's wording gesture, read through `editing` for the same
+     reason. Separate from `revise` above because the host may hold one and
+     not the other — they are two members of the bundle, not one. */
+  const reviseEdge = editing ? edit?.onReviseRelationship : undefined;
   const svgRef = useRef<SVGSVGElement>(null);
 
   /**
@@ -572,10 +667,116 @@ export function ErViewer({
     [edit, entityDrag],
   );
 
+  /* ---- the three ways out of focus ---------------------------------------
+   *
+   * Escape was the only one, and the other two were reported as focus being
+   * stuck: a reader who had pressed Apply was left reading a DIMMED schema
+   * with a panel over it, and pressing the empty ground — the gesture every
+   * canvas tool answers — did nothing at all.
+   *
+   * APPLYING EXITS FOCUS, and this canvas is the only one of the four that
+   * does it: the C4 panel, the flowchart dock and the sequence dock all keep
+   * their selection after an Apply, which was measured before writing this
+   * rather than assumed. The divergence is the FOCUS MODEL's, not a taste:
+   * focus here is a LENS, not a selection — everything the focused table is
+   * not joined to is dimmed and the lit connectors animate — so leaving it up
+   * after the edit has landed leaves the reader looking at three-quarters of
+   * their schema greyed out with no indication that a keypress restores it.
+   * A C4 selection outlines one node and dims nothing, so keeping it costs
+   * the reader nothing to keep.
+   *
+   * THE ORDER IS SUBMIT, THEN EXIT. The gesture runs first, synchronously, so
+   * the patched document and the host's announcement both land — clearing
+   * first would unmount the form mid-submit and leave the announcement
+   * describing an entity nothing was focused on. And the exit is
+   * unconditional: `revisedErEntityEdit` returns null for a form submitted
+   * unchanged, and the reader who pressed Apply on an unchanged form still
+   * means "I am done with this table".
+   */
+  const applyEntityRevision = useCallback(
+    (entityId: string, revision: ErEntityRevision) => {
+      revise?.(entityId, revision);
+      setRawFocus(null);
+    },
+    [revise],
+  );
+
+  const applyRelationshipRevision = useCallback(
+    (index: number, revision: ErRelationshipRevision) => {
+      reviseEdge?.(index, revision);
+      setRawFocus(null);
+    },
+    [reviseEdge],
+  );
+
+  /**
+   * Where a press on the pane began, in CLIENT pixels — the only thing the
+   * backdrop click needs, and it needs it because nothing else can tell it
+   * whether the press was a click or a pan.
+   *
+   * THE CAMERA CANNOT ANSWER THIS. `useCanvasZoom` owns the drag-to-pan and
+   * keeps no `moved` flag and no threshold of its own: it takes pointer
+   * capture on the pane at pointerdown and releases it at pointerup,
+   * suppressing nothing. So the travel is measured here, against the
+   * threshold this file already owns, in the shape the flowchart canvas uses
+   * next door (`panSuppressesClick`). Giving the camera the flag instead
+   * would delete this ref and every canvas would inherit the answer — that is
+   * one line in `use-canvas-zoom.ts` and the better fix.
+   *
+   * AND A PANE-LEVEL HANDLER IS THE ONLY PLACE THIS CAN LIVE. `ErDiagram`
+   * draws a transparent backdrop rect whose `onClick` clears focus, and it
+   * never fires for a mouse press on the ground: the camera's capture
+   * RETARGETS the trailing click to the pane, which is the same retargeting
+   * the entity drag takes capture lazily to avoid. The rect still answers a
+   * press the camera stands down from, so both paths stay.
+   */
+  const panPress = useRef<{ clientX: number; clientY: number } | null>(null);
+
+  const handlePanePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      panPress.current = { clientX: event.clientX, clientY: event.clientY };
+    },
+    [],
+  );
+
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const press = panPress.current;
+      panPress.current = null;
+      /* A DRAG IS NOT A CLICK. Over the threshold this press panned the
+         canvas or placed a table, and either way it must not also clear the
+         focus the reader is working inside. Under it — or with no press
+         recorded at all, which is a click synthesised by something other
+         than a pointer — the ground was clicked. */
+      if (
+        press !== null &&
+        Math.abs(event.clientX - press.clientX) +
+          Math.abs(event.clientY - press.clientY) >
+          ENTITY_DRAG_THRESHOLD
+      ) {
+        return;
+      }
+      /* THE SCROLLBAR GUTTERS ARE NOT THE GROUND, the flowchart backdrop's
+         own guard: a press on the pane's scrollbar is a camera gesture and
+         clearing focus from it reads as the panel closing itself. */
+      const pane = event.currentTarget;
+      const rect = pane.getBoundingClientRect();
+      if (
+        event.clientX - rect.left > pane.clientWidth ||
+        event.clientY - rect.top > pane.clientHeight
+      ) {
+        return;
+      }
+      setRawFocus(null);
+    },
+    [],
+  );
+
   return (
     <div className="relative h-full w-full">
       {/* Escape clears focus from anywhere on the canvas, matching the
-          viewer's own top-level convention. */}
+          viewer's own top-level convention. A press on the ground and a press
+          on Apply do too — see the three-ways-out note above. */}
       <div
         ref={paneRef}
         /* THE GROUND, filling the pane rather than the drawing — the reversal
@@ -596,6 +797,12 @@ export function ErViewer({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        /* The ground's own press. It records where the press began for the
+           click below and claims nothing else — the camera's pan and the
+           entity drag both still see it, because neither this nor they stop
+           propagation. */
+        onPointerDown={handlePanePointerDown}
+        onClick={handleBackdropClick}
       >
         {/* Sized in PIXELS from the camera's scale rather than `width="100%"`:
             a percentage width can only ever shrink to the pane, which is why
@@ -737,6 +944,21 @@ export function ErViewer({
               ? "Identifying — drawn solid: the child cannot exist without its parent."
               : "Non-identifying — drawn dashed: the child has an identity of its own."}
           </p>
+          {/* THE FORM SITS UNDER THE PROSE rather than replacing it, which is
+              the opposite of the entity panel's answer and for a reason: the
+              entity form's four fields ARE the prose that panel was showing,
+              so two copies would leave the reader guessing which the diagram
+              believes. Here the prose is the CARDINALITY sentence, which this
+              form deliberately cannot write — it is the argument for what the
+              one field does not cover, so it has to stay visible above it. */}
+          {reviseEdge !== undefined && focus?.kind === "relationship" ? (
+            <RelationshipWordingForm
+              key={focus.index}
+              index={focus.index}
+              label={focusedEdge.label}
+              onRevise={applyRelationshipRevision}
+            />
+          ) : null}
         </aside>
       ) : null}
 
@@ -781,7 +1003,7 @@ export function ErViewer({
             <EntityWordingForm
               key={focused.id}
               entity={focused}
-              onRevise={revise}
+              onRevise={applyEntityRevision}
             />
           )}
 

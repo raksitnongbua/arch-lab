@@ -55,6 +55,19 @@
  *      role pairs `USECASE_ROLE_BY_KIND` maps to (screen and export cannot
  *      diverge), each declared exactly once so no theme block can shadow
  *      one into a half-populated variant.
+ *  14. THE HEADING'S EDITOR BOX, measured: the retitle form tracks the
+ *      heading it replaces rather than being a constant (the reported "the
+ *      edit box is too big"), the component's form-chrome minimum acts as a
+ *      FLOOR under a one-line heading, and a box asking for more room than
+ *      the drawing has is pulled back inside `bounds` — past the frame the
+ *      `<svg>` clips its viewport and the Apply button is silently gone.
+ *  15. THE FOCUS EXITS, pinned from the viewer's SOURCE because the
+ *      behaviour lives in a `.tsx` no harness here can load: a wording
+ *      Apply drops the focus after the host's handler runs and without a
+ *      second announcement, a pointercancel does not arm the click
+ *      suppressor (which is what swallowed the next background press), the
+ *      pane backdrop still clears focus, and the open heading form keeps its
+ *      own clicks off that backdrop.
  *
  * Exits non-zero on any failure. Run with: pnpm check:usecase-layout
  */
@@ -96,7 +109,7 @@ registerHooks({
 const { parseUseCaseText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutUseCase, UC } = await import(
+const { layoutUseCase, UC, usecaseHeadingEditorBox } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/layout.ts")).href
 );
 const { USECASE_KIND_TOKENS, USECASE_ROLE_BY_KIND } = await import(
@@ -769,6 +782,93 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
+/* The heading's editor box                                                 */
+/*                                                                          */
+/* A reader reported the retitle form as "too big", and it was: the box was  */
+/* a flat 300x208 that never looked at the heading it replaced, so a         */
+/* diagram with a short title got a panel half again as wide as its own      */
+/* words. `usecaseHeadingEditorBox` measures the heading now, with the        */
+/* component's form-chrome minimum as a FLOOR. Both halves are asserted      */
+/* here, and the third — the clamp that keeps Apply out of the `<svg>`       */
+/* clip — is asserted on the smallest document there is, because that is     */
+/* the one where the form is bigger than the drawing.                        */
+/*                                                                          */
+/* THE PAD AND THE FLOOR ARE ARGUMENTS, so nothing here is scraped out of    */
+/* the `.tsx` that owns them; what is proven is that the function is         */
+/* MEASURED rather than constant, which is what the reported bug was.        */
+/* ----------------------------------------------------------------------- */
+
+console.log("the heading's editor box (measured, floored, clamped)");
+
+{
+  const PAD = { x: 6, y: 4 };
+  const FLOOR = { width: 240, height: 184 };
+  const editorBox = (l) => usecaseHeadingEditorBox(l, PAD, FLOOR);
+
+  /* Two documents that differ ONLY in their title's length. A constant-sized
+     box gives them the same width; a measured one does not, and the gap is
+     the gap between the two headings. */
+  const titled = (title) =>
+    layoutUseCase(
+      parseUseCaseText(
+        `archlab 1.0 usecase\ntitle "${title}"\n\n@usecase\n` +
+          `  actor a "Author"\n  boundary "System"\n` +
+          `    usecase draft "Draft the note"\n    usecase publish "Publish it"\n\n` +
+          `  a -- draft\n  a -- publish\n`,
+      ),
+    );
+  const shortTitle = titled("Editorial review workflow, in brief");
+  const longTitle = titled(
+    "Editorial review workflow, in brief, with the second half spelled out",
+  );
+  check(
+    "the editor box is MEASURED off the heading, not sized from a constant — two documents differing only in title length get boxes whose widths differ by exactly what their headings' widths differ by, which is the reported 'the edit box is too big' held by measurement",
+    Math.abs(
+      editorBox(longTitle).width -
+        editorBox(shortTitle).width -
+        (longTitle.heading.width - shortTitle.heading.width),
+    ) < 1e-9 && editorBox(longTitle).width > editorBox(shortTitle).width,
+    `${box(editorBox(shortTitle))} vs ${box(editorBox(longTitle))}`,
+  );
+  check(
+    "both of those headings are wider than the floor — otherwise the assertion above would be comparing two floors and proving nothing about the measurement",
+    shortTitle.heading.width + PAD.x * 2 > FLOOR.width,
+  );
+  check(
+    "the editor covers the heading it replaces, pad included — a form narrower than the words it is editing reads as a panel dropped beside the title rather than the title becoming typeable",
+    editorBox(shortTitle).width >= shortTitle.heading.width,
+  );
+  check(
+    "the floor still holds under a one-line heading — 'Sketch' measures a fraction of the room two labelled fields and the Apply row need, so the minimum is a floor and the box is never shrunk to the words",
+    editorBox(bareLayout).width === FLOOR.width,
+    `${box(editorBox(bareLayout))} for a heading ${bareLayout.heading.width} wide`,
+  );
+  /* THE CLIP. `check:usecase-layout` cannot see a shaved Apply button, but it
+     can see the box leave the frame the `<svg>` viewport is cut to — which is
+     the same thing one render later. Asserted against a floor LARGER than the
+     whole diagram, because that is the case that produced the shipped
+     symptom. */
+  for (const [label, l] of [
+    ["bare", bareLayout],
+    ["food delivery", layout],
+    ["thai", thaiLayout],
+  ]) {
+    const huge = usecaseHeadingEditorBox(l, PAD, {
+      width: 4000,
+      height: 4000,
+    });
+    check(
+      `${label}: an editor asking for more room than the drawing has is pulled back inside bounds on both axes — past the frame the <svg> clips its viewport and the Apply button is gone with nothing on screen to say so`,
+      huge.x >= l.bounds.x &&
+        huge.y >= l.bounds.y &&
+        huge.x + huge.width <= l.bounds.x + l.bounds.width + 1e-9 &&
+        huge.y + huge.height <= l.bounds.y + l.bounds.height + 1e-9,
+      `${box(huge)} in bounds ${box(l.bounds)}`,
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* Fixture 4 — pins: an author-stated (x,y) on one element                  */
 /*                                                                          */
 /* Every assertion here is a DIFFERENCE between two layouts of the SAME      */
@@ -1252,6 +1352,57 @@ const VAR_TO_KEY = Object.fromEntries(
         /strokeWidth=\{focused \? UC_FOCUS_STROKE : UC_STROKE\}/.test(
           diagramSrc,
         ),
+    );
+    /* ---- THE FOCUS EXITS. Three reported symptoms, all of them "the dock
+       stays open over a diagram I have finished with", and none of them
+       visible to any assertion that measures geometry. They are pinned from
+       the source because the behaviour lives in a `.tsx` component that no
+       harness here can load — and each regex names the STATEMENT that would
+       have to go missing, not the shape of the code around it. ---- */
+    check(
+      "the diagram hands the WHOLE LAYOUT to the shared editor-box helper rather than sizing the retitle form itself — a box computed in the renderer is how the form came to ignore the heading it replaces, which is the reported 'too big'",
+      /usecaseHeadingEditorBox\(\s*layout,/.test(diagramSrc) &&
+        !/HEADING_EDITOR\.(?:width|height)/.test(diagramSrc),
+    );
+    check(
+      "applying a wording edit DROPS THE FOCUS, and drops it after the host's handler has run — the dock left standing over an element the reader has just finished rewriting is the reported bug, and clearing first would take the form away mid-submit",
+      /onReviseElement\(elementId, revision\);\s*\n\s*setRawFocus\(null\);/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "that exit does NOT route through handleClearFocus — its 'Focus cleared.' would land in the single polite live region one setState after the host's own edit sentence and swallow it, so the reader would hear that their focus went and never what their edit did",
+      /onReviseElement\(elementId, revision\);\s*\n\s*setRawFocus\(null\);\s*\n\s*paneFocusClaim\.current = true;/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "the exit's pane-focus claim is ANSWERED by an effect that focuses the pane — the Apply button unmounts with the dock, and a keyboard reader left at the top of the page cannot make a second edit without tabbing in from nowhere",
+      /if \(!paneFocusClaim\.current\) return;\s*\n\s*paneFocusClaim\.current = false;\s*\n\s*paneRef\.current\?\.focus\(\);/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "a CANCELLED pointer gesture does not arm the click suppressor — a pointercancel produces no trailing click to suppress, so arming it left the flag set and the NEXT background press was swallowed instead: the reported 'an outside click does not exit focus'",
+      /if \(!cancelled\) panSuppressesClick\.current = true;/.test(viewerSrc) &&
+        /if \(state\.moved && !cancelled\) panSuppressesClick\.current = true;/.test(
+          viewerSrc,
+        ) &&
+        /onPointerCancel=\{handlePointerCancel\}/.test(viewerSrc),
+    );
+    check(
+      "the pane backdrop still clears focus, behind the drag suppressor and the scrollbar-gutter test — the gesture the sequence, flowchart and C4 canvases all carry, and the one an exit-on-apply change must not quietly replace",
+      /onClick=\{handleBackdropClick\}/.test(viewerSrc) &&
+        /panSuppressesClick\.current\) \{\s*\n\s*panSuppressesClick\.current = false;\s*\n\s*return;/.test(
+          viewerSrc,
+        ) &&
+        /clientWidth \|\|[\s\S]{0,80}clientHeight\s*\n\s*\) \{\s*\n\s*return;\s*\n\s*\}\s*\n\s*handleClearFocus\(\);/.test(
+          viewerSrc,
+        ),
+    );
+    check(
+      "the OPEN heading form stops its own clicks reaching the backdrop, as the closed heading button already did — without it every press inside the fields cleared the reader's element focus and announced 'Focus cleared.' over the retitle sentence",
+      /onClick=\{\(event\) => event\.stopPropagation\(\)\}/.test(viewerSrc),
     );
     check(
       "no source file reaches for Math.random() — the breath scatter is a hash so a re-render cannot reshuffle a resting diagram and the exporter stays deterministic",

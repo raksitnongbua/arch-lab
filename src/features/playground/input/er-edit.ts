@@ -36,14 +36,18 @@
  *      spent two releases documenting a feature that had never existed while
  *      no consumer read it, and a field with no reader is that lie twice.
  *
- * AN ENTITY IS ADDRESSED BY ID, which the parser proves unique per file, so
- * none of the index-addressing the flowchart needs for its edges applies here.
+ * AN ENTITY IS ADDRESSED BY ID, which the parser proves unique per file. A
+ * RELATIONSHIP IS ADDRESSED BY INDEX, because it has none and the parser
+ * proves nothing about it — `revisedErRelationshipEdit` carries the evidence,
+ * and it is the flowchart's edge addressing rather than an exception to this
+ * file.
  */
 
-import type { ErEntity, ErLabFile } from "@/types";
+import type { ErEntity, ErLabFile, ErRelationship } from "@/types";
 
 import {
   canonicalErEntityBlock,
+  canonicalErRelationshipBlock,
   parseErTextWithSpans,
   serializeErText,
   type ErSpans,
@@ -139,22 +143,166 @@ export function revisedErEntityEdit(
      name on it. */
   if (label.trim() === "") return null;
 
-  return patchOne(doc, sourceText, entityId, (entity) => ({
-    /* Named field by field rather than spread, because a spread cannot REMOVE
-       a key and an emptied box has to. */
-    id: entity.id,
-    label,
-    ...(technology === undefined ? {} : { technology }),
-    ...(tags === undefined || tags.length === 0 ? {} : { tags }),
-    ...(description === undefined ? {} : { description }),
-    /* CARRIED, NEVER REVISED: the placement for the reason above, the columns
-       for the reason `ErEntityRevision` states. */
-    ...(entity.position === undefined ? {} : { position: entity.position }),
-    ...(entity.pinned === undefined ? {} : { pinned: entity.pinned }),
-    ...(entity.attributes === undefined
-      ? {}
-      : { attributes: entity.attributes }),
-  }));
+  return patchOne(doc, sourceText, entityId, (entity) => {
+    /* SPREAD, THEN DELETE — and it was named field by field, which ATE THE
+       AUTHOR'S `!` ESCAPES. The old comment's reasoning was sound as far as it
+       went ("a spread cannot REMOVE a key and an emptied box has to") and the
+       conclusion was wrong: naming the fields means naming ALL of them, and a
+       forward-compatible key from a newer minor is one nobody here can name.
+       An entity carrying `! weight : 3` lost that line the moment its label
+       was retyped, because `assemble` puts an unknown on the entity as its own
+       property and the rebuild simply did not copy it.
+
+       Same class as the two bugs beside it: `revisedFlowNodeEdit` dropping a
+       node's `position`, and this module's own relationship gesture, which was
+       written field by field first and ate a join's escape until its
+       assertion caught it. A block patch respells the whole declaration, so
+       anything the rebuild forgets is anything the author loses.
+
+       Delete is what an emptied box needs, and it is the only thing a spread
+       could not do — so the spread comes first and the deletes follow. */
+    const next = { ...entity, label };
+    if (technology === undefined) delete next.technology;
+    else next.technology = technology;
+    if (tags === undefined || tags.length === 0) delete next.tags;
+    else next.tags = tags;
+    if (description === undefined) delete next.description;
+    else next.description = description;
+    /* `position`, `pinned` and the columns are CARRIED, and now by the spread
+       rather than by three lines that had to remember them. */
+    return next;
+  });
+}
+
+/**
+ * The one field a selected relationship's panel may rewrite: the VERB on the
+ * line.
+ *
+ * WHY THE LABEL EARNS A GESTURE. It is the only part of a join the crow's
+ * feet cannot draw. The panel already spells the cardinalities in words
+ * ("exactly one customer places zero or more orders"), and the label is the
+ * middle of that sentence — the one word in it the reader can be wrong about
+ * and the diagram cannot correct.
+ *
+ * THREE FIELDS ARE ABSENT, and the absences are the content of this type.
+ * `FlowNodeRevision` refuses `shape` because it would change what a step's
+ * arrows MEAN; these refuse in the same spirit, and the argument has to be
+ * made per field rather than by analogy:
+ *
+ * `fromCardinality`/`toCardinality` ARE THE NOTATION, not a caption on it.
+ * The pair IS the crow's-foot glyph at each end, and changing one restates
+ * what the schema permits — "an order belongs to exactly one customer" versus
+ * "to zero or one" is a nullable foreign key, which is a claim about the
+ * database and not about the drawing. It is also the one field on this line
+ * whose two halves are positional (`ErRelationship`: "the pairing is
+ * positional, not inferred"), so a form offering them would have to teach
+ * which end is which before it could be used correctly. A gesture for this
+ * belongs on the ENDS the reader can see — a control on the glyph itself,
+ * with its own verdict about what it means to loosen a constraint — not in a
+ * text field under a label box.
+ *
+ * `kind` IS THE `--`/`..` TOKEN, and it says whether the child can exist
+ * without its parent. Same class of claim: identifying versus non-identifying
+ * is a statement about the key, which the panel already explains in a
+ * sentence of its own ("the child cannot exist without its parent"). A
+ * checkbox that rewrote it would let a reader change what the schema asserts
+ * while believing they were retyping a verb.
+ *
+ * `from`/`to` NAME ENTITIES, so they are refused outright rather than argued
+ * — a graph edit wearing a field edit's clothes, exactly as `ErEntityRevision`
+ * refuses `id`. Repointing a join is a gesture whose verdict has to answer
+ * for the entity left with nothing pointing at it, and it is not this one.
+ *
+ * REMOVAL IS NOT HERE EITHER, and its absence is a decision rather than an
+ * oversight: `canvas-editing.md` has removal riding under `revise` but settled
+ * separately per notation, and a removed join asks what happens to a child
+ * whose parent it was identifying. That verdict is unwritten, so the gesture
+ * is unbuilt.
+ */
+export interface ErRelationshipRevision {
+  /** The verb, or absent to strip the `: label` from the line entirely. */
+  label?: string;
+}
+
+/**
+ * `doc` with one relationship's label rewritten, or `null` when the edit
+ * cannot apply.
+ *
+ * BY INDEX, and the evidence is the parser's rather than this file's. An ER
+ * relationship carries no id, and `parseErTextWithSpans` proves no uniqueness
+ * over relationships at all — it rejects a duplicate entity id and a
+ * duplicate column name, and says nothing about two lines joining the same
+ * pair. So `customer ||--o{ order : places` and `customer ||--o{ order :
+ * returns` are both legal in one file, and a `from`/`to` key would rewrite
+ * whichever came first: silently, and a screen away from the line the reader
+ * pressed. `ErSpans.relationships` is therefore the index-aligned ARRAY
+ * `FlowchartSpans.edges` is, built from the same pending array `resolve` maps
+ * into the model, so `spans.relationships[i]` and `file.relationships[i]` are
+ * one line by construction.
+ *
+ * AN EMPTIED LABEL IS DROPPED rather than written as `: ""`. The parser
+ * refuses an empty one outright and says to omit the `":"` instead, and the
+ * serializer THROWS on it — so writing one would take the page down from the
+ * panel's Apply. Whitespace counts as empty for the same reason it does in
+ * `revisedErEntityEdit`: the serializer would quote it and the canvas would
+ * draw a line captioned with a space.
+ *
+ * EVERYTHING ELSE ON THE LINE IS CARRIED BY SPREADING THE CURRENT
+ * RELATIONSHIP, then dropping or writing the one field — the shape
+ * `pinnedErEntityEdit` uses, and the opposite of the entity wording
+ * gesture's field-by-field rebuild. Naming the fields was written first and
+ * was WRONG, caught by the assertion for it: a relationship carries the
+ * author's `!` escapes as extra keys (`emitRelationship` writes them back out
+ * of `splitUnknowns`), and a rebuild from the five known fields silently ate
+ * an `! weight: 3` the reader never pointed at. A block patch respells the
+ * whole block, so anything the rebuild forgets is anything the author loses:
+ * the two cardinalities and the kind would come back as the serializer's
+ * reading of a half-built record and quietly restate the schema, and the
+ * escapes would simply be gone. Spreading carries all of it; `delete` is what
+ * a spread cannot do on its own, and an emptied box needs it.
+ */
+export function revisedErRelationshipEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  index: number,
+  revision: ErRelationshipRevision,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "er") {
+    return null;
+  }
+  const relationships = doc.file.relationships ?? [];
+  const current = relationships[index];
+  if (current === undefined) return null;
+
+  const { label } = revision;
+  const trimmed = label === undefined ? "" : label.trim();
+  const revised: ErRelationship = { ...current };
+  /* An EMPTIED box strips the `: label` from the line rather than writing
+     `: ""`, which the parser refuses and the serializer throws on. Absent is
+     a real state here — an unlabelled join is a choice in a dense diagram
+     (`ErRelationship.label`) — so this is a removal, not a defaulting. */
+  if (trimmed === "") delete revised.label;
+  else revised.label = trimmed;
+
+  const edited: ErLabFile = {
+    ...doc.file,
+    relationships: relationships.map((relationship, at) =>
+      at === index ? revised : relationship,
+    ),
+  };
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable === null) return null;
+  const span = patchable.spans.relationships[index];
+  const lines = canonicalErRelationshipBlock(edited, index);
+  if (span === undefined || lines === null) return null;
+
+  const patched = applyPatches(sourceText, [{ span, lines }]);
+  /* A form submitted with nothing changed in it: no text change, no undo
+     entry, no re-render — the same answer `patchOne` gives a drag that landed
+     where it began. */
+  if (patched === sourceText) return null;
+  return adopt(doc, patched);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -47,7 +47,15 @@ registerHooks({
 const { parseDictText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutDict, DICT, wrapToWidth, badgeRunWidth } = await import(
+const {
+  layoutDict,
+  DICT,
+  DICT_TITLE,
+  dictTitleBox,
+  dictTitleEditorBox,
+  wrapToWidth,
+  badgeRunWidth,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/dict/lib/layout.ts")).href
 );
 const { DICT_EXAMPLE } = await import(
@@ -303,6 +311,133 @@ console.log("the table uses its room, but not past readable");
         ),
       ),
     ),
+  );
+}
+
+console.log("the title's editor sits on the band it edits");
+
+{
+  /* THE BUG THESE EXIST FOR, reported by someone using the canvas: "the title
+     modal is not moved to the top". The editor's box was solved in the
+     renderer as a hand-typed 300×112 CENTRED ON THE TITLE'S OWN LINE, the way
+     the 35-unit press target still is. Centring a 112-unit form on a line 55
+     units down puts its top edge at -1, so `Math.max(0, …)` decided where it
+     landed rather than the layout: it opened 28 units ABOVE the band it was
+     editing, in the canvas's top margin, and hung its Apply row over the first
+     section's heading.
+
+     A form that lands outside the band it replaces is the CLIPPING failure
+     this script hunts, said about chrome instead of a cell — so it is measured
+     here, off the real geometry, rather than asserted about the source. */
+  const drawn = dictTitleBox(layout);
+  const editor = dictTitleEditorBox(layout);
+  const bandTop = layout.titleY - DICT.titleHeight / 2;
+  const tableRight = layout.columnX.source + layout.columnWidth.source;
+
+  check(
+    "the drawn title's box ends where its words do",
+    drawn !== null &&
+      Math.abs(
+        drawn.width -
+          Math.min(
+            tableRight - drawn.x,
+            width(layout.title, DICT_TITLE.size) + DICT.padX * 2,
+          ),
+      ) < 0.5,
+    `${drawn === null ? "no box" : drawn.width}`,
+  );
+  check(
+    "the title's editor is anchored on the title band's TOP edge, not centred on the line",
+    editor !== null && Math.abs(editor.y - bandTop) < 0.5,
+    `editor y ${editor === null ? "—" : editor.y}, band top ${bandTop}`,
+  );
+  check(
+    "and that anchor is the layout's answer, not what the clamp left",
+    editor !== null && editor.y > 0 && editor.x > 0,
+    `a box placed at 0,0 is a box whose position nothing chose: ${JSON.stringify(editor)}`,
+  );
+  check(
+    "the editor covers the whole band it replaces, so the reader types where the title was",
+    editor !== null &&
+      editor.y <= bandTop + 0.5 &&
+      editor.y + editor.height >= bandTop + DICT.titleHeight - 0.5 &&
+      editor.x <= drawn.x + 0.5 &&
+      editor.width >= Math.min(drawn.width, editor.width),
+    `editor ${JSON.stringify(editor)} vs band ${bandTop}..${bandTop + DICT.titleHeight}`,
+  );
+
+  /* SIZED FROM THE MEASURED TITLE, not from a slab. The same complaint the
+     use-case canvas's editor drew — a 300-unit form over a short heading reads
+     as oversized — so the width follows the words, floored so a two-letter
+     title still gets a field somebody can read, capped at the table. Proved by
+     COMPARISON, because a single measurement cannot show that anything is
+     being measured at all. */
+  const titled = (title) =>
+    dictTitleEditorBox(
+      layoutDict(
+        parseDictText(DICT_EXAMPLE.replace('title "Customer API"', title)),
+      ),
+    );
+  const short = titled('title "Ledger"');
+  const long = titled(
+    'title "Customer API payload dictionary, every returned field"',
+  );
+  check(
+    "a longer title gives a wider editor — the width is measured, not typed",
+    long.width > short.width,
+    `${short.width} -> ${long.width}`,
+  );
+  check(
+    "a short title still gets a readable field",
+    short.width >= DICT_TITLE.editorMinWidth - 0.5,
+    `${short.width} < ${DICT_TITLE.editorMinWidth}`,
+  );
+  check(
+    "and no title, however long, pushes the editor past the table",
+    long.x + long.width <= tableRight + 0.5,
+    `${long.x + long.width} > ${tableRight}`,
+  );
+
+  /* NOTHING CLIPS, at either state and at every width — the register this
+     whole script is written in. A one-section dictionary is the case the clamp
+     exists for: the editor is taller than that document's own title band plus
+     its single row, so it is the shortest drawing the canvas ever hands over. */
+  const tiny = layoutDict(
+    parseDictText(
+      `archlab 1.0 dict\ntitle "T"\n\n@dict\n  section "S"\n    field a uuid\n`,
+    ),
+  );
+  const boxes = [
+    ["the example, closed", layout, dictTitleBox(layout)],
+    ["the example, open", layout, dictTitleEditorBox(layout)],
+    ["a one-field dictionary, closed", tiny, dictTitleBox(tiny)],
+    ["a one-field dictionary, open", tiny, dictTitleEditorBox(tiny)],
+  ];
+  const escaping = boxes.filter(
+    ([, canvas, box]) =>
+      box === null ||
+      box.x < -0.5 ||
+      box.y < -0.5 ||
+      box.x + box.width > canvas.width + 0.5 ||
+      box.y + box.height > canvas.height + 0.5,
+  );
+  check(
+    "neither the title's press target nor its editor clips outside the drawing",
+    escaping.length === 0,
+    escaping.map(([label]) => label).join(", "),
+  );
+
+  /* AND THE CANVAS ASKS FOR BOTH BOXES rather than solving them again. Two
+     copies of a box drawn over this table is how the badge run came to hang
+     outside the column reserved for it, and how this editor came to be placed
+     by a clamp. */
+  const diagram = read("src/features/dict/components/dict-diagram.tsx");
+  check(
+    "the canvas takes both title boxes from the layout, not its own arithmetic",
+    /dictTitleBox\(/.test(diagram) &&
+      /dictTitleEditorBox\(/.test(diagram) &&
+      !/DICT_TITLE_EDITOR/.test(diagram),
+    "a box solved in the renderer cannot be measured by this script, which is how the editor shipped off its band",
   );
 }
 

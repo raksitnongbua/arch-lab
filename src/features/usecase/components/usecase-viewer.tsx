@@ -534,14 +534,70 @@ export function UseCaseViewer({
 
   const editing = edit !== undefined && edit.editable;
   /* THE WORDING GESTURE IS ITS OWN OFFER, held rather than tested as a
-     boolean so the handler passed to the form is the one TypeScript has
-     already seen is there. See `UseCaseEditHandlers.onReviseElement` for why
-     it is not `editing` that answers for this. */
+     boolean so the dock draws its fields only for a host that handed the
+     handler over. See `UseCaseEditHandlers.onReviseElement` for why it is not
+     `editing` that answers for this. What the FORM gets is `reviseAndExit`
+     below, which calls this and then ends the focus. */
   const onReviseElement = edit?.onReviseElement;
   /* THE HEADING GESTURE IS A THIRD OFFER, held the same way and for the same
      reason — see `UseCaseEditHandlers.onRetitle`. */
   const onRetitle = edit?.onRetitle;
   const svgRef = useRef<SVGSVGElement>(null);
+
+  /**
+   * APPLYING A WORDING EDIT ENDS THE FOCUS.
+   *
+   * A reader reported the opposite as a bug: they pressed Apply and the dock
+   * stayed open over a diagram that had already been rewritten, so the panel
+   * beside the drawing was a form for an edit they had just finished making.
+   * The gesture is complete at Apply — it is a whole source-text patch, not a
+   * step in one — so the focus it borrowed goes back.
+   *
+   * THIS IS THIS CANVAS ALONE, and knowingly. The C4, sequence and flowchart
+   * docks all leave the selection standing after their own Apply, so
+   * `canvas-editing.md`'s "a gesture the neighbouring canvas already has must
+   * work the same way" is being broken on purpose, on a report from someone
+   * using it. If those three are brought in line, this comment is the note
+   * saying they were meant to be.
+   *
+   * THE PATCH LANDS FIRST. The wording sentence a screen-reader user hears is
+   * the HOST's — `use-canvas-editing.ts` announces it inside the revise
+   * handler, and announces the refusal when an emptied label makes the edit a
+   * no-op — so the handler runs before this component takes anything away.
+   *
+   * AND THE EXIT IS SILENT. `handleClearFocus` would announce "Focus cleared."
+   * into the single polite live region the host owns, one setState after the
+   * host's own sentence, and the second write swallows the first: the reader
+   * would be told their focus went and never told what their edit did. Focus
+   * is dropped directly here for that reason, and it is the only path that
+   * does.
+   *
+   * AND DOM FOCUS IS RE-HOMED ON THE PANE, which is what `handleCloseDock`
+   * does for the dock's own close button and for the same reason: the Apply
+   * button unmounts with the dock, and a keyboard reader whose focus fell to
+   * the top of the page cannot make a second edit without tabbing back in
+   * from nowhere. It is a CLAIM answered by an effect rather than a `.focus()`
+   * in the handler, which is the heading's own mechanism one row down: the
+   * dock is still mounted while the handler runs, so the focus has to be moved
+   * after the commit that unmounts it — and a memoized callback may not touch
+   * a ref that a render then reads, which `react-hooks/refs` refuses outright.
+   */
+  const paneFocusClaim = useRef(false);
+  useEffect(() => {
+    if (!paneFocusClaim.current) return;
+    paneFocusClaim.current = false;
+    paneRef.current?.focus();
+  });
+
+  const reviseAndExit = useCallback(
+    (elementId: string, revision: UseCaseElementRevision): void => {
+      if (onReviseElement === undefined) return;
+      onReviseElement(elementId, revision);
+      setRawFocus(null);
+      paneFocusClaim.current = true;
+    },
+    [onReviseElement],
+  );
 
   /* ---- the heading's own editor ------------------------------------------- */
 
@@ -786,8 +842,25 @@ export function UseCaseViewer({
     },
     [elementDrag, toLayoutUnits],
   );
-  const handlePointerUp = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
+  /**
+   * The end of whichever gesture was in flight.
+   *
+   * `cancelled` IS WHY THIS TAKES A FLAG rather than being two handlers. A
+   * pointercancel — a touch the browser turned into its own gesture, a drag
+   * the OS took over — ends the press WITHOUT a trailing click, and the
+   * suppressor below exists only to eat a trailing click. Arming it on a
+   * cancel left it armed, so the NEXT background press was swallowed instead
+   * and the reader's focus stayed put with the dock open: the reported "an
+   * outside click does not exit focus", which needs no gesture of its own to
+   * fix, only the flag not being set for a gesture that produces nothing to
+   * suppress.
+   *
+   * A cancelled move still commits, unchanged: the shape has been dragged
+   * across the canvas and the reader watched it go, so abandoning the
+   * placement at the browser's discretion would be the surprise.
+   */
+  const endPointerGesture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
       if (elementDrag !== null) {
         setElementDrag(null);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -801,8 +874,8 @@ export function UseCaseViewer({
         if (!elementDrag.moved) return;
         /* The capture above already retargeted the trailing click to the pane,
            so suppress it there too — otherwise the drag ends by clearing the
-           focus the reader was working with. */
-        panSuppressesClick.current = true;
+           focus the reader was working with. Not on a cancel: see the flag. */
+        if (!cancelled) panSuppressesClick.current = true;
         /* MINUS THE LAYOUT'S OWN SHIFT — see `layoutShift`. Writing the drawn
            coordinate straight through would place the shape a heading's height
            and a margin away from the cursor, and do it again on every
@@ -817,12 +890,22 @@ export function UseCaseViewer({
       if (state === null) return;
       panState.current = null;
       setPanning(false);
-      if (state.moved) panSuppressesClick.current = true;
+      if (state.moved && !cancelled) panSuppressesClick.current = true;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
     },
     [edit, elementDrag, layoutShift],
+  );
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      endPointerGesture(event, false),
+    [endPointerGesture],
+  );
+  const handlePointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      endPointerGesture(event, true),
+    [endPointerGesture],
   );
 
   /* The pane is the backdrop — clicking empty canvas clears focus (every
@@ -926,7 +1009,7 @@ export function UseCaseViewer({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           tabIndex={0}
           role="application"
           aria-label={`Use-case diagram. Arrow keys move focus between elements, Escape clears focus. Pinch or hold ${mod === "⌘" ? "Command" : "Control"} and scroll to zoom between 10 and 400 percent. Elements and lines are buttons — Tab reaches them.`}
@@ -1106,7 +1189,7 @@ export function UseCaseViewer({
                             tags: focusedElement.tags,
                             description: focusedElement.description,
                           }}
-                          onRevise={onReviseElement}
+                          onRevise={reviseAndExit}
                         />
                       </dd>
                     </div>
@@ -1451,6 +1534,12 @@ function HeadingForm({
          diagram shorter than the editor the Apply row would otherwise be
          shaved off with nothing on screen to say so. */
       className="flex size-full flex-col gap-2 overflow-auto rounded-md border border-node-border bg-node p-2"
+      /* THE PRESSES IN HERE ARE THE FORM'S, NOT THE PANE'S — the same
+         stand-down the closed heading button makes, and it was missing here:
+         every click while the fields are open reached the viewer's backdrop,
+         which cleared whatever element the reader had focused and announced
+         "Focus cleared." over the top of the retitle sentence. */
+      onClick={(event) => event.stopPropagation()}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmitFields({

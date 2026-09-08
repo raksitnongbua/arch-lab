@@ -201,6 +201,45 @@ export function dictHandleChip(
   };
 }
 
+/**
+ * The document title's own type size, the leading its press target sits in,
+ * and the room its editor asks for — in LAYOUT UNITS.
+ *
+ * HERE RATHER THAN IN THE CANVAS for the reason `BADGE` and `DICT_HANDLE` are:
+ * the title's press target and its editor are boxes drawn over the table, so
+ * they have to be measured against the table, and a size typed in the renderer
+ * while the layout drew the words at another is how a control came to end
+ * before the words it offered to change did.
+ *
+ * `editorMinWidth` IS A FLOOR, NOT A WIDTH. The editor is sized from the
+ * MEASURED title box (see `dictTitleEditorBox`), so a modest title gets a
+ * modest form rather than the fixed 300-unit slab this used to be; the floor
+ * only stops a three-letter title handing the reader a field too narrow to
+ * read what they are typing.
+ *
+ * `editorHeight` is a MINIMUM in the same sense: the title band is 54 units
+ * and a labelled field with an Apply row under it does not fit in 54, so the
+ * editor is the taller of the two. It is the one number here that cannot be
+ * measured off the drawing, because it describes HTML the layout never sees.
+ */
+export const DICT_TITLE = {
+  size: 22,
+  /** How much taller than its type size the press target is — the leading a
+   * single line of text sits in, so the target covers the words rather than
+   * only their x-height. */
+  hitLeading: 1.6,
+  editorHeight: 112,
+  editorMinWidth: 240,
+} as const;
+
+/** A box drawn over the table, in layout units. */
+export interface DictBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /** The five columns, in reading order. `flex` columns share what is left after
  * the measured ones; today only the description flexes. */
 const COLUMNS = ["name", "type", "flags", "description", "source"] as const;
@@ -503,5 +542,89 @@ export function layoutDict(
     sections: laid,
     columnX,
     columnWidth,
+  };
+}
+
+/**
+ * The box the document title is DRAWN in — its press target when the canvas
+ * hands one over.
+ *
+ * MEASURED, so the target ends where the words do: the same glyph estimate the
+ * columns are measured with, at the size the title is actually drawn at. It
+ * never reaches past the table's right edge, so a long title cannot hand the
+ * reader a box wider than the drawing it sits on.
+ *
+ * `null` for an untitled document, which is the same answer `layoutDict` gives
+ * for the band: a document without a title never parsed, and nothing is
+ * offered where there is nothing to rewrite.
+ */
+export function dictTitleBox(layout: DictLayout): DictBox | null {
+  if (layout.title === null) return null;
+  const x = layout.columnX.name - DICT.padX;
+  const right = layout.columnX.source + layout.columnWidth.source;
+  const height = DICT_TITLE.size * DICT_TITLE.hitLeading;
+  return {
+    x,
+    /* Centred on the drawn line, because this box covers the WORDS. Its
+       editor below is anchored on the BAND instead — see there. */
+    y: layout.titleY - height / 2,
+    width: Math.min(
+      right - x,
+      textWidth(layout.title, DICT_TITLE.size) + DICT.padX * 2,
+    ),
+    height,
+  };
+}
+
+/**
+ * The box the title's EDITOR takes: the title band's own top-left corner, the
+ * measured title's width, and the room a labelled field with an Apply row
+ * needs — pulled back inside the drawing.
+ *
+ * ANCHORED ON THE BAND'S TOP EDGE, and that is the bug this function was
+ * extracted for. The editor used to be centred on the title's own line, the
+ * way the press target above still is — which is right for a box 35 units tall
+ * and wrong for one 112 units tall: centring a form on a line 55 units down
+ * put its top edge ABOVE the top of the drawing, so the `Math.max(0, …)` clamp
+ * decided where it landed rather than the layout, and the form sat off the
+ * band it was editing with its Apply row hanging over the first section's
+ * heading. The band it replaces is what it must cover, so the band's top is
+ * what it is anchored to.
+ *
+ * SIZED FROM THE MEASURED TITLE, not from a constant slab. A fixed 300 units
+ * reads as oversized over a short title — the same complaint the use-case
+ * canvas's editor drew — so the width follows `dictTitleBox`, floored at
+ * `DICT_TITLE.editorMinWidth` so a very short title still gets a readable
+ * field, and capped at the table's own width.
+ *
+ * CLAMPED INTO THE DRAWING rather than trusted: an `<svg>` clips its viewport,
+ * so an editor hanging past the edge of a one-section dictionary would have its
+ * Apply button shaved off with nothing on screen to say so. The form scrolls
+ * inside whatever room it is given.
+ *
+ * IT OVERLAPS THE FIRST SECTION'S HEADING BAND, unavoidably — 112 units of
+ * form does not fit in 54 units of band — which is why the canvas paints the
+ * title's group LAST. `check:dict-reorder` holds that ordering: painted where
+ * it used to be, the section's own reveal area covered the Apply row and ate
+ * the press.
+ */
+export function dictTitleEditorBox(layout: DictLayout): DictBox | null {
+  const drawn = dictTitleBox(layout);
+  if (drawn === null) return null;
+  const right = layout.columnX.source + layout.columnWidth.source;
+  const width = Math.min(
+    layout.width,
+    right - drawn.x,
+    Math.max(DICT_TITLE.editorMinWidth, drawn.width),
+  );
+  const height = Math.min(layout.height, DICT_TITLE.editorHeight);
+  /* The band's own top, from the same two numbers `layoutDict` placed the
+     title with. */
+  const bandTop = layout.titleY - DICT.titleHeight / 2;
+  return {
+    x: Math.max(0, Math.min(drawn.x, layout.width - width)),
+    y: Math.max(0, Math.min(bandTop, layout.height - height)),
+    width,
+    height,
   };
 }

@@ -669,7 +669,17 @@ export function ErDiagram({
           panel's close button and clicking the focused item again, and neither
           is what a reader reaches for — clicking the empty space around a
           diagram to deselect is the convention every canvas tool shares, and
-          its absence reads as the focus being stuck. */}
+          its absence reads as the focus being stuck.
+
+          IT IS NOT THE WHOLE ANSWER, and believing it was is why "clicking
+          outside does nothing" was reported anyway. Inside `ErViewer` the
+          camera takes POINTER CAPTURE on the pane for any press on the
+          ground, and capture retargets the trailing `click` to the capturing
+          element — so for a mouse press on the ground this rect's `onClick`
+          never runs and the pane's own backdrop handler is what clears the
+          focus. This stays because it is the answer wherever there is no such
+          pane: the example view mounts this diagram on its own, and a press
+          the camera stands down from still arrives here. */}
       {onFocus !== undefined ? (
         <rect
           x={layout.bounds.x}
@@ -677,7 +687,16 @@ export function ErDiagram({
           width={layout.bounds.width}
           height={layout.bounds.height}
           fill="transparent"
-          onClick={() => onFocus(null)}
+          /* STOPPED, like every other click in this drawing. The pane behind
+             this rect now clears the focus too (`ErViewer`'s backdrop
+             handler, for the capture-retargeting reason above), and two
+             handlers clearing one click is two answers to a question with
+             one. Stopping here makes exactly one of them run per press
+             whichever way the click was routed. */
+          onClick={(event) => {
+            event.stopPropagation();
+            onFocus(null);
+          }}
           /* A click TARGET, not a control: keyboard users clear focus with
              Escape, which the viewer owns, so putting this in the tab order
              would announce "backdrop" for no gain. */
