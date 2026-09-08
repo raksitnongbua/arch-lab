@@ -97,11 +97,20 @@ const {
   parseFlowchartText,
   parseUseCaseText,
   parseErText,
+  parseErTextWithSpans,
+  canonicalErEntityBlock,
   serializeErText,
   detectAlabKind,
   ArchTextParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+
+/* The REAL patcher the canvas uses, not a copy of it — the whole point of the
+   section below is that this module and the spans agree. */
+const { applyPatches } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/line-patch.ts"))
+    .href
 );
 
 const { LEFT_CARDINALITY, RIGHT_CARDINALITY, CONNECTOR_BY_KIND } = await import(
@@ -165,13 +174,13 @@ reviewed 2026-08-19T00:00:00Z
     attr email string uk
       desc "Login identity, lowercased on write"
     attr name string
-  entity order "Order" [PostgreSQL]
+  entity order "Order" [PostgreSQL] pin (320,96)
     attr id uuid pk
     attr customer_id uuid pk fk
     attr total numeric(10,2)
     attr placed_at timestamptz
-  entity address "Address"
-  entity audit_log "Audit log" #core
+  entity address "Address" (296,348)
+  entity audit_log "Audit log" #core pin=false (600,374)
     attr id bigserial pk
     attr note "character varying"
 
@@ -450,12 +459,253 @@ console.log("document-type detection");
 /* ----------------------------------------------------------------------- */
 /* 7. Refusals — each names a line, a column, and the rule                 */
 /* ----------------------------------------------------------------------- */
+/* A stated position, and the pin that keeps it                            */
+/* ----------------------------------------------------------------------- */
+
+/* The kitchen sink above already round-trips all three spellings — `pin
+   (x,y)`, a bare `(x,y)` and `pin=false (x,y)` — so this section asserts what
+   a byte-identical round trip CANNOT: that absence stays absence, that the
+   information-losing direction of the toggle survives, and that a point this
+   token cannot spell rides the `!` escape instead of being quietly truncated.
+
+   Each of these is a bug that shipped, or nearly did, in a neighbouring
+   grammar. The escape one was found in the flowchart serializer by writing
+   the assertion rather than by reading the code. */
+
+console.log("");
+console.log("a stated position, and the pin that keeps it");
+
+{
+  const model = parseErText(KITCHEN_SINK);
+  const byId = (id) => model.entities.find((entity) => entity.id === id);
+
+  check(
+    "`pin (x,y)` reaches the model as both fields",
+    byId("order")?.pinned === true &&
+      byId("order")?.position?.x === 320 &&
+      byId("order")?.position?.y === 96,
+    JSON.stringify(byId("order")),
+  );
+  check(
+    "a bare `(x,y)` is a position with NO pin key at all",
+    byId("address")?.position?.x === 296 &&
+      !("pinned" in (byId("address") ?? {})),
+    "absent and explicitly-false are different documents, and a bare " +
+      "position must not invent a pin: " +
+      JSON.stringify(byId("address")),
+  );
+  check(
+    "`pin=false` reaches the model as false, not as absent",
+    byId("audit_log")?.pinned === false,
+    JSON.stringify(byId("audit_log")),
+  );
+  check(
+    "an entity the layout places carries NEITHER key",
+    !("position" in (byId("customer") ?? {})) &&
+      !("pinned" in (byId("customer") ?? {})),
+    "absent is the normal case, and a solved entity must round-trip as an " +
+      "absent key rather than as a coordinate: " +
+      JSON.stringify(byId("customer")),
+  );
+
+  /* THE INFORMATION-LOSING TRANSITION, which is the one `canvas-editing.md`
+     says to assert: a serializer that omitted `pin=false` at its default
+     would silently delete an author's explicit "do not keep this", and the
+     round trip above would still be byte-stable for every other document. */
+  const off = serializeErText({
+    ...model,
+    entities: model.entities.map((entity) =>
+      entity.id === "audit_log" ? { ...entity, pinned: false } : entity,
+    ),
+  });
+  check(
+    "an explicit `pin=false` is written out rather than omitted at default",
+    off.includes("pin=false"),
+    "the toggle deleted the author's explicit off",
+  );
+
+  /* A POINT THIS TOKEN CANNOT SPELL. `(x,y)` has room for exactly two
+     numbers, so a point carrying a third key from a newer minor has to ride
+     the `!` escape whole — writing it as `(x,y)` would drop the extra key
+     and the round trip would look clean. */
+  const odd = serializeErText({
+    ...model,
+    entities: model.entities.map((entity) =>
+      entity.id === "address"
+        ? { ...entity, position: { x: 1, y: 2, z: 3 } }
+        : entity,
+    ),
+  });
+  check(
+    "a point with a third key rides the `!` escape instead of being truncated",
+    odd.includes("! position") && !odd.includes("(1,2)"),
+    "the `z` was dropped and the document silently changed meaning",
+  );
+  check(
+    "and that escape parses back to the same point",
+    JSON.stringify(
+      parseErText(odd).entities.find((entity) => entity.id === "address")
+        ?.position,
+    ) === JSON.stringify({ x: 1, y: 2, z: 3 }),
+    "the escape did not survive the round trip",
+  );
+}
+
+/* Deliberately non-canonical: comments, author blank lines, and a column
+   `desc` two levels deeper than its entity's opener. */
+const MESSY = `archlab 1.0 er
+title "Shop orders"
+
+// The customer is the root of the graph — everything hangs off it.
+@er
+  entity customer "Customer" [PostgreSQL]
+    desc "Anyone who has ever placed an order"
+    attr id uuid pk
+    attr email string uk
+      desc "Lowercased on write, so it can be a unique key"
+
+  // Orders are what the whole schema exists for.
+  entity order "Order"
+    attr id uuid pk
+    attr total numeric(10,2)
+
+  customer ||--o{ order : places
+`;
+
+/* ----------------------------------------------------------------------- */
+/* Spans, and the line patch they exist for                                */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THESE ARE HERE AT ALL. A canvas gesture must be a LINE PATCH, never a
+   re-emit: `serializeErText` writes canonical text, so re-emitting the
+   file deletes every `//` comment and every author blank line — and passes
+   every round-trip assertion while doing it, because canonical text
+   re-emitted IS canonical text. `0a9cbf1` bought that rule on the flowchart
+   canvas.
+
+   So the fixture below is DELIBERATELY NON-CANONICAL, which
+   `canvas-editing.md` requires: comments in three places, author blank lines,
+   and a continuation two levels deep. A span that stopped one line short, or
+   a helper that re-derived its own indentation, shows up here as a changed
+   line count. */
+
+console.log("");
+console.log("spans, and the line patch they exist for");
+
+{
+  const { file, spans } = parseErTextWithSpans(MESSY);
+  const ids = ["customer", "order"];
+
+  check(
+    "every entity the model holds has a span",
+    ids.every((id) => spans.entities.get(id) !== undefined) &&
+      spans.entities.size === 2,
+    `model: ${ids.join(", ")} / spans: ${[...spans.entities.keys()].join(", ")}`,
+  );
+
+  const sourceLines = MESSY.split("\n");
+  check(
+    "a span STARTS on the declaration line it names",
+    ids.every((id) =>
+      sourceLines[spans.entities.get(id).start - 1].includes(id),
+    ),
+    "a span pointing at the wrong line patches the wrong element",
+  );
+
+  /* THE SPAN COVERS THE WHOLE BLOCK, columns included — `emitEntity` writes
+     the columns, so a span ending at the opener would leave them orphaned
+     under a line that no longer introduces them. `customer` ends on its
+     second column's `desc`, which is the deepest line in the file and the
+     one an entity-only span cannot see. */
+  check(
+    "an entity's span reaches its last column's own continuation",
+    spans.entities.get("customer").end === 10 &&
+      sourceLines[9].includes("Lowercased on write"),
+    `customer span: ${JSON.stringify(spans.entities.get("customer"))}`,
+  );
+
+  /* THE GUARANTEE, measured: one gesture, one changed line, every other byte
+     identical. Counted as a line diff rather than by searching for the
+     comments, because a patch that duplicated the block would keep the
+     comments too. */
+  for (const [id, at] of [
+    ["order", { x: 320, y: 96 }],
+    ["customer", { x: 24, y: 186 }],
+  ]) {
+    const moved = {
+      ...file,
+      entities: file.entities.map((element) =>
+        element.id === id ? { ...element, position: at } : element,
+      ),
+    };
+    const span = spans.entities.get(id);
+    /* NO PAD IS READ, unlike the use-case check's equivalent: an ER entity is
+       pinned by the parser to one indentation, so `canonicalErEntityBlock`
+       takes none. Reading one here would assert nothing. */
+    const patched = applyPatches(MESSY, [
+      { span, lines: canonicalErEntityBlock(moved, id) },
+    ]);
+    const changed = MESSY.split("\n").filter(
+      (line, index) => line !== patched.split("\n")[index],
+    );
+    check(
+      `moving ${id} rewrites exactly one line`,
+      changed.length === 1 && changed[0].includes(id),
+      `${changed.length} lines changed: ${JSON.stringify(changed)}`,
+    );
+    check(
+      `and the patched text still parses to the same ${id} position`,
+      parseErText(patched).entities.find((element) => element.id === id)
+        ?.position?.x === at.x,
+      "the gesture wrote text its own parser reads differently",
+    );
+    check(
+      `and every comment and blank line survives moving ${id}`,
+      patched.split("\n").length === MESSY.split("\n").length &&
+        (MESSY.match(/^\s*\/\//gm) ?? []).length ===
+          (patched.match(/^\s*\/\//gm) ?? []).length,
+      "a re-emit would pass every round-trip assertion and still do this",
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("refusals (line, column, and the rule by name)");
 
 const BODY = (body) => `archlab 1.0 er\ntitle "T"\n\n@er\n${body}\n`;
 
 const REFUSALS = [
+  [
+    "`pin` on an entity that states no position",
+    BODY('  entity a "A" pin\n    attr id uuid pk'),
+    /states none/i,
+  ],
+  [
+    "`pin=false` on an entity that states no position, refused the same way",
+    BODY('  entity a "A" pin=false\n    attr id uuid pk'),
+    /states none/i,
+  ],
+  [
+    "a `pin=` value outside true/false",
+    BODY('  entity a "A" pin=maybe (0,0)\n    attr id uuid pk'),
+    /"true" or "false"/i,
+  ],
+  [
+    "two positions on one entity line",
+    BODY('  entity a "A" (1,2) (3,4)\n    attr id uuid pk'),
+    /duplicate \(x,y\)/i,
+  ],
+  [
+    "two pins on one entity line",
+    BODY('  entity a "A" pin pin (1,2)\n    attr id uuid pk'),
+    /duplicate "pin"/i,
+  ],
+  [
+    "a position missing its comma",
+    BODY('  entity a "A" (1 2)\n    attr id uuid pk'),
+    /between x and y/i,
+  ],
   [
     "a column key outside the closed vocabulary",
     BODY('  entity a "A"\n    attr id uuid primary'),

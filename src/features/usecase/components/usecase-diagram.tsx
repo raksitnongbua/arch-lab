@@ -75,7 +75,7 @@ import type {
   LaidUseCaseEllipse,
   UseCaseLayout,
 } from "../lib/layout";
-import { UC } from "../lib/layout";
+import { UC, UC_HEADING_HIT_PAD, usecaseHeadingHitBox } from "../lib/layout";
 import { usecaseBreathPhase } from "../lib/motion";
 import {
   actorFigure,
@@ -152,6 +152,67 @@ export interface UseCaseDiagramProps {
   zoom: number | "fit";
   onFocusElement: (id: string) => void;
   onFocusEdge: (index: number) => void;
+  /**
+   * The live `<svg>`, handed back so the host can turn client pixels into
+   * layout units through the element's own matrix.
+   *
+   * A REF RATHER THAN THE HOST RE-DERIVING THE CAMERA: the frame below is
+   * `layout.bounds`, whose `x`/`y` go negative the moment something is pinned
+   * left of or above the origin, and `preserveAspectRatio` letterboxes on top
+   * of that. `getScreenCTM` already knows both.
+   */
+  svgRef?: React.Ref<SVGSVGElement>;
+  /**
+   * Start moving an element by dragging its figure or its ellipse. PRESENCE IS
+   * THE OFFER, as on the flowchart canvas: a locked, read-only or Mermaid-pane
+   * canvas passes nothing and the press falls through to the focus click it has
+   * always been.
+   *
+   * ONE HANDLER FOR BOTH SHAPES, because an actor and a use case are one
+   * `UseCaseElement` with a `kind` and a drag on either is the same edit —
+   * `usecase-edit.ts` makes the same point about its own gestures.
+   */
+  onElementDragStart?: (id: string, event: React.PointerEvent) => void;
+  /** The in-flight move, in LAYOUT UNITS: where the dragged shape's top-left
+   *  would land. Null when nothing is being dragged. */
+  elementDrag?: { id: string; x: number; y: number } | null;
+  /**
+   * The heading, made typeable — or absent, which is every static render, the
+   * `/demo` preview and every export.
+   *
+   * PRESENCE IS THE OFFER, as for `onElementDragStart` above: without it the
+   * heading is drawn exactly as it always was and no `foreignObject` is ever
+   * built, which is what keeps the exporters honest — they render from the
+   * model through `export/render-svg.ts` and hand this nothing.
+   */
+  retitle?: UseCaseRetitleSurface;
+}
+
+/**
+ * What the canvas needs in order to make the drawn heading the affordance for
+ * rewriting it, as the VIEWER assembles it.
+ *
+ * IT CARRIES NO REACT NODE, and that is the fix rather than a simplification.
+ * It used to carry the viewer's mounted fields, which this renderer put in a
+ * `foreignObject` — and native HTML inside an `<svg>` is laid out in USER
+ * UNITS, so the form was multiplied by the viewBox-to-viewport ratio like
+ * every ellipse beside it. This canvas's "fit" magnifies a small drawing, so
+ * on a compact document in a wide pane the form painted at 2.5x to 4.7x: a
+ * 14px label at 36-66px and an Apply button larger than the diagram's nodes.
+ *
+ * So the form is not this component's to mount any more. The viewer positions
+ * it as an HTML sibling of the drawing, anchored to `usecaseHeadingHitBox`
+ * through the `<svg>`'s own matrix, at a size stated in CSS pixels. What
+ * crosses this boundary is a press and a flag — never a node, which is what
+ * `check:usecase-layout` asserts, because a node is all it would take to put
+ * the form back inside the drawing.
+ */
+export interface UseCaseRetitleSurface {
+  /** Begin editing — pressing the drawn heading. */
+  onOpen: () => void;
+  /** Whether the viewer's fields are open. The drawn heading and its press
+   *  target stand down while they are, so neither shows through the form. */
+  open: boolean;
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -167,6 +228,10 @@ export function UseCaseDiagram({
   zoom,
   onFocusElement,
   onFocusEdge,
+  svgRef,
+  onElementDragStart,
+  elementDrag = null,
+  retitle,
 }: UseCaseDiagramProps): React.JSX.Element {
   const focusSet = resolveUseCaseFocus(layout, focus);
   const elementDimmed = (id: string): boolean =>
@@ -174,19 +239,37 @@ export function UseCaseDiagram({
   const edgeDimmed = (index: number): boolean =>
     focusSet !== null && !focusSet.edges.has(index);
   const elementById = new Map(layout.elements.map((e) => [e.id, e]));
+  /* Whether the viewer's fields are open, read once. The drawn heading and its
+     press target both stand down while they are — the fields live over this
+     canvas rather than in it. */
+  const headingOpen = retitle?.open === true;
 
   return (
     <svg
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      ref={svgRef}
+      /* THE LAYOUT'S OWN FRAME, which is `0 0 width height` for every
+         document that pins nothing and wider than it whenever a pinned
+         element sits outside the solved bounds. Reading `0 0` here cropped
+         exactly that case in the flowchart — a pinned shape drawn 64% off the
+         picture, with the export inheriting the crop. */
+      viewBox={`${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.width} ${layout.bounds.height}`}
       {...(zoom === "fit"
         ? { width: "100%", height: "100%" }
         : {
-            width: Math.round(layout.width * zoom),
-            height: Math.round(layout.height * zoom),
+            width: Math.round(layout.bounds.width * zoom),
+            height: Math.round(layout.bounds.height * zoom),
           })}
       preserveAspectRatio="xMidYMid meet"
-      role="img"
-      aria-label={`Use-case diagram: ${title}. ${layout.elements.length} elements, ${layout.edges.length} relationships. Elements and lines are buttons — Tab reaches them.`}
+      /* `img` WHILE THE HEADING IS ONLY DRAWN, `group` ONCE IT CAN BE TYPED
+         INTO — the dictionary canvas's own switch, for its reason: assistive
+         technology PRUNES the subtree of a `role="img"`, so the title field
+         and its Apply button would sit in the tab order with no readable name
+         at all. The elements and lines have always been buttons under this
+         role, which is the same defect one layer down; it is not this
+         gesture's to fix, and `role="group"` here fixes it for free wherever
+         editing is on. */
+      role={retitle === undefined ? "img" : "group"}
+      aria-label={`Use-case diagram: ${title}. ${layout.elements.length} elements, ${layout.edges.length} relationships. Elements and lines are buttons — Tab reaches them.${retitle === undefined ? "" : " The heading is a button — press it to rewrite the title and description."}`}
       className="af-uc-svg block"
     >
       {/* The role textures, once for the whole canvas — the shared-def rule in
@@ -241,6 +324,10 @@ export function UseCaseDiagram({
           toLabel={elementById.get(edge.to)?.label ?? edge.to}
           focused={focus?.kind === "edge" && focus.index === edge.index}
           dimmed={edgeDimmed(edge.index)}
+          stale={
+            elementDrag !== null &&
+            (edge.from === elementDrag.id || edge.to === elementDrag.id)
+          }
           onFocus={() => onFocusEdge(edge.index)}
           onKeyDown={keyActivate(() => onFocusEdge(edge.index))}
         />
@@ -257,6 +344,8 @@ export function UseCaseDiagram({
             dimmed={elementDimmed(element.id)}
             onFocus={() => onFocusElement(element.id)}
             onKeyDown={keyActivate(() => onFocusElement(element.id))}
+            onDragStart={onElementDragStart}
+            drag={elementDrag?.id === element.id ? elementDrag : null}
           />
         ) : (
           <UseCaseNode
@@ -267,13 +356,23 @@ export function UseCaseDiagram({
             dimmed={elementDimmed(element.id)}
             onFocus={() => onFocusElement(element.id)}
             onKeyDown={keyActivate(() => onFocusElement(element.id))}
+            onDragStart={onElementDragStart}
+            drag={elementDrag?.id === element.id ? elementDrag : null}
           />
         ),
       )}
 
       {/* ---- the heading: inside the drawing, so it travels with exports.
-            aria-hidden — the <svg>'s aria-label already opens with it. ---- */}
-      <g aria-hidden="true" className="pointer-events-none">
+            aria-hidden — the <svg>'s aria-label already opens with it.
+
+            IT STANDS DOWN WHILE THE FIELDS ARE OPEN rather than sitting under
+            them: two renditions of one title, the drawn one going stale as the
+            reader types, is worse than a box in its place — and the fields are
+            opaque, so the drawn text would only show through at their edges. */}
+      <g
+        aria-hidden="true"
+        className={cn("pointer-events-none", headingOpen && "hidden")}
+      >
         <text
           x={UC.marginX}
           y={UC.marginTop + UC.titleFontSize}
@@ -315,6 +414,76 @@ export function UseCaseDiagram({
           </text>
         ) : null}
       </g>
+
+      {/* ---- the heading, made typeable.
+            THE DRAWN HEADING IS THE AFFORDANCE, not a panel beside it: a
+            document's title is already on the canvas in the place a reader
+            would point at to change it, and `canvas-editing.md` asks for the
+            surface a canvas already has before a new one. The press target is
+            transparent, so the title keeps the typography the export ships —
+            an HTML copy of it in here would drift from the `<text>` above at
+            every zoom.
+
+            A NATIVE `<button>` IN A `foreignObject`, which is the dictionary
+            canvas's departure and its argument holds verbatim: this is not
+            part of the drawing, so it wants the keyboard behaviour, the focus
+            ring and the hover state a real control brings — and it keeps this
+            file's shapes out of `check:view-input`'s selection sweep, because
+            a heading is an ACTION and not a thing to select.
+
+            THE PRESS TARGET STAYS IN HERE AND THE FORM DOES NOT, which is the
+            one asymmetry in this block. The target covers a MEASURED heading,
+            so it belongs in the heading's units and is right to scale with the
+            picture. The form covers nothing — it is chrome, sized for the
+            reader's screen — and scaling it is what made it paint at up to
+            4.7x. The viewer mounts it over this canvas instead; see
+            `useCanvasOverlayPosition`. ---- */}
+      {retitle === undefined || headingOpen ? null : (
+        <foreignObject
+          /* THE CLASS IS ON THE BOX, not on the button inside it, so the
+             viewer's pan stands down for the whole target rather than for the
+             ink of it. The viewer's heading-form overlay wears the same class,
+             so both states of the heading stand the pan down. */
+          className="af-uc-heading"
+          {...usecaseHeadingHitBox(layout, UC_HEADING_HIT_PAD)}
+        >
+          <button
+            type="button"
+            /* A DASHED HAIRLINE, NEVER A FILL, and it is drawn at rest
+               rather than only on hover: the title is the affordance, so a
+               reader has to be able to see that it is one without pointing
+               at it first, and the outline is the device an editor uses for
+               exactly that. A fill of any strength — even a wash — would sit
+               over the drawn `<text>` beneath this box and dim the title it
+               offers to change.
+
+               THE RING IS INSET because a `foreignObject` clips to its own
+               box: an outline paints outside the border box and would be
+               shaved off at the corners, which is where a keyboard reader is
+               looking (the dictionary's handle stylesheet carries the same
+               finding). */
+            className="size-full cursor-text rounded-md border border-dashed border-node-border/50 bg-transparent hover:border-node-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+            /* The identity focus is put back on after the edit — see
+               `usecase-viewer.tsx`, which explains why a re-parse blurs
+               whatever the reader pressed. */
+            data-af-uc-heading=""
+            /* ONE STRING FOR THE TOOLTIP AND THE NAME, the rule every
+               wordless control here keeps, and it names the CURRENT title:
+               with the drawn text pruned from the accessibility tree under
+               `role="img"` on a read-only canvas, this is the only place a
+               screen-reader user hears what they are about to change. */
+            aria-label={`Rewrite the diagram title and description — currently “${title}”`}
+            title="Rewrite the title and description"
+            onClick={(event) => {
+              /* The press is the heading's, not the pane's: the viewer's
+                 backdrop click would otherwise clear the reader's focus in
+                 the same gesture that opened the fields. */
+              event.stopPropagation();
+              retitle.onOpen();
+            }}
+          />
+        </foreignObject>
+      )}
     </svg>
   );
 }
@@ -345,11 +514,18 @@ function HitRect({
   ariaLabel,
   onFocus,
   onKeyDown,
+  onDragStart,
 }: {
   element: LaidUseCaseElement;
   ariaLabel: string;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Begin a move. The SAME rect is the focus target and the move handle —
+   *  not a separate overlay, because two stacked hit areas over one shape is
+   *  how a click starts landing on whichever happens to be on top after the
+   *  next edit, and the host already tells a click from a drag by distance
+   *  travelled. */
+  onDragStart?: (event: React.PointerEvent) => void;
 }): React.JSX.Element {
   // The bounding box is the target, not the outline: an ellipse's corners
   // and the air between a figure's legs are exactly where a pointer aims.
@@ -367,6 +543,7 @@ function HitRect({
         role="button"
         tabIndex={0}
         aria-label={ariaLabel}
+        onPointerDown={onDragStart}
         onClick={(event) => {
           event.stopPropagation();
           onFocus();
@@ -413,6 +590,8 @@ function Actor({
   dimmed,
   onFocus,
   onKeyDown,
+  onDragStart,
+  drag = null,
 }: {
   element: LaidUseCaseActor;
   tagColors?: Readonly<Record<string, string>>;
@@ -420,6 +599,10 @@ function Actor({
   dimmed: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Where this shape's top-left is being dragged to, or null when it is not
+   *  the shape in flight. */
+  drag?: { x: number; y: number } | null;
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
 }): React.JSX.Element {
   const paint = elementPaint(element, tagColors);
   const strokeColor = focused ? "var(--primary)" : paint.stroke;
@@ -433,6 +616,26 @@ function Actor({
     <g
       className={cn(DIMMABLE, "af-uc-actor", dimmed && DIM)}
       data-element-id={element.id}
+      /* THE TRANSLATE RIDES THE GROUP ITSELF, which the ER canvas cannot do:
+         the entrance here animates a CHILD (`.af-uc-body`), so nothing
+         outranks a presentation attribute written up here, while
+         `af-er-rise` animates the ER entity's own group with `forwards` fill
+         and parks its transform for the life of the page.
+
+         THE REAL SHAPE MOVES, at reduced opacity, rather than a ghost outline
+         beside it — the flowchart canvas's answer, and for its reason: a
+         reader dragging a shape wants to see the shape, not translate between
+         two of them to judge where it lands. The lines cannot follow until the
+         next solve, so the ones touching it dim for the length of the gesture
+         (see `Edge`'s `stale`). An inline `style` opacity rather than the
+         `DIM` class, because it has to beat that class while a dimmed shape is
+         the one being dragged. */
+      transform={
+        drag === null
+          ? undefined
+          : `translate(${drag.x - element.x} ${drag.y - element.y})`
+      }
+      style={drag === null ? undefined : { opacity: 0.6 }}
     >
       <g className="af-uc-body">
         {/* Head filled with the kind's fill so the figure carries the same
@@ -508,6 +711,11 @@ function Actor({
         ariaLabel={ariaLabel}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
+        onDragStart={
+          onDragStart === undefined
+            ? undefined
+            : (event) => onDragStart(element.id, event)
+        }
       />
     </g>
   );
@@ -524,6 +732,8 @@ function UseCaseNode({
   dimmed,
   onFocus,
   onKeyDown,
+  onDragStart,
+  drag = null,
 }: {
   element: LaidUseCaseEllipse;
   tagColors?: Readonly<Record<string, string>>;
@@ -531,6 +741,10 @@ function UseCaseNode({
   dimmed: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Where this shape's top-left is being dragged to, or null when it is not
+   *  the shape in flight. */
+  drag?: { x: number; y: number } | null;
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
 }): React.JSX.Element {
   const paint = elementPaint(element, tagColors);
   // The surface wash (the C4 canvas's polish layer): a per-instance
@@ -552,12 +766,23 @@ function UseCaseNode({
 
   return (
     <g
+      /* The drag's translate and wash — `Actor` above carries the argument for
+         putting both on this group rather than on the animated child. */
+      transform={
+        drag === null
+          ? undefined
+          : `translate(${drag.x - element.x} ${drag.y - element.y})`
+      }
       className={cn(DIMMABLE, "af-uc-node", dimmed && DIM)}
       data-element-id={element.id}
       style={
         {
           "--node-fill": paint.fill,
           "--node-stroke": paint.stroke,
+          /* The drag's wash rides the group's existing style rather than the
+             `DIM` class, because it has to beat that class while the shape
+             being dragged is also a dimmed one. */
+          ...(drag === null ? {} : { opacity: 0.6 }),
         } as React.CSSProperties
       }
     >
@@ -630,6 +855,11 @@ function UseCaseNode({
         ariaLabel={ariaLabel}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
+        onDragStart={
+          onDragStart === undefined
+            ? undefined
+            : (event) => onDragStart(element.id, event)
+        }
       />
     </g>
   );
@@ -645,6 +875,7 @@ function Edge({
   toLabel,
   focused,
   dimmed,
+  stale = false,
   onFocus,
   onKeyDown,
 }: {
@@ -653,6 +884,11 @@ function Edge({
   toLabel: string;
   focused: boolean;
   dimmed: boolean;
+  /** True while one of the two shapes this line joins is being dragged, so
+   *  the route it draws no longer describes where that shape is. A stale line
+   *  at full strength is the drawing asserting something untrue; a faded one
+   *  reads as "this will be redrawn". */
+  stale?: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element | null {
@@ -677,6 +913,7 @@ function Edge({
              must not reshuffle a resting diagram, and the exporter must stay
              deterministic. */
           "--uc-breath-phase": `${usecaseBreathPhase(edge.index)}ms`,
+          ...(stale ? { opacity: 0.3 } : {}),
         } as React.CSSProperties
       }
     >

@@ -47,9 +47,17 @@ registerHooks({
 const { parseDictText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutDict, DICT, wrapToWidth, badgeRunWidth } = await import(
+const dictLayoutModule = await import(
   pathToFileURL(path.join(ROOT, "src/features/dict/lib/layout.ts")).href
 );
+const {
+  layoutDict,
+  DICT,
+  DICT_TITLE,
+  dictTitleBox,
+  wrapToWidth,
+  badgeRunWidth,
+} = dictLayoutModule;
 const { DICT_EXAMPLE } = await import(
   pathToFileURL(path.join(ROOT, "src/features/dict/input/example.ts")).href
 );
@@ -303,6 +311,154 @@ console.log("the table uses its room, but not past readable");
         ),
       ),
     ),
+  );
+}
+
+console.log("the title's press target, and the form's scale-independence");
+
+{
+  /* THE FIRST BUG THESE EXIST FOR, reported by someone using the canvas: "the
+     title modal is not moved to the top". The editor's box was solved in the
+     renderer as a hand-typed 300x112 CENTRED ON THE TITLE'S OWN LINE, so its
+     top edge landed above the top of the drawing and `Math.max(0, …)` decided
+     where it went.
+
+     THE SECOND, WHICH IS WHY THERE IS NO EDITOR BOX LEFT TO MEASURE: that box
+     was in LAYOUT UNITS, and the form it sized was native HTML in a
+     `foreignObject` — laid out in user units and multiplied by the
+     viewBox-to-viewport ratio. A 240x112-unit form is 240x112 CSS px at fit on
+     a wide pane and 960x448 at 400%, with the label going from 14px to 56px.
+     The use-case canvas had it worse at rest, because its "fit" magnifies; the
+     measurement is in `check:usecase-layout`'s own section header.
+
+     So the form is an HTML sibling of the drawing now, anchored to the DRAWN
+     title's box through the `<svg>`'s matrix and sized in CSS pixels. What is
+     measured here is that box — the press target, which is drawn geometry and
+     right to scale — and that nothing is left for a form to be sized from. */
+  const drawn = dictTitleBox(layout);
+  const bandTop = layout.titleY - DICT.titleHeight / 2;
+  const tableRight = layout.columnX.source + layout.columnWidth.source;
+
+  check(
+    "the drawn title's box ends where its words do",
+    drawn !== null &&
+      Math.abs(
+        drawn.width -
+          Math.min(
+            tableRight - drawn.x,
+            width(layout.title, DICT_TITLE.size) + DICT.padX * 2,
+          ),
+      ) < 0.5,
+    `${drawn === null ? "no box" : drawn.width}`,
+  );
+  check(
+    "the press target sits ON the title's own line, inside the band it names",
+    drawn !== null &&
+      drawn.y >= bandTop - 0.5 &&
+      drawn.y + drawn.height <= bandTop + DICT.titleHeight + 0.5,
+    `${JSON.stringify(drawn)} vs band ${bandTop}..${bandTop + DICT.titleHeight}`,
+  );
+  check(
+    "and its position is the layout's answer, not what a clamp left",
+    drawn !== null && drawn.y > 0 && drawn.x > 0,
+    `a box placed at 0,0 is a box whose position nothing chose: ${JSON.stringify(drawn)}`,
+  );
+
+  /* MEASURED, not typed. Proved by COMPARISON, because a single measurement
+     cannot show that anything is being measured at all. */
+  const titled = (title) =>
+    dictTitleBox(
+      layoutDict(
+        parseDictText(DICT_EXAMPLE.replace('title "Customer API"', title)),
+      ),
+    );
+  const short = titled('title "Ledger"');
+  const long = titled(
+    'title "Customer API payload dictionary, every returned field"',
+  );
+  check(
+    "a longer title gives a wider press target — the width is measured, not typed",
+    long.width > short.width,
+    `${short.width} -> ${long.width}`,
+  );
+  check(
+    "and no title, however long, pushes it past the table",
+    long.x + long.width <= tableRight + 0.5,
+    `${long.x + long.width} > ${tableRight}`,
+  );
+
+  /* NOTHING CLIPS, on the shortest drawing the canvas ever hands over. */
+  const tiny = layoutDict(
+    parseDictText(
+      `archlab 1.0 dict\ntitle "T"\n\n@dict\n  section "S"\n    field a uuid\n`,
+    ),
+  );
+  const boxes = [
+    ["the example", layout, dictTitleBox(layout)],
+    ["a one-field dictionary", tiny, dictTitleBox(tiny)],
+  ];
+  const escaping = boxes.filter(
+    ([, canvas, box]) =>
+      box === null ||
+      box.x < -0.5 ||
+      box.y < -0.5 ||
+      box.x + box.width > canvas.width + 0.5 ||
+      box.y + box.height > canvas.height + 0.5,
+  );
+  check(
+    "the title's press target never clips outside the drawing",
+    escaping.length === 0,
+    escaping.map(([label]) => label).join(", "),
+  );
+
+  /* THE NAMED SCALE-INDEPENDENCE ASSERTION, module half. `dictTitleEditorBox`
+     and the two `DICT_TITLE` editor numbers described the FORM in layout
+     units, which is what let the camera multiply it. Their deletion is
+     asserted rather than assumed: reintroducing one is exactly what putting
+     the form back inside the `foreignObject` would need, and a helper with no
+     reader is the mistake `docs/adr/0003-usecase-and-er-positions.md` records
+     twice on this branch. */
+  check(
+    "the layout exports NO unit-space editor box, and no editor size, for the title's form to be sized from — a form measured in layout units is a form the viewBox scale multiplies, which is the 960x448px form at 400% zoom",
+    dictLayoutModule.dictTitleEditorBox === undefined &&
+      DICT_TITLE.editorHeight === undefined &&
+      DICT_TITLE.editorMinWidth === undefined,
+    "a unit-space editor box is back; it cannot describe a control whose size must not change with the camera",
+  );
+
+  /* AND THE CANVAS ASKS FOR THE BOX rather than solving it again — two copies
+     of a box drawn over this table is how the badge run came to hang outside
+     its column, and how the editor came to be placed by a clamp. */
+  const diagram = read("src/features/dict/components/dict-diagram.tsx");
+  const viewer = read("src/features/dict/components/dict-viewer.tsx");
+  check(
+    "the canvas takes the title's box from the layout, not its own arithmetic",
+    /dictTitleBox\(/.test(diagram) && !/DICT_TITLE_EDITOR/.test(diagram),
+    "a box solved in the renderer cannot be measured by this script, which is how the editor shipped off its band",
+  );
+  /* THE NAMED ASSERTION, renderer half — the one that goes red if the form is
+     put back inside the `foreignObject`. That element can only hold what this
+     component is HANDED, and the only thing that could be handed is a React
+     node, so the surface carrying none is the whole guard. */
+  check(
+    "the retitle FORM is never mounted inside the <svg>: the canvas's retitle surface carries no React node, and the one foreignObject over the title is its press target — HTML in there is laid out in user units and multiplied by the viewBox scale",
+    !/React\.ReactNode/.test(diagram) &&
+      !/retitle\.form|titleFields/.test(diagram),
+    "a node crossing DictRetitleSurface is a form back inside the drawing",
+  );
+  check(
+    "and the viewer positions the form from the title's SCREEN rect through the shared canvas overlay, at a size stated in CSS pixels with no layout term in it",
+    /useCanvasOverlayPosition\(\{/.test(viewer) &&
+      /dictTitleBox\(size\)/.test(viewer) &&
+      /const TITLE_FORM_SIZE = \{ width: \d+, height: \d+ \}/.test(viewer),
+    "the form is sized from something other than a CSS-pixel constant, or placed by hand-rolled arithmetic on zoom and scroll",
+  );
+  /* AND NO `foreignObject` REACHES AN EXPORT, which is what makes a native
+     control on this canvas safe at all: the share image, the PNG and the SVG
+     download render from the MODEL and are handed no interactive surface. */
+  check(
+    "the exporter serialises no foreignObject — a native control in a downloaded SVG renders as nothing in most consumers, and as a form in the rest",
+    !/foreignObject/.test(read("src/features/dict/export/render-svg.ts")),
   );
 }
 

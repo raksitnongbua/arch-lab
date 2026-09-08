@@ -63,11 +63,12 @@ import {
   pick,
   readBangTail,
   readPath,
+  readPointToken,
   readTag,
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { DocumentHeaderSpans, LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { readTintAttribute } from "../sequence/parse";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
@@ -102,7 +103,12 @@ interface PendElement extends Loc {
   label: string;
   technology?: string;
   tags?: string[];
+  position?: { x: number; y: number };
+  pinned?: boolean;
   description?: string;
+  /** The last line of this element's BLOCK — its own declaration line until a
+   *  `desc` or an `!` escape extends it. See `UseCaseSpans`. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -143,6 +149,14 @@ interface Header {
   created?: string;
   updated?: string;
   reviewed?: string;
+  /** 1-based line of the `title` line, for `DocumentHeaderSpans`. Recorded
+   *  during the header parse rather than found afterwards: a gesture that had
+   *  to LOCATE it would be re-implementing the header parse in a module that
+   *  already has the parse's answer — the second-parser move `codebase.md`
+   *  bans, and the argument C4's `HeaderSpans.direction` already makes. */
+  titleLine?: number;
+  /** 1-based line of the `description` line, when the file has one. */
+  descriptionLine?: number;
   metaRaw: Map<string, Pend>;
   metaUnknowns: Pend[];
   schemaRaw?: Pend;
@@ -178,7 +192,61 @@ function edgeTokenList(): string {
  * deterministic. Throws `ArchTextParseError` (line + column) on any problem
  * — all-or-nothing.
  */
+/**
+ * Where each element of a parse sits in the source text.
+ *
+ * The use-case counterpart of `ArchTextSpans`, `SequenceSpans`,
+ * `FlowchartSpans` and `ErSpans`, and it exists for the same one reason: an
+ * edit to a use-case diagram on the canvas has to be a LINE PATCH.
+ * `serializeUseCaseText` writes canonical text, which has no `//` comments,
+ * no author blank lines and no field the author spelled out that the
+ * canonical form omits at its default — so a re-emit is lossy in a way that
+ * passes every assertion, because canonical text re-emitted IS canonical
+ * text. Splicing by span keeps every byte the edit did not touch.
+ *
+ * ELEMENTS ARE KEYED BY ID, which the parser already proves unique per file.
+ *
+ * BOUNDARIES AND EDGES CARRY NO SPAN. No gesture addresses either yet, and
+ * untested bookkeeping guarding nothing is what `SequenceSpans` declines to
+ * write for a fragment — add them with the first gesture that needs them. An
+ * edge would also need the index-aligned array `FlowchartSpans.edges` uses
+ * rather than a map: it has no id, and two associations between the same pair
+ * are legal text.
+ *
+ * A BOUNDARY'S MEMBERS ARE NOT PART OF ITS SPAN, and an element's span never
+ * reaches its boundary's line. The two nest in the TEXT but an element is
+ * addressed on its own, and a patch that swallowed the opener would move the
+ * element out of the boundary that encloses it — which is exactly why the
+ * caller reads the indentation off the block it is replacing rather than
+ * re-deriving membership.
+ */
+export interface UseCaseSpans {
+  /**
+   * The document's own `title` and `description` lines — what the heading this
+   * canvas draws is rewritten through. See `DocumentHeaderSpans`.
+   */
+  header: DocumentHeaderSpans;
+  elements: ReadonlyMap<string, LineSpan>;
+}
+
+/**
+ * Parses `.alab` use-case source into a `UseCaseLabFile`. Pure and
+ * deterministic. Throws `ArchTextParseError` (line + column) on any problem —
+ * all-or-nothing.
+ */
 export function parseUseCaseText(source: string): UseCaseLabFile {
+  return parseUseCaseTextWithSpans(source).file;
+}
+
+/**
+ * `parseUseCaseText`, plus where every element came from — the SAME parse, so
+ * the spans cannot describe a different reading of the text than the model
+ * does. Callers that only want the model use `parseUseCaseText`.
+ */
+export function parseUseCaseTextWithSpans(source: string): {
+  file: UseCaseLabFile;
+  spans: UseCaseSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -379,7 +447,28 @@ export function parseUseCaseText(source: string): UseCaseLabFile {
     );
   }
 
-  return resolve(header, elements, elementById, boundaries, edges);
+  const file = resolve(header, elements, elementById, boundaries, edges);
+  /* Built from the SAME pending array `resolve` just read, AFTER it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. */
+  return {
+    file,
+    spans: {
+      header: {
+        /* `title` is non-optional in `DocumentHeaderSpans` because no parser
+           accepts a file without one; the fallback keeps this total rather
+           than asserting a fact the type already carries. */
+        title: header.titleLine ?? 1,
+        description: header.descriptionLine,
+      },
+      elements: new Map(
+        elements.map((element) => [
+          element.id,
+          { start: element.line, end: element.endLine },
+        ]),
+      ),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -407,10 +496,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       break;
     case "title":
       onceString(cursor, header.title, keyword);
+      header.titleLine = loc.line;
       header.title = cursor.readQuoted("the file title");
       break;
     case "description":
       onceString(cursor, header.description, keyword);
+      header.descriptionLine = loc.line;
       header.description = cursor.readQuoted("the file description");
       break;
     case "owner":
@@ -649,6 +740,16 @@ function parseBodyLine(
 
 /* --------------------------------- elements -------------------------------- */
 
+/**
+ * `pin` as a whole word, for the element attribute loop.
+ *
+ * A LOOKAHEAD RATHER THAN A CONSUMING READ, so that a word this grammar does
+ * not know still reaches `expectEnd` and produces the error message it always
+ * has. Anchored against a following word character or hyphen so that a near
+ * miss — `pinned` is the obvious one — is not read as the flag.
+ */
+const PIN_AHEAD_RE = /^pin(?![\w-])/;
+
 function parseElementLine(
   cursor: LineCursor,
   loc: Loc,
@@ -699,6 +800,7 @@ function parseElementLine(
     id,
     kind,
     label,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -725,7 +827,62 @@ function parseElementLine(
       element.tags.push(readTag(cursor));
       continue;
     }
+    /* `(x,y)` — the author has PINNED this element. The same paren spelling a
+       flowchart node's position and a C4 node's geometry use, minus the
+       `w×h`: an actor's figure and a use case's ellipse are both measured
+       from their own contents, so there is nothing for a size to mean here.
+       Reusing the token rather than inventing `at x,y` keeps one vocabulary
+       across the kinds, as `[technology]` and `#tag` on this line already
+       do. */
+    if (cursor.peek() === "(") {
+      if (element.position !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, "duplicate (x,y) attribute");
+      }
+      element.position = readPointToken(cursor);
+      continue;
+    }
+    /* `pin` / `pin=false` — keep these coordinates when the diagram is handed
+       back to the layout. Peeked rather than read as a word, for the reason
+       `PIN_AHEAD_RE` gives. `pin` on an element with no `(x,y)` is refused
+       after the loop, where the position is known. */
+    if (PIN_AHEAD_RE.test(cursor.text.slice(cursor.pos))) {
+      if (element.pinned !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, 'duplicate "pin" attribute');
+      }
+      cursor.pos += 3;
+      if (cursor.eat("=")) {
+        const valueLoc = { line: cursor.line, column: cursor.column };
+        const value = cursor.readBare(/^[a-z]+/, '"true" or "false"');
+        if (value !== "true" && value !== "false") {
+          failAt(
+            valueLoc.line,
+            valueLoc.column,
+            `pin= must be "true" or "false", got "${value}"`,
+            value,
+          );
+        }
+        element.pinned = value === "true";
+      } else {
+        element.pinned = true;
+      }
+      continue;
+    }
     break;
+  }
+  /* `pin` NAMES COORDINATES TO KEEP, so it cannot stand on an element that
+     states none — it would be a flag with nothing to protect, the shape
+     `C4Node.pinned` wore for two releases while documenting a feature that
+     did not exist. Refused in BOTH directions, `pin` and `pin=false` alike:
+     "explicitly not keeping a position I never stated" is not a document
+     anybody meant to write. Checked here rather than in the loop because
+     `pin` is written BEFORE the `(x,y)` on the line. */
+  if (element.pinned !== undefined && element.position === undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      '"pin" keeps an element\'s stated coordinates, and this element ' +
+        "states none — add an (x,y) position or remove the pin",
+    );
   }
   cursor.expectEnd("the element line");
   state.elements.push(element);
@@ -956,6 +1113,11 @@ function parseBoundaryBang(cursor: LineCursor, boundary: PendBoundary): void {
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each accepting path, because a span that stopped short by one line
+     would make a patch overwrite an author's `!` escape. */
+  if (target.kind === "element") target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     /* `desc` — elements only. An edge has no description field: an
        association's label is the whole annotation a line carries, and
@@ -1089,6 +1251,10 @@ function resolve(
     add("label", element.label);
     add("technology", pick(element.technology, element.raw, "technology"));
     add("tags", pick(element.tags, element.raw, "tags"));
+    /* In `USECASE_ELEMENT_KEYS` order, which is the order the line writes
+       them — `pin` before the `(x,y)`, as a C4 node writes `pin (x,y w×h)`. */
+    add("pinned", pick(element.pinned, element.raw, "pinned"));
+    add("position", pick(element.position, element.raw, "position"));
     add("description", pick(element.description, element.raw, "description"));
     return assemble(pairs, element.unknowns);
   });

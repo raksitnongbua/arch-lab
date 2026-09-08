@@ -81,11 +81,20 @@ const {
   parseSequenceText,
   parseFlowchartText,
   parseUseCaseText,
+  parseUseCaseTextWithSpans,
+  canonicalUseCaseElementBlock,
   serializeUseCaseText,
   detectAlabKind,
   ArchTextParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+
+/* The REAL patcher the canvas uses, not a copy of it — the whole point of the
+   section below is that this module and the spans agree. */
+const { applyPatches, indentOf } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/line-patch.ts"))
+    .href
 );
 
 /* ----------------------------------------------------------------------- */
@@ -146,14 +155,14 @@ reviewed 2026-08-05T00:00:00Z
   actor customer "Customer"
     desc "Orders food from nearby restaurants."
     ! x-persona after label : "guest"
-  actor admin "Administrator" [internal] #ops
+  actor admin "Administrator" [internal] #ops pin (84,268)
   boundary "Food Delivery Service" tint=#bfdfff
     ! x-lane : "core"
     usecase search "Search restaurants"
       desc "Browse and filter by cuisine, distance and rating."
-    usecase order "Place an order" #checkout
+    usecase order "Place an order" #checkout (432,116)
     usecase pay "Take payment" [Stripe]
-    usecase refund "Issue a refund"
+    usecase refund "Issue a refund" pin=false (316,428)
 
   customer -- search
   customer -- order : "1..*"
@@ -447,6 +456,207 @@ check(
 /* ----------------------------------------------------------------------- */
 /* 5. Malformed inputs — line, column and a quotable source line            */
 /* ----------------------------------------------------------------------- */
+/* A stated position, and the pin that keeps it                            */
+/* ----------------------------------------------------------------------- */
+
+/* The kitchen sink above already round-trips all three spellings — `pin
+   (x,y)`, a bare `(x,y)` and `pin=false (x,y)` — so this section asserts what
+   a byte-identical round trip CANNOT: that absence stays absence, that the
+   information-losing direction of the toggle survives, and that a point this
+   token cannot spell rides the `!` escape rather than being truncated.
+
+   The same three assertions stand in `check:er`, because both grammars grew
+   the field from one shared reader and either serializer could lose it on its
+   own. */
+
+console.log("");
+console.log("a stated position, and the pin that keeps it");
+
+{
+  const byId = (id) => sink.elements.find((element) => element.id === id);
+
+  check(
+    "`pin (x,y)` reaches the model as both fields",
+    byId("admin")?.pinned === true &&
+      byId("admin")?.position?.x === 84 &&
+      byId("admin")?.position?.y === 268,
+    JSON.stringify(byId("admin")),
+  );
+  check(
+    "a bare `(x,y)` is a position with NO pin key at all",
+    byId("order")?.position?.x === 432 && !("pinned" in (byId("order") ?? {})),
+    "a bare position must not invent a pin: " + JSON.stringify(byId("order")),
+  );
+  check(
+    "`pin=false` reaches the model as false, not as absent",
+    byId("refund")?.pinned === false,
+    JSON.stringify(byId("refund")),
+  );
+  check(
+    "an element the layout places carries NEITHER key",
+    !("position" in (byId("customer") ?? {})) &&
+      !("pinned" in (byId("customer") ?? {})),
+    "absent is the normal case: " + JSON.stringify(byId("customer")),
+  );
+
+  /* THE INFORMATION-LOSING TRANSITION `canvas-editing.md` asks to be
+     asserted: omitting `pin=false` at its default would silently delete an
+     author's explicit "do not keep this", and every other document's round
+     trip would stay byte-stable. */
+  check(
+    "an explicit `pin=false` is written out rather than omitted at default",
+    serializeUseCaseText(sink).includes("pin=false"),
+    "the toggle deleted the author's explicit off",
+  );
+
+  /* `(x,y)` has room for exactly two numbers, so a point carrying a third key
+     from a newer minor rides the `!` escape whole. */
+  const odd = serializeUseCaseText({
+    ...sink,
+    elements: sink.elements.map((element) =>
+      element.id === "order"
+        ? { ...element, position: { x: 1, y: 2, z: 3 } }
+        : element,
+    ),
+  });
+  check(
+    "a point with a third key rides the `!` escape instead of being truncated",
+    odd.includes("! position") && !odd.includes("(1,2)"),
+    "the `z` was dropped and the document silently changed meaning",
+  );
+  check(
+    "and that escape parses back to the same point",
+    JSON.stringify(
+      parseUseCaseText(odd).elements.find((element) => element.id === "order")
+        ?.position,
+    ) === JSON.stringify({ x: 1, y: 2, z: 3 }),
+    "the escape did not survive the round trip",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Spans, and the line patch they exist for                                */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THESE ARE HERE AT ALL. A canvas gesture must be a LINE PATCH, never a
+   re-emit: `serializeUseCaseText` writes canonical text, so re-emitting the
+   file deletes every `//` comment and every author blank line — and passes
+   every round-trip assertion while doing it, because canonical text
+   re-emitted IS canonical text. `0a9cbf1` bought that rule on the flowchart
+   canvas.
+
+   The fixture is DELIBERATELY NON-CANONICAL, which `canvas-editing.md`
+   requires. It also carries the case this notation has and ER does not: an
+   element INSIDE a boundary, indented one level deeper than one outside it.
+   A helper that re-derived its own indentation instead of reading the
+   caller's would move that element out of its boundary, and the changed-line
+   count is what catches it. */
+
+const MESSY = `archlab 1.0 usecase
+title "Food delivery"
+
+// Guests can look but not buy.
+@usecase
+  actor guest "Guest"
+  actor customer "Customer"
+    desc "Has an account and a card on file."
+
+  // Everything inside here is the system's own behaviour.
+  boundary "Delivery platform"
+    usecase browse "Browse restaurants"
+    usecase pay "Pay for the order" [Stripe]
+      desc "Stripe hosted checkout."
+
+  guest -- browse
+  customer -- pay
+`;
+
+console.log("");
+console.log("spans, and the line patch they exist for");
+
+{
+  const { file, spans } = parseUseCaseTextWithSpans(MESSY);
+  const ids = ["guest", "customer", "browse", "pay"];
+  const sourceLines = MESSY.split("\n");
+
+  check(
+    "every element the model holds has a span",
+    ids.every((id) => spans.elements.get(id) !== undefined) &&
+      spans.elements.size === ids.length,
+    `spans: ${[...spans.elements.keys()].join(", ")}`,
+  );
+  check(
+    "a span STARTS on the declaration line it names",
+    ids.every((id) =>
+      sourceLines[spans.elements.get(id).start - 1].includes(id),
+    ),
+    "a span pointing at the wrong line patches the wrong element",
+  );
+  check(
+    "a span reaches an element's own `desc` and stops there",
+    spans.elements.get("pay").end === 14 &&
+      sourceLines[13].includes("Stripe hosted checkout") &&
+      spans.elements.get("browse").end === 12,
+    `pay: ${JSON.stringify(spans.elements.get("pay"))}`,
+  );
+  /* AND NEVER REACHES THE BOUNDARY THAT ENCLOSES IT. The two nest in the
+     text, but an element is addressed on its own; a span that swallowed the
+     opener would move the element out of its boundary on the first drag. */
+  check(
+    "an element's span never reaches its boundary's own line",
+    ids.every(
+      (id) =>
+        spans.elements.get(id).start > 11 ||
+        !sourceLines[spans.elements.get(id).start - 1].includes("boundary"),
+    ),
+    "a member's span reached its boundary opener",
+  );
+
+  for (const [id, at, expectPad] of [
+    ["pay", { x: 316, y: 428 }, "    "],
+    ["customer", { x: 84, y: 268 }, "  "],
+  ]) {
+    const moved = {
+      ...file,
+      elements: file.elements.map((element) =>
+        element.id === id ? { ...element, position: at } : element,
+      ),
+    };
+    const span = spans.elements.get(id);
+    const pad = indentOf(sourceLines[span.start - 1]);
+    check(
+      `${id}'s indentation is read off the source, not re-derived`,
+      pad === expectPad,
+      `pad is ${JSON.stringify(pad)}, expected ${JSON.stringify(expectPad)}`,
+    );
+    const patched = applyPatches(MESSY, [
+      { span, lines: canonicalUseCaseElementBlock(moved, id, pad) },
+    ]);
+    const changed = MESSY.split("\n").filter(
+      (line, index) => line !== patched.split("\n")[index],
+    );
+    check(
+      `moving ${id} rewrites exactly one line`,
+      changed.length === 1 && changed[0].includes(id),
+      `${changed.length} lines changed: ${JSON.stringify(changed)}`,
+    );
+    check(
+      `and the patched text still parses to the same ${id} position`,
+      parseUseCaseText(patched).elements.find((e) => e.id === id)?.position
+        ?.x === at.x,
+      "the gesture wrote text its own parser reads differently",
+    );
+    check(
+      `and ${id} is still inside the boundary it was written in`,
+      patched.includes('  boundary "Delivery platform"') &&
+        (patched.match(/^\s*\/\//gm) ?? []).length ===
+          (MESSY.match(/^\s*\/\//gm) ?? []).length,
+      "the patch moved the element out of its boundary, or ate a comment",
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("malformed inputs (.alab usecase)");
 
@@ -512,6 +722,36 @@ const USE_HEAD =
   'archlab 1.0 usecase\ntitle "T"\n\n@usecase\n  actor a "A"\n  usecase b "B"\n  usecase c "C"\n';
 
 usecaseError("empty source is refused", "", "archlab");
+usecaseError(
+  "`pin` on an element that states no position is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin'),
+  "states none",
+);
+usecaseError(
+  "`pin=false` on an element that states no position, refused the same way",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin=false'),
+  "states none",
+);
+usecaseError(
+  "a `pin=` value outside true/false is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin=maybe (0,0)'),
+  '"true" or "false"',
+);
+usecaseError(
+  "two positions on one element line are refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" (1,2) (3,4)'),
+  "duplicate (x,y)",
+);
+usecaseError(
+  "two pins on one element line are refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin pin (1,2)'),
+  'duplicate "pin"',
+);
+usecaseError(
+  "a position missing its comma is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" (1 2)'),
+  "between x and y",
+);
 usecaseError(
   "a newer major version is refused",
   'archlab 2.0 usecase\ntitle "T"\n\n@usecase\n',

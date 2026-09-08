@@ -17,6 +17,7 @@
  */
 
 export { ErViewer } from "./components/er-viewer";
+export type { ErEditHandlers } from "./components/er-viewer";
 export { ErDiagram } from "./components/er-diagram";
 export type { ErFocus } from "./components/er-diagram";
 export { ErExampleView } from "./components/er-example-view";
@@ -41,6 +42,7 @@ export { ER_EXAMPLE } from "./input/example";
 export { ER, layoutEr } from "./lib/layout";
 export type {
   ErLayout,
+  ErRect,
   LaidErAttribute,
   LaidErEnd,
   LaidErEntity,

@@ -133,6 +133,109 @@ export function badgeRunWidth(flags: readonly string[]): number {
   );
 }
 
+/**
+ * The reorder chip: a pair of move-earlier / move-later controls, revealed on
+ * the section band or the field row the reader is pointing at.
+ *
+ * HERE RATHER THAN IN THE CANVAS for the reason `BADGE` is: a control the
+ * canvas draws over its own table has to be measured against that table, and
+ * two copies of the arithmetic is how the badge run came to hang outside the
+ * column reserved for it. The layout stays pure — this is arithmetic on two
+ * numbers the caller already has, not a measurement of anything.
+ *
+ * IT IS NOT PART OF THE TABLE'S OWN GEOMETRY, and `layoutDict` deliberately
+ * does not place one: a chip that reserved space would move every column the
+ * moment a document became editable, so the same dictionary would export at
+ * one width and edit at another. It is chrome drawn OVER the table, which is
+ * why it carries an opaque backing.
+ */
+export const DICT_HANDLE = {
+  /** Side of one square control — the 16-unit glyph grid plus a little air. */
+  button: 18,
+  /** Between the pair. */
+  gap: 2,
+  /** Between the pair and the chip's own edge. */
+  pad: 3,
+  radius: 8,
+  /** The grid the chevrons are drawn on, so the glyph paths read as integers
+   * and one scale factor maps them onto `button`. */
+  grid: 16,
+} as const;
+
+export interface DictHandleChip {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Left edge of each control, named for the READING ORDER the direction is
+   * named for rather than for the screen. */
+  earlierX: number;
+  laterX: number;
+  /** Top edge of both. */
+  buttonY: number;
+}
+
+/**
+ * The chip's box, its right edge at `rightEdge` and centred on `centerY`.
+ *
+ * RIGHT-ALIGNED because the left of every band and row is the thing being
+ * moved — a section's label, a field's name — and a control that covered the
+ * name while the reader hovered it would hide exactly what they are aiming at.
+ */
+export function dictHandleChip(
+  rightEdge: number,
+  centerY: number,
+): DictHandleChip {
+  const width = DICT_HANDLE.pad * 2 + DICT_HANDLE.button * 2 + DICT_HANDLE.gap;
+  const height = DICT_HANDLE.pad * 2 + DICT_HANDLE.button;
+  const x = rightEdge - width;
+  const y = centerY - height / 2;
+  return {
+    x,
+    y,
+    width,
+    height,
+    earlierX: x + DICT_HANDLE.pad,
+    laterX: x + DICT_HANDLE.pad + DICT_HANDLE.button + DICT_HANDLE.gap,
+    buttonY: y + DICT_HANDLE.pad,
+  };
+}
+
+/**
+ * The document title's own type size and the leading its press target sits in
+ * — in LAYOUT UNITS.
+ *
+ * HERE RATHER THAN IN THE CANVAS for the reason `BADGE` and `DICT_HANDLE` are:
+ * the title's press target is a box drawn over the table, so it has to be
+ * measured against the table, and a size typed in the renderer while the
+ * layout drew the words at another is how a control came to end before the
+ * words it offered to change did.
+ *
+ * THERE ARE NO EDITOR NUMBERS HERE ANY MORE. There were two — `editorHeight`
+ * and `editorMinWidth`, the room the title's own retitle form asked for in
+ * layout units — and a layout unit is the wrong unit for a form: native HTML
+ * in a `foreignObject` is laid out in user units and multiplied by the
+ * viewBox-to-viewport ratio, so the form grew with the reader's zoom (72px
+ * chips and a 448px-tall field at 400%). The form is an HTML sibling of the
+ * drawing now, sized in CSS pixels by `TITLE_FORM_SIZE` in `dict-viewer.tsx`.
+ * Do not bring a unit-space editor box back.
+ */
+export const DICT_TITLE = {
+  size: 22,
+  /** How much taller than its type size the press target is — the leading a
+   * single line of text sits in, so the target covers the words rather than
+   * only their x-height. */
+  hitLeading: 1.6,
+} as const;
+
+/** A box drawn over the table, in layout units. */
+export interface DictBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /** The five columns, in reading order. `flex` columns share what is left after
  * the measured ones; today only the description flexes. */
 const COLUMNS = ["name", "type", "flags", "description", "source"] as const;
@@ -435,5 +538,41 @@ export function layoutDict(
     sections: laid,
     columnX,
     columnWidth,
+  };
+}
+
+/**
+ * The box the document title is DRAWN in — its press target when the canvas
+ * hands one over, and the anchor the viewer hangs the title's HTML editor off.
+ *
+ * MEASURED, so the target ends where the words do: the same glyph estimate the
+ * columns are measured with, at the size the title is actually drawn at. It
+ * never reaches past the table's right edge, so a long title cannot hand the
+ * reader a box wider than the drawing it sits on.
+ *
+ * TWO READERS, ONE BOX. The canvas draws the `foreignObject` on it; the viewer
+ * runs its top-left through the `<svg>`'s own matrix to place the retitle form
+ * over it (`useCanvasOverlayPosition`). The press target is drawn geometry and
+ * scales with the table, as it should — the FORM does not, which is why it is
+ * no longer sized from anything in this file.
+ *
+ * `null` for an untitled document, which is the same answer `layoutDict` gives
+ * for the band: a document without a title never parsed, and nothing is
+ * offered where there is nothing to rewrite.
+ */
+export function dictTitleBox(layout: DictLayout): DictBox | null {
+  if (layout.title === null) return null;
+  const x = layout.columnX.name - DICT.padX;
+  const right = layout.columnX.source + layout.columnWidth.source;
+  const height = DICT_TITLE.size * DICT_TITLE.hitLeading;
+  return {
+    x,
+    /* Centred on the drawn line, because this box covers the WORDS. */
+    y: layout.titleY - height / 2,
+    width: Math.min(
+      right - x,
+      textWidth(layout.title, DICT_TITLE.size) + DICT.padX * 2,
+    ),
+    height,
   };
 }

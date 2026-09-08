@@ -79,7 +79,12 @@
  */
 
 export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
-export type { ArchTextSpans, HeaderSpans, LineSpan } from "./lib/parse";
+export type {
+  ArchTextSpans,
+  DocumentHeaderSpans,
+  HeaderSpans,
+  LineSpan,
+} from "./lib/parse";
 export {
   canonicalDiagramBlock,
   canonicalDiagramHead,
@@ -154,22 +159,39 @@ export {
   // a barrel that carries four grammars.
   GROUP_KEYWORD as FLOWCHART_GROUP_KEYWORD,
 } from "./lib/flowchart/keywords";
-export { parseUseCaseText } from "./lib/usecase/parse";
-export { serializeUseCaseText } from "./lib/usecase/serialize";
+export {
+  parseUseCaseText,
+  parseUseCaseTextWithSpans,
+} from "./lib/usecase/parse";
+export type { UseCaseSpans } from "./lib/usecase/parse";
+export {
+  canonicalUseCaseElementBlock,
+  serializeUseCaseText,
+} from "./lib/usecase/serialize";
 export {
   DEPENDENCY_STEREOTYPES,
   ELEMENT_KIND_BY_KEYWORD,
 } from "./lib/usecase/keywords";
-export { parseErText } from "./lib/er/parse";
-export { serializeErText } from "./lib/er/serialize";
+export { parseErText, parseErTextWithSpans } from "./lib/er/parse";
+export type { ErSpans } from "./lib/er/parse";
+export {
+  canonicalErEntityBlock,
+  canonicalErRelationshipBlock,
+  serializeErText,
+} from "./lib/er/serialize";
 export {
   ATTRIBUTE_KEYS,
   ER_HEADER_WORD,
   LEFT_CARDINALITY,
   RIGHT_CARDINALITY,
 } from "./lib/er/keywords";
-export { parseDictText } from "./lib/dict/parse";
-export { serializeDictText } from "./lib/dict/serialize";
+export { parseDictText, parseDictTextWithSpans } from "./lib/dict/parse";
+export type { DictSpans } from "./lib/dict/parse";
+export {
+  canonicalDictFieldBlock,
+  canonicalDictSectionBlock,
+  serializeDictText,
+} from "./lib/dict/serialize";
 export { DICT_HEADER_WORD, FIELD_FLAGS } from "./lib/dict/keywords";
 export { parseGanttText } from "./lib/gantt/parse";
 export { serializeGanttText } from "./lib/gantt/serialize";

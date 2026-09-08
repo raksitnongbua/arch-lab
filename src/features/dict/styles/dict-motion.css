@@ -1,5 +1,7 @@
 /* ---------------------------------------------------------------------------
- * Dictionary viewer motion: a reveal, and nothing else.
+ * Dictionary viewer motion: a reveal, and nothing else — plus, at the foot of
+ * the file, the reorder chip's own states, which live here because a reveal
+ * that has to survive a keyboard is three CSS states and no JavaScript.
  *
  * THE MODEL, and why it is the quietest of the six. Every other canvas has an
  * ambient gesture because every other canvas draws CONNECTIONS, and a
@@ -97,4 +99,93 @@
       transform: none;
     }
   }
+
+  /* The reveal is a state change, not motion — so only its EASING lives
+     behind the media query. See the reorder block below. */
+  .af-dict-handles {
+    transition: opacity 120ms ease-out;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The reorder chip.
+ *
+ * IN THIS STYLESHEET rather than in the component, because a reveal is three
+ * states of one element — resting, pointed at, focused — and only CSS can hold
+ * the third: `:focus-within` is what keeps the pair reachable by keyboard
+ * without JavaScript having to tell the canvas which row the reader is on, and
+ * it works before hydration. Every DIMENSION the chip is built from stays in
+ * `DICT_HANDLE` and arrives as an inline style, so nothing here is a second
+ * copy of a number; what lives here is only what CSS alone can say.
+ *
+ * HIDDEN MEANS INERT, not merely invisible: an `opacity: 0` chip still claims
+ * the pointer, and an invisible control over the tail of the source column is
+ * a click that lands on nothing the reader can see. Keyboard focus is
+ * untouched by `pointer-events`, which is what lets `:focus-within` reveal a
+ * chip the reader tabbed into.
+ * ------------------------------------------------------------------------- */
+
+.af-dict-handles {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.af-dict-row:hover .af-dict-handles,
+.af-dict-row:focus-within .af-dict-handles,
+.af-dict-band:hover .af-dict-handles,
+.af-dict-band:focus-within .af-dict-handles {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.af-dict-chip {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  background: var(--node);
+  border: 1px solid var(--node-border);
+}
+
+.af-dict-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.af-dict-handle:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+/* THE RING IS DRAWN INSIDE THE BUTTON, and that is not a style preference: a
+   `foreignObject` clips its content to its own box, and an `outline` paints
+   OUTSIDE the border box — so the browser's indicator would be shaved off
+   against the edge of the chip, worst at the corners, which is where a
+   keyboard reader is looking. An inset ring cannot be clipped by the box it is
+   inside. */
+.af-dict-handle:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ring);
+  color: var(--foreground);
+}
+
+/* A WALL, NOT A DEAD CONTROL: it keeps its place, its name and its tooltip,
+   and says why. `aria-disabled` rather than `disabled` is what keeps focus
+   inside the table on the press that reaches the end of a run. */
+.af-dict-handle-off {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.af-dict-handle-off:hover {
+  background: transparent;
+  color: var(--muted-foreground);
 }

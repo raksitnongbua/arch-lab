@@ -65,6 +65,7 @@ import {
   pick,
   readBangTail,
   readPath,
+  readPointToken,
   readTag,
   readTechnology,
   segString,
@@ -825,16 +826,7 @@ function parseNodeLine(
       if (node.position !== undefined) {
         failAt(attrLoc.line, attrLoc.column, "duplicate (x,y) attribute");
       }
-      cursor.pos += 1;
-      cursor.skipSpaces();
-      const x = cursor.readNumber("the x position");
-      cursor.skipSpaces();
-      cursor.expect(",", '"," between x and y');
-      cursor.skipSpaces();
-      const y = cursor.readNumber("the y position");
-      cursor.skipSpaces();
-      cursor.expect(")", '")" closing the position');
-      node.position = { x, y };
+      node.position = readPointToken(cursor);
       continue;
     }
     break;

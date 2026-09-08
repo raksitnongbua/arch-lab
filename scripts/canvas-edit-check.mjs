@@ -1500,14 +1500,34 @@ console.log("\nThe capability grid answers every notation for every ability");
      the grid a returning implementer will read is the grid the app obeys. */
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
+  /* THE ABILITY NAMES ARE READ OFF THE TYPE, not counted against a literal.
+     This said `abilities.length === 4` and listed the four by name, so adding
+     the fifth (`retitle`) failed here — which is the right place to notice a
+     new ability, but the WRONG failure: it says "the grid grew" rather than
+     "the grid and the type disagree", and the fix a reader reaches for is to
+     bump the number, which asserts nothing the next time.
+     The union in `canvas-edit.ts` is the declaration, so the assertion is
+     that the OBJECT's keys are exactly the union's members — parsed out of the
+     source, because a type cannot be read at runtime. A member added to one
+     and not the other is what this catches, and it needs no edit when a sixth
+     ability arrives. */
+  const abilitySource = read("src/features/playground/input/canvas-edit.ts");
+  const unionMatch = /export type CanvasEditAbility =\s*([^;]*);/.exec(
+    abilitySource,
+  );
+  const declared =
+    unionMatch === null
+      ? []
+      : [...unionMatch[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]);
   check(
-    "the grid names the four abilities and nothing else",
-    abilities.length === 4 &&
-      abilities.includes("move") &&
-      abilities.includes("revise") &&
-      abilities.includes("create") &&
-      abilities.includes("connect"),
-    `abilities: ${abilities.join(", ")}`,
+    "the CanvasEditAbility union was found, so the comparison is not vacuous",
+    declared.length >= 2,
+    `parsed: ${JSON.stringify(declared)}`,
+  );
+  check(
+    "the grid's rows are exactly the abilities the type declares",
+    [...abilities].sort().join(",") === [...declared].sort().join(","),
+    `grid: ${[...abilities].sort().join(", ")} / type: ${[...declared].sort().join(", ")}`,
   );
 
   for (const ability of abilities) {
@@ -1615,17 +1635,45 @@ console.log("\nThe capability grid answers every notation for every ability");
      would have gone on saying otherwise with every check green — the same shape
      as the three stale claims section 15 exists for.
 
-     So: make the flowchart offer `move`, and the ER document's refusal must
-     name it. Restored immediately, and the restoration is itself asserted, or
-     every section after this one would run against a mutated grid. */
-  const erSeed = parseViewSource(VIEW_SEED_TEXT.er);
+     So: rename the flowchart's noun, and a refusing document's own refusal
+     must come back carrying the new word. Restored immediately, and the
+     restoration is itself asserted, or every section after this one would run
+     against a mutated grid.
+
+     THE FIXTURE IS DERIVED, and it used to be the ER seed by name. That broke
+     the day ER learned to be dragged: `canvasEditability` returns no `reason`
+     for a notation that offers the ability, so `before.includes(...)` read a
+     property of `undefined` and the whole run died with a TypeError instead of
+     one red line. A test that hardcodes which notation refuses is the same
+     staleness this section exists to catch, one level up — so the refusing
+     notation is now read off the grid, and the day the last one starts
+     offering `move` this reports a vacuous section rather than crashing. */
+  /* A REFUSAL THAT USES THE DERIVED TAIL, which is a narrower set than "any
+     refusal". A cell carrying `instead` points the reader at a gesture its own
+     notation does have and never reaches `onlyTheseNotations` at all — the
+     sequence move refusal is exactly that, sending the reader to the wording
+     editor — so picking one of those would assert the derivation against a
+     sentence the derivation does not write. */
+  const stillRefusesMove = Object.keys(CANVAS_EDIT_OFFERS.move).filter(
+    (kind) =>
+      !CANVAS_EDIT_OFFERS.move[kind].offers &&
+      CANVAS_EDIT_OFFERS.move[kind].instead === undefined,
+  );
+  check(
+    "some notation still refuses `move` with the DERIVED tail, so this section is not vacuous",
+    stillRefusesMove.length >= 1,
+    "every notation offers `move`; the derived refusal names nobody and the " +
+      "assertions below prove nothing",
+  );
+  const refusingKind = stillRefusesMove[0];
+  const refusingSeed = parseViewSource(VIEW_SEED_TEXT[refusingKind]);
   const moveRefusal = () =>
-    erSeed.status === "ok"
-      ? canvasEditability(erSeed.value, "move").reason
+    refusingSeed.status === "ok"
+      ? (canvasEditability(refusingSeed.value, "move").reason ?? "")
       : "";
   const before = moveRefusal();
   check(
-    "the move refusal names C4 and does not name a notation that cannot be dragged",
+    `the ${refusingKind} move refusal names C4 and not a noun no cell holds`,
     before.includes("C4 diagrams") && !before.includes("flowchart diagrams"),
     `reason: ${before}`,
   );
@@ -1646,6 +1694,89 @@ console.log("\nThe capability grid answers every notation for every ability");
     moveRefusal() === before,
     "the flipped cell leaked into the rest of the run",
   );
+
+  /* AN OFFERING CELL MUST REACH A CONTROL — AND THIS ASSERTION DID NOT EXIST
+     EITHER, which is how a false claim shipped past a green run.
+
+     `canvas-editing.md` requires that "a gesture no control invokes" fails
+     here. Three assertions do enforce it — "the playground wires X into the
+     canvas / sequence / flowchart bundle" — and all three are keyed to a
+     bundle by name, so the ER, use-case and dictionary bundles were covered by
+     none of them, and the fifth ability by nothing at all. `retitle` was
+     committed offering on two notations while no reader could retype anything,
+     with 909 assertions green.
+
+     So: every notation whose cell offers an ability must have its viewer handed
+     an `edit`/heading prop by the playground. Mechanical rather than
+     per-gesture on purpose — naming each handler would be a fourth hand-kept
+     list, and the failure this catches is the absence of the whole hop, not a
+     missing member of it. */
+  {
+    const host = read("src/features/playground/components/view-playground.tsx");
+    const VIEWER = {
+      c4: "canvasEdit",
+      sequence: "sequenceEdit",
+      flowchart: "flowchartEdit",
+      usecase: "usecaseEdit",
+      er: "erEdit",
+      dict: "dictEdit",
+    };
+    for (const kind of Object.keys(CANVAS_EDIT_OFFERS.move)) {
+      const offersAnything = Object.values(CANVAS_EDIT_OFFERS).some(
+        (cells) => cells[kind].offers,
+      );
+      if (!offersAnything) continue;
+      const bundle = VIEWER[kind];
+      check(
+        `the playground hands the ${kind} canvas its edit bundle`,
+        typeof bundle === "string" && host.includes(bundle),
+        `${kind} offers an ability and no bundle named ${bundle ?? "?"} ` +
+          "reaches its viewer — the gesture exists and nothing invokes it",
+      );
+    }
+    /* AND THE FIFTH ABILITY'S OWN HOP, which no bundle above carries: the
+       heading is not an element, so it is handed over on its own. */
+    const retitling = Object.keys(CANVAS_EDIT_OFFERS.retitle).filter(
+      (kind) => CANVAS_EDIT_OFFERS.retitle[kind].offers,
+    );
+    check(
+      "a canvas that offers `retitle` is handed a retitle handler",
+      retitling.length === 0 || /onRetitle/.test(host),
+      `${retitling.join(", ")} offer retitle and the playground passes no ` +
+        "onRetitle — the heading claims an editor no reader can reach",
+    );
+  }
+
+  /* ONE NOTATION, ONE `shortNoun` — AND THIS ASSERTION DID NOT EXIST.
+     `CANVAS_EDITING_PASSAGE` reads `shortNoun` off "the first offering cell"
+     of each notation and its comment said "`check:canvas-edit` pins every cell
+     of one notation to the same one, so which cell answers cannot matter."
+     Nothing did. `shortNoun` appeared only in `check:seo`, and a notation
+     spelled "use case" in one cell and "use-case" in another would have made
+     the passage name the same canvas twice with no check objecting — a claim
+     about a guard is not a guard. */
+  for (const kind of Object.keys(CANVAS_EDIT_OFFERS.move)) {
+    const spellings = [
+      ...new Set(
+        Object.values(CANVAS_EDIT_OFFERS)
+          .map((cells) => cells[kind])
+          .filter((offer) => offer.offers)
+          .map((offer) => offer.shortNoun),
+      ),
+    ];
+    check(
+      `${kind} spells its shortNoun the same way in every cell that offers`,
+      spellings.length <= 1,
+      `${kind} is spelled ${spellings.map((word) => JSON.stringify(word)).join(" and ")} — ` +
+        "the passage would name one canvas twice",
+    );
+    /* NOT asserting that the noun is a multi-word phrase, which was tried and
+       was wrong: `"flowcharts"` is one word and reads correctly mid-sentence
+       because it is already a plural common noun, whereas `"ER"` alone would
+       not. The distinction is grammatical, not countable, so it stays a
+       reviewer's call — the length floor above is what a check can honestly
+       assert. */
+  }
 
   /* THE PANE-LANGUAGE EXCEPTIONS ARE REAL, derived from the cells that declare
      one rather than from the two Mermaid cases somebody remembered to write
@@ -1704,90 +1835,83 @@ console.log("\nEvery notation that cannot carry geometry says so");
       continue;
     }
     const verdict = canvasEditability(parsed.value);
-    if (kind === "c4") {
+    /* WHICH ANSWER TO EXPECT IS READ OFF THE GRID, not off a list of kind
+       names branched on here. This loop used to name `c4` and `flowchart`
+       explicitly and send everything else to the refusal assertion; the day
+       use case and ER learned to be dragged, that produced two red lines
+       saying a draggable document was not refused — a test failing because
+       the FEATURE landed, which teaches the reader nothing and invites the
+       assertion to be deleted rather than fixed.
+       `check:canvas-edit` already proves the grid and `canvasEditability`
+       agree, so reading the grid here is not circular: it asks a different
+       question — that whichever answer the grid gives, the refusal is ACTIONABLE
+       and the C4 mover still declines. */
+    if (CANVAS_EDIT_OFFERS.move[kind].offers) {
       check(
-        "a C4 document is editable",
-        verdict.editable === true,
-        "it is not",
-      );
-      continue;
-    }
-    if (kind === "flowchart") {
-      /* THE SECOND NOTATION THAT ANSWERS `move`, and the only cell in this
-         table whose `"grammar"` refusal has ever been reversed — the format
-         grew the coordinate it lacked (ADR 0002, superseding ADR 0001). It
-         still falls through to the `movedNodeEdit` guard below: offering the
-         ABILITY is not offering the C4 grammar's gesture. */
-      check(
-        "a flowchart document is draggable now that the grammar holds a position",
+        `a ${kind} document is draggable, as its cell says`,
         verdict.editable === true,
         `verdict: ${JSON.stringify(verdict)}`,
       );
+    } else {
       check(
-        "movedNodeEdit declines a flowchart document",
-        movedNodeEdit(parsed.value, "", "any", "any", { x: 1, y: 1 }) === null,
+        `a ${kind} document is refused, with a reason a reader can act on`,
+        verdict.editable === false &&
+          typeof verdict.reason === "string" &&
+          verdict.reason.length > 20,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+    }
+    /* AND THE C4 MOVER DECLINES EITHER WAY, for every notation that is not
+       C4. Offering the ABILITY is not offering the C4 grammar's gesture, and
+       this is the guard that says so — a notation whose cell flips must still
+       be refused by a mover that writes `(x,y w×h)` into a grammar with no
+       such token. */
+    if (kind !== "c4") {
+      /* And the refusal must be real, not only advisory: the mover itself has
+       to decline, or a caller that forgot to ask would corrupt a document. */
+      check(
+        `movedNodeEdit declines a ${kind} document`,
+        movedNodeEdit(parsed.value, "", "any", "any", { x: 0, y: 0 }) === null,
         "expected null",
       );
-      continue;
     }
-    check(
-      `a ${kind} document is refused, with a reason a reader can act on`,
-      verdict.editable === false &&
-        typeof verdict.reason === "string" &&
-        verdict.reason.length > 20,
-      `verdict: ${JSON.stringify(verdict)}`,
-    );
-    /* And the refusal must be real, not only advisory: the mover itself has
-       to decline, or a caller that forgot to ask would corrupt a document. */
-    check(
-      `movedNodeEdit declines a ${kind} document`,
-      movedNodeEdit(parsed.value, "", "any", "any", { x: 0, y: 0 }) === null,
-      "expected null",
-    );
   }
 
-  /* THE SAME TABLE, THE OTHER ABILITY. There are two things a canvas can write
-     back (`CanvasEditAbility`) and the notations answer them differently: a
-     sequence document refuses `move` while offering `revise`, C4 answers both,
-     and the four text-laid-out notations refuse both.
+  /* THE SAME TABLE, THE OTHER ABILITY, and the notations answer the two
+     differently — a sequence document refuses `move` while offering `revise`,
+     use case and ER do the opposite, C4 and the flowchart answer both.
      Looping the seed table a second time is what makes that a COVERAGE claim
-     rather than two hand-checked cases — the failure a hardcoded pair cannot
-     notice is a seventh notation whose dock grows an editor that writes into a
-     grammar with nowhere to put it. */
+     rather than a few hand-checked cases.
+
+     AND WHICH ANSWER TO EXPECT IS READ OFF THE GRID, for the reason the loop
+     above gives: this branched on `sequence`, `c4` and `flowchart` by name and
+     sent everything else to the refusal assertion, so the day a dictionary
+     learned to reorder it produced a red line saying an editable document was
+     not refused — a test failing because the feature landed. */
   for (const kind of kinds) {
     const parsed = parseViewSource(VIEW_SEED_TEXT[kind]);
     if (parsed.status !== "ok") continue; // already reported above
     const verdict = canvasEditability(parsed.value, "revise");
-    if (kind === "sequence") {
+    if (CANVAS_EDIT_OFFERS.revise[kind].offers) {
       check(
-        "a sequence document can have its wording revised",
+        `a ${kind} document can be revised on its canvas, as its cell says`,
         verdict.editable === true,
         `verdict: ${JSON.stringify(verdict)}`,
       );
-      continue;
-    }
-    if (kind === "c4") {
-      check(
-        "a C4 document can have a node's wording revised",
-        verdict.editable === true,
-        `verdict: ${JSON.stringify(verdict)}`,
-      );
-    } else if (kind === "flowchart") {
-      /* THE THIRD OFFERING NOTATION, and it sits here rather than in the
-         refusing `else` because its `"surface"` refusal moved: the details
-         dock the canvas already opened on selection grew fields. It still
-         falls through to the sequence-gesture loop below — offering the
-         ABILITY is not offering another grammar's gestures. */
-      check(
-        "a flowchart document can have a step's wording revised",
-        verdict.editable === true,
-        `verdict: ${JSON.stringify(verdict)}`,
-      );
-      check(
-        "revisedNodeEdit declines a flowchart document",
-        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
-        "expected null",
-      );
+      /* AND THE C4 REVISER STILL DECLINES IT. Offering the ability is not
+         offering another grammar's gesture, and this half of the coverage was
+         briefly lost when this loop stopped branching on kind names: the
+         assertion lived inside the hardcoded `flowchart` branch, so deriving
+         the expectation deleted it. It belongs on every offering notation that
+         is not C4, not on the one that happened to be written out. */
+      if (kind !== "c4") {
+        check(
+          `revisedNodeEdit declines a ${kind} document`,
+          revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) ===
+            null,
+          "expected null",
+        );
+      }
     } else {
       check(
         `a ${kind} document refuses "revise", with a reason a reader can act on`,

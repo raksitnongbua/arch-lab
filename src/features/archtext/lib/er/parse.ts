@@ -74,11 +74,12 @@ import {
   pick,
   readBangTail,
   readPath,
+  readPointToken,
   readTag,
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
 import { USECASE_HEADER_WORD } from "../usecase/keywords";
@@ -116,6 +117,11 @@ interface PendAttribute extends Loc {
   type: string;
   keys?: ErAttributeKey[];
   description?: string;
+  /** The last line of this column's own block — its `attr` line until a
+   *  `desc` or an `!` escape extends it. Rolled into the OWNING ENTITY's span
+   *  (see `ErSpans`); a column has no span of its own because no gesture
+   *  addresses one. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -125,6 +131,8 @@ interface PendEntity extends Loc {
   label: string;
   technology?: string;
   tags?: string[];
+  position?: { x: number; y: number };
+  pinned?: boolean;
   description?: string;
   attributes: PendAttribute[];
   /** Names already used in this entity, for the duplicate-column error —
@@ -134,6 +142,10 @@ interface PendEntity extends Loc {
   /** True once an `attr` has been read, which is what closes the window for
    * this entity's `desc` (see the file header). */
   sawAttribute: boolean;
+  /** The last line of this entity's BLOCK — its own declaration line until a
+   *  `desc`, an `!` escape or an `attr` (with any continuation of its own)
+   *  extends it. See `ErSpans`. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -146,6 +158,11 @@ interface PendRelationship extends Loc {
   toLoc: Loc;
   toCardinality: ErCardinality;
   kind: ErRelationshipKind;
+  /** The last line of this relationship's BLOCK — its own line until an `!`
+   *  escape extends it. A relationship takes no `desc` (the parser says so
+   *  and names the reason), so an escape is the only continuation there is,
+   *  and it is enough to make the block more than one line. See `ErSpans`. */
+  endLine: number;
   label?: string;
   raw: Map<string, Pend>;
   unknowns: Pend[];
@@ -209,7 +226,68 @@ function relationshipTokenHint(): string {
  * Throws `ArchTextParseError` (line + column) on any problem —
  * all-or-nothing.
  */
+/**
+ * Where each entity of a parse sits in the source text.
+ *
+ * The ER counterpart of `ArchTextSpans`, `SequenceSpans` and
+ * `FlowchartSpans`, and it exists for the same one reason: an edit to an ER
+ * diagram on the canvas has to be a LINE PATCH. `serializeErText` writes
+ * canonical text, which has no `//` comments, no author blank lines and no
+ * field the author spelled out that the canonical form omits at its default —
+ * so a re-emit is lossy in a way that passes every assertion, because
+ * canonical text re-emitted IS canonical text. Splicing by span keeps every
+ * byte the edit did not touch.
+ *
+ * ENTITIES ARE KEYED BY ID, which the parser already proves unique per file.
+ *
+ * THE SPAN COVERS THE WHOLE BLOCK, columns included. An entity's `attr` lines
+ * are part of its declaration rather than siblings of it, so a patch that
+ * replaced only the opener would leave the columns orphaned under a line that
+ * no longer introduces them — and `emitEntity` writes the columns too, so the
+ * replacement and the span have to agree about where the entity ends.
+ *
+ * RELATIONSHIPS ARE AN INDEX-ALIGNED ARRAY, NOT A MAP, and the shape is
+ * forced rather than chosen — it is `FlowchartSpans.edges`' shape for
+ * `FlowchartSpans.edges`' reason. This grammar gives a relationship no id,
+ * and NOTHING here refuses a second relationship between the same pair: the
+ * only duplicate the parser rejects among relationships is none, where an
+ * entity id is proved unique on line 830. So `customer ||--o{ order` twice,
+ * once labelled `places` and once `returns`, is legal text a reader can and
+ * does write, and a `from`/`to` key would address whichever came first —
+ * silently rewriting the wrong line, a screen away from where the reader
+ * pressed. The index is the model's own addressing: `resolve` maps this same
+ * pending array in order, so `spans.relationships[i]` and
+ * `file.relationships[i]` are the same line by construction rather than by a
+ * lookup that could drift.
+ *
+ * ATTRIBUTES STILL CARRY NO SPAN. No gesture addresses a column — the detail
+ * panel refuses them on purpose (`ErEntityRevision`) — and untested
+ * bookkeeping guarding nothing is what `SequenceSpans` declines to write for
+ * a fragment. Add them with the first gesture that needs one.
+ */
+export interface ErSpans {
+  entities: ReadonlyMap<string, LineSpan>;
+  relationships: readonly LineSpan[];
+}
+
+/**
+ * Parses `.alab` ER source into an `ErLabFile`. Pure and deterministic.
+ * Throws `ArchTextParseError` (line + column) on any problem —
+ * all-or-nothing.
+ */
 export function parseErText(source: string): ErLabFile {
+  return parseErTextWithSpans(source).file;
+}
+
+/**
+ * `parseErText`, plus where every entity came from — the SAME parse, so the
+ * spans cannot describe a different reading of the text than the model does.
+ * Callers that only want the model use `parseErText`.
+ */
+export function parseErTextWithSpans(source: string): {
+  file: ErLabFile;
+  spans: ErSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -413,7 +491,38 @@ export function parseErText(source: string): ErLabFile {
     );
   }
 
-  return resolve(header, entities, entityById, relationships);
+  const file = resolve(header, entities, entityById, relationships);
+  /* Built from the SAME pending array `resolve` just read, AFTER it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. */
+  return {
+    file,
+    spans: {
+      entities: new Map(
+        entities.map((entity) => [
+          entity.id,
+          {
+            start: entity.line,
+            /* The MAX over the entity's own lines and every column's, rather
+               than the entity's own `endLine` alone: a column's `desc` is the
+               last line of the block and is two levels deeper than the
+               opener, so nothing but a max can see it. */
+            end: entity.attributes.reduce(
+              (last, attribute) => Math.max(last, attribute.endLine),
+              entity.endLine,
+            ),
+          },
+        ]),
+      ),
+      /* IN THE SAME ORDER `resolve` READ THEM, which is what makes the index
+         an address rather than a coincidence — the model's
+         `file.relationships` is this array mapped one for one. */
+      relationships: relationships.map((relationship) => ({
+        start: relationship.line,
+        end: relationship.endLine,
+      })),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -690,6 +799,17 @@ function parseBodyLine(
 /* --------------------------------- entities -------------------------------- */
 
 /**
+ * `pin` as a whole word, for the attribute loop below.
+ *
+ * A LOOKAHEAD RATHER THAN A CONSUMING READ, so that a word this grammar does
+ * not know still reaches `expectEnd` and produces the error message it always
+ * has. Anchored against a following word character or hyphen so that a label
+ * fragment beginning "pin" — there is no such attribute today, but `pinned`
+ * would be the obvious near-miss — is not read as the flag.
+ */
+const PIN_AHEAD_RE = /^pin(?![\w-])/;
+
+/**
  * `entity customer "Customer" [PostgreSQL] #billing`, with its columns nested
  * one level in.
  *
@@ -747,6 +867,7 @@ function parseEntityOpener(
     attributes: [],
     attributeByName: new Map(),
     sawAttribute: false,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -773,7 +894,70 @@ function parseEntityOpener(
       entity.tags.push(readTag(cursor));
       continue;
     }
+    /* `(x,y)` — the author has PINNED this entity. The same paren spelling a
+       flowchart node's position and a C4 node's geometry use, minus the
+       `w×h`: a entity's size is measured from its own contents and is not the
+       author's to set, so there is nothing for a size to mean here. Reusing
+       the token rather than inventing `at x,y` keeps one vocabulary across
+       the kinds, as `[technology]` and `#tag` on this very line already do. */
+    if (cursor.peek() === "(") {
+      if (entity.position !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, "duplicate (x,y) attribute");
+      }
+      entity.position = readPointToken(cursor);
+      continue;
+    }
+    /* `pin` / `pin=false` — keep these coordinates when the diagram is handed
+       back to the layout. PEEKED RATHER THAN READ AS A WORD: this loop breaks
+       on anything it does not recognise and lets `expectEnd` report it, and
+       switching to C4's read-a-word-then-refuse shape would reword an error
+       message this grammar's own checks assert. `pin` on an element with no
+       `(x,y)` is refused after the loop, where the position is known. */
+    if (PIN_AHEAD_RE.test(cursor.text.slice(cursor.pos))) {
+      if (entity.pinned !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, 'duplicate "pin" attribute');
+      }
+      cursor.pos += 3;
+      if (cursor.eat("=")) {
+        const valueLoc = { line: cursor.line, column: cursor.column };
+        const value = cursor.readBare(/^[a-z]+/, '"true" or "false"');
+        if (value !== "true" && value !== "false") {
+          failAt(
+            valueLoc.line,
+            valueLoc.column,
+            `pin= must be "true" or "false", got "${value}"`,
+            value,
+          );
+        }
+        entity.pinned = value === "true";
+      } else {
+        entity.pinned = true;
+      }
+      continue;
+    }
     break;
+  }
+  /* `pin` NAMES COORDINATES TO KEEP, so it cannot stand on an element that
+     states none — it would be a flag with nothing to protect, which is the
+     shape `C4Node.pinned` wore for two releases while documenting a feature
+     that did not exist. Refused in BOTH directions, `pin` and `pin=false`
+     alike: "explicitly not keeping a position I never stated" is not a
+     document anybody meant to write, and one rule is easier to hold than a
+     rule with an exception. Checked here rather than in the loop because
+     `pin` is written BEFORE the `(x,y)` on the line.
+
+     THIS REFUSAL IS THE REASON `pin` COULD BE ADDED AT ALL. Neither
+     precedent answers what a bare `pin` means: the flowchart grammar has no
+     keyword (a `(x,y)` alone IS the pin) and the C4 one sits beside a
+     MANDATORY geometry, so the case cannot arise there. Refusing it is the
+     answer that cannot be misread later. */
+  if (entity.pinned !== undefined && entity.position === undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      '"pin" keeps an entity\'s stated coordinates, and this entity states ' +
+        "none — add an (x,y) position or remove the pin",
+    );
   }
   cursor.expectEnd("the entity line");
   state.openEntityBlock(entity);
@@ -838,6 +1022,7 @@ function parseAttributeLine(
     ...loc,
     name,
     type,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -874,6 +1059,12 @@ function parseAttributeLine(
 
   entity.attributes.push(attribute);
   entity.attributeByName.set(name, attribute);
+  /* THE COLUMN'S LINE EXTENDS THE ENTITY'S BLOCK. An `attr` is part of its
+     entity's declaration rather than a sibling of it — `emitEntity` writes
+     the columns too — so a span that ended at the opener would make a patch
+     leave the columns orphaned under a line that no longer introduces them.
+     See `ErSpans`. */
+  entity.endLine = cursor.line;
   entity.sawAttribute = true;
   return {
     kind: "attribute",
@@ -916,6 +1107,7 @@ function parseRelationshipLine(
     toLoc,
     toCardinality: RIGHT_CARDINALITY[rightGlyph],
     kind: KIND_BY_CONNECTOR[connector],
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -954,6 +1146,15 @@ function parseRelationshipLine(
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each of the accepting paths, because a span that stopped short by one
+     line would make a patch overwrite an author's `!` escape. EVERY kind of
+     target now, relationships included: the wording gesture addresses a
+     relationship by index and splices its block, so a relationship whose
+     `endLine` stayed on its opener would have its escapes eaten by the first
+     Apply. */
+  target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     const loc = { line: cursor.line, column: cursor.column };
     cursor.pos += "desc".length;
@@ -1079,6 +1280,10 @@ function resolve(
     add("label", entity.label);
     add("technology", pick(entity.technology, entity.raw, "technology"));
     add("tags", pick(entity.tags, entity.raw, "tags"));
+    /* In `ER_ENTITY_KEYS` order, which is the order the line writes them —
+       `pin` before the `(x,y)`, as a C4 node writes `pin (x,y w×h)`. */
+    add("pinned", pick(entity.pinned, entity.raw, "pinned"));
+    add("position", pick(entity.position, entity.raw, "position"));
     add("description", pick(entity.description, entity.raw, "description"));
     /* Omitted when the entity draws no columns: an empty array and no array
        would be two spellings of "no columns", and the serializer writes

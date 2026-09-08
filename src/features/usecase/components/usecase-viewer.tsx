@@ -48,6 +48,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { UseCaseLabFile } from "@/types";
+// A deep import into the playground's input layer, as `flowchart-viewer.tsx`
+// makes for its own revision type: the shape of a wording edit is the gesture
+// module's to define, and this feature only fills it in.
+import type { UseCaseElementRevision } from "@/features/playground/input/usecase-edit";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -66,10 +70,15 @@ import {
 import { useModKey } from "@/lib/mod-key";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+import { useCanvasOverlayPosition } from "@/components/ui/use-canvas-overlay";
 import { cn } from "@/lib/utils";
 
 import type { LaidUseCaseEdge } from "../lib/layout";
-import { layoutUseCase } from "../lib/layout";
+import {
+  layoutUseCase,
+  UC_HEADING_HIT_PAD,
+  usecaseHeadingHitBox,
+} from "../lib/layout";
 import type { UseCaseFocus } from "./usecase-diagram";
 import {
   resolveUseCaseFocus,
@@ -81,9 +90,141 @@ import { DockRow } from "@/components/ui/dock-row";
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
 
+/**
+ * How far a press must travel before it stops being a click on a shape and
+ * becomes a move.
+ *
+ * IN CSS PIXELS, MEASURED ON CLIENT COORDINATES. A threshold in the layout's
+ * user units is a threshold that shrinks with the zoom: at the default "fit"
+ * scale a diagram wider than its pane draws at well under 1:1, so two pixels
+ * of hand jitter clear several user units and every click becomes a drag. A
+ * pointer's tremor is a physical quantity, so its threshold has to be one too.
+ *
+ * MAINTAINED BY HAND against its twins — `NODE_DRAG_THRESHOLD` in
+ * `flowchart-viewer.tsx`, `ENTITY_DRAG_THRESHOLD` in `er-viewer.tsx` and
+ * `CANVAS_DRAG_THRESHOLD` in `sequence/lib/reorder.ts` — because a feature may
+ * not deep-import another feature's internals and this has no home in
+ * `src/lib` yet. Four copies is one too many; give it one.
+ */
+const ELEMENT_DRAG_THRESHOLD = 4;
+
+/**
+ * The heading editor's size, in CSS PIXELS — the reader's own pixels, not the
+ * drawing's units.
+ *
+ * IT IS A CONSTANT AND NOT A MEASUREMENT, and that is the point. The previous
+ * box was measured off the heading in LAYOUT UNITS so that a short title got a
+ * modest form — which was the right answer to the wrong question, because
+ * anything inside the `<svg>` is then multiplied by the viewBox-to-viewport
+ * ratio. A compact document in a wide pane fits at up to 4.7x, so that form
+ * painted at 1131x740px with a 66px label. Out here nothing scales it: 300px
+ * is a form, at every zoom and on every document.
+ *
+ * THE HEIGHT IS THE ROWS ADDED UP — padding, the title label and field, the
+ * two-row description textarea, and the Apply/Cancel row. It is also what the
+ * overlay is CLAMPED by: `useCanvasOverlayPosition` keeps this box inside the
+ * pane's visible rectangle, which is the clamp the unit-space box had against
+ * the drawing's edge, said about the thing that can cut it off now. The form
+ * scrolls inside it, so an under-estimate costs a scrollbar rather than a
+ * shaved-off Apply button.
+ *
+ * MAINTAINED BY HAND against `TITLE_FORM_SIZE` in `dict-viewer.tsx`, which is
+ * the same form one field shorter. `check:usecase-layout` and `check:dict`
+ * assert only that each is CSS px and never derived from a layout — the
+ * numbers themselves are a design choice per canvas.
+ */
+const HEADING_FORM_SIZE = { width: 300, height: 232 };
+
+/**
+ * The gestures this canvas can send back, when editing is on.
+ *
+ * PRESENCE IS THE OFFER, the contract every editable canvas here keeps: the
+ * whole bundle is `undefined` while the canvas is locked, read-only or in a
+ * Mermaid pane, and the viewer then renders no editing chrome at all rather
+ * than disabled controls. `editable` is the second half of the same answer for
+ * a host that holds the handlers but cannot let them run yet.
+ *
+ * ONE GESTURE SERVES TWO SHAPES. An actor and a use case are one
+ * `UseCaseElement` with a `kind`, so a drag on a stick figure and a drag on an
+ * ellipse are the same edit — nothing here branches on kind, which is the
+ * model being right rather than an omission (`usecase-edit.ts` says the same).
+ *
+ * NOTHING HERE IMPORTS THE PLAYGROUND. The host passes these in, the same
+ * direction `FlowchartEditHandlers` points: this feature knows what a gesture
+ * means geometrically and nothing about the text it becomes.
+ */
+export interface UseCaseEditHandlers {
+  /**
+   * Place `elementId`'s shape top-left at `position`, in the space the TEXT
+   * records — which is what `UseCaseElement.position` holds unchanged, and
+   * which is NOT the space the canvas draws in. The viewer takes the layout's
+   * own shift off a dropped point first; `layoutShift` inside it carries why.
+   *
+   * TOP-LEFT, NOT THE CENTRE, even for an ellipse: `layoutUseCase` derives
+   * `cx`/`cy` from a stated corner, and a pin read as a centre draws the
+   * ellipse half a box up and left of where the author asked for it.
+   */
+  onMoveElement: (
+    elementId: string,
+    position: { x: number; y: number },
+  ) => void;
+  /** Hand one element back to the solver — its `(x,y)` and its `pin` both go,
+   *  because a pin with no position is a document the parser refuses. */
+  onReleaseElement: (elementId: string) => void;
+  /** Set or clear one element's pin, which exempts it from a whole-diagram
+   *  release. Pinning needs a position to keep. */
+  onPinElement: (elementId: string, pinned: boolean) => void;
+  /**
+   * Rewrite one element's own wording — its label, its `[technology]`, its
+   * `#tag`s and its `desc` detail. `id` and `kind` are not among them, and
+   * `UseCaseElementRevision` carries why.
+   *
+   * OPTIONAL WHERE THE THREE ABOVE ARE NOT, because presence is the offer at
+   * the level of ONE GESTURE here: placement and wording are separate cells of
+   * `CANVAS_EDIT_OFFERS` (ADR 0003 gave this canvas the first without the
+   * second), so `editable` beside them cannot answer for both — it is the
+   * host's verdict on placement. A host that hands this handler over is a host
+   * whose wording cell offers the ability, and the dock draws the fields only
+   * then. Reading the grid from in here would be this feature importing the
+   * playground, which is the direction this bundle exists to avoid.
+   */
+  onReviseElement?: (
+    elementId: string,
+    revision: UseCaseElementRevision,
+  ) => void;
+  /**
+   * Rewrite the DOCUMENT's own heading — the `title` and `description` lines
+   * of the shared `.alab` header, which is the one gesture on this canvas that
+   * addresses no element.
+   *
+   * `undefined` LEAVES A LINE ALONE; `""` REMOVES IT. The two are not the same
+   * request, which is why this takes a pair of optional fields rather than two
+   * strings: an untouched description must survive the edit byte for byte,
+   * while an emptied one takes its line out of the file — the grammar has no
+   * meaning for `description ""`. An emptied TITLE is refused outright,
+   * because every grammar here requires one, so the form never submits an
+   * empty one (its field is `required`) and the reader is told where the
+   * problem is instead of watching a press do nothing.
+   *
+   * STRUCTURAL, NOT IMPORTED, exactly as `DictReorderSurface` is declared
+   * beside the canvas that draws it: the host's `RetitleFields` satisfies this
+   * without this feature naming the playground, so the dependency keeps
+   * running one way.
+   *
+   * OPTIONAL FOR THE REASON `onReviseElement` IS — a separate cell of
+   * `CANVAS_EDIT_OFFERS`, so `editable` cannot answer for it, and the heading
+   * becomes typeable only for a host that hands this over.
+   */
+  onRetitle?: (fields: { title?: string; description?: string }) => void;
+  /** False while the host holds the handlers but must not run them. */
+  editable: boolean;
+}
+
 export function UseCaseViewer({
   file,
   onAnnounce,
+  edit,
+  lockSlot,
 }: {
   file: UseCaseLabFile;
   /**
@@ -93,6 +234,22 @@ export function UseCaseViewer({
    * sequence viewer documents the contract).
    */
   onAnnounce: (message: string) => void;
+  /** Editing gestures, or absent — see `UseCaseEditHandlers`. */
+  edit?: UseCaseEditHandlers;
+  /**
+   * The canvas lock, mounted at the pane's own top-right corner exactly as the
+   * C4, sequence and flowchart canvases mount theirs.
+   *
+   * A SLOT RATHER THAN A FLAG, and it lives on the canvas rather than in the
+   * host's strip for the reason `67b35ae` bought: a lock that was correct in
+   * `canvasEditability` and rendered only inside another notation's branch left
+   * a whole canvas silently uneditable with no control anywhere to unlock it,
+   * for a release, with every assertion green.
+   *
+   * DELIBERATELY NOT GATED ON `edit`: locking WITHDRAWS the handlers, so a lock
+   * that only rendered alongside them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   // ONE layout call per model — the single source of geometric truth.
   const layout = useMemo(() => layoutUseCase(file), [file]);
@@ -233,7 +390,11 @@ export function UseCaseViewer({
     const width = pane.clientWidth - 24;
     const height = pane.clientHeight - 24;
     if (width <= 0 || height <= 0) return 1;
-    return Math.min(width / layout.width, height / layout.height);
+    /* Fitted against the DRAWN frame, not the canvas measured from the
+       origin: a pin outside the solved bounds widens the former and not the
+       latter, so fitting to `layout.width` would scale the picture as if the
+       overhang were not there and then let the viewBox crop it. */
+    return Math.min(width / layout.bounds.width, height / layout.bounds.height);
   }, [layout]);
 
   /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
@@ -394,10 +555,271 @@ export function UseCaseViewer({
   const panSuppressesClick = useRef(false);
   const [panning, setPanning] = useState(false);
 
+  /* ---- the move gesture --------------------------------------------------
+   * IT COSTS NO NEW POINTER ARBITRATION, which is what made it addable to a
+   * canvas that already drag-pans: `handlePointerDown` below already stands
+   * down for any press inside `.af-uc-hit`, and the hit rect over every shape
+   * carries that class — so the pan never sees the press that starts a move,
+   * and a drag that both panned and placed is unreachable rather than merely
+   * unlikely. The flowchart canvas stands down for `.af-flow-hit` the same
+   * way. */
+
+  const editing = edit !== undefined && edit.editable;
+  /* THE WORDING GESTURE IS ITS OWN OFFER, held rather than tested as a
+     boolean so the dock draws its fields only for a host that handed the
+     handler over. See `UseCaseEditHandlers.onReviseElement` for why it is not
+     `editing` that answers for this. What the FORM gets is `reviseAndExit`
+     below, which calls this and then ends the focus. */
+  const onReviseElement = edit?.onReviseElement;
+  /* THE HEADING GESTURE IS A THIRD OFFER, held the same way and for the same
+     reason — see `UseCaseEditHandlers.onRetitle`. */
+  const onRetitle = edit?.onRetitle;
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /**
+   * APPLYING A WORDING EDIT ENDS THE FOCUS.
+   *
+   * A reader reported the opposite as a bug: they pressed Apply and the dock
+   * stayed open over a diagram that had already been rewritten, so the panel
+   * beside the drawing was a form for an edit they had just finished making.
+   * The gesture is complete at Apply — it is a whole source-text patch, not a
+   * step in one — so the focus it borrowed goes back.
+   *
+   * THIS IS THIS CANVAS ALONE, and knowingly. The C4, sequence and flowchart
+   * docks all leave the selection standing after their own Apply, so
+   * `canvas-editing.md`'s "a gesture the neighbouring canvas already has must
+   * work the same way" is being broken on purpose, on a report from someone
+   * using it. If those three are brought in line, this comment is the note
+   * saying they were meant to be.
+   *
+   * THE PATCH LANDS FIRST. The wording sentence a screen-reader user hears is
+   * the HOST's — `use-canvas-editing.ts` announces it inside the revise
+   * handler, and announces the refusal when an emptied label makes the edit a
+   * no-op — so the handler runs before this component takes anything away.
+   *
+   * AND THE EXIT IS SILENT. `handleClearFocus` would announce "Focus cleared."
+   * into the single polite live region the host owns, one setState after the
+   * host's own sentence, and the second write swallows the first: the reader
+   * would be told their focus went and never told what their edit did. Focus
+   * is dropped directly here for that reason, and it is the only path that
+   * does.
+   *
+   * AND DOM FOCUS IS RE-HOMED ON THE PANE, which is what `handleCloseDock`
+   * does for the dock's own close button and for the same reason: the Apply
+   * button unmounts with the dock, and a keyboard reader whose focus fell to
+   * the top of the page cannot make a second edit without tabbing back in
+   * from nowhere. It is a CLAIM answered by an effect rather than a `.focus()`
+   * in the handler, which is the heading's own mechanism one row down: the
+   * dock is still mounted while the handler runs, so the focus has to be moved
+   * after the commit that unmounts it — and a memoized callback may not touch
+   * a ref that a render then reads, which `react-hooks/refs` refuses outright.
+   */
+  const paneFocusClaim = useRef(false);
+  useEffect(() => {
+    if (!paneFocusClaim.current) return;
+    paneFocusClaim.current = false;
+    paneRef.current?.focus();
+  });
+
+  const reviseAndExit = useCallback(
+    (elementId: string, revision: UseCaseElementRevision): void => {
+      if (onReviseElement === undefined) return;
+      onReviseElement(elementId, revision);
+      setRawFocus(null);
+      paneFocusClaim.current = true;
+    },
+    [onReviseElement],
+  );
+
+  /* ---- the heading's own editor ------------------------------------------- */
+
+  const [retitling, setRetitling] = useState(false);
+
+  /**
+   * THE PRESS THAT MUST GET ITS FOCUS BACK.
+   *
+   * An edit here re-parses the whole document, so the heading is laid out
+   * again and the control the reader pressed is a node the reconciler has
+   * moved — which blurs it. Closing the fields on Apply then leaves DOM focus
+   * at the top of the page, and the whole gesture is pointer-only in practice:
+   * a keyboard reader cannot rename twice without tabbing back in from
+   * nowhere. So the submit records a claim and the commit that answers it puts
+   * focus on the heading, which is the dictionary canvas's mechanism for its
+   * reorder handles and for the same reason.
+   *
+   * NO EXPIRY IS NEEDED, unlike there: a claim is always consumed by the very
+   * next commit, because closing the fields is itself a state change this
+   * component makes. A refused edit — the host declining to patch a pane whose
+   * line numbers describe another document — lands on that same commit and
+   * still returns the reader to the heading they pressed.
+   */
+  const headingFocusClaim = useRef(false);
+  useEffect(() => {
+    if (!headingFocusClaim.current) return;
+    headingFocusClaim.current = false;
+    paneRef.current
+      ?.querySelector<HTMLElement>("[data-af-uc-heading]")
+      ?.focus();
+  });
+
+  const closeRetitle = useCallback(() => {
+    headingFocusClaim.current = true;
+    setRetitling(false);
+  }, []);
+
+  const handleRetitle = useCallback(
+    (fields: { title?: string; description?: string }) => {
+      closeRetitle();
+      onRetitle?.(fields);
+    },
+    [closeRetitle, onRetitle],
+  );
+
+  /* A PRESS AND A FLAG, and no node: the canvas draws the press target and
+     nothing else, because HTML handed to it would end up in a `foreignObject`
+     and be multiplied by the viewBox scale — the "the edit box is enormous"
+     report. The fields are mounted below, over the canvas. */
+  const retitle = useMemo(
+    () =>
+      onRetitle === undefined
+        ? undefined
+        : { onOpen: () => setRetitling(true), open: retitling },
+    [onRetitle, retitling],
+  );
+
+  /**
+   * WHERE THE FIELDS GO: over the heading they replace, at a size the reader's
+   * screen decides and the diagram does not.
+   *
+   * The anchor is the heading's own press target in LAYOUT UNITS — the same box
+   * the canvas draws the `foreignObject` on, from the same helper — and
+   * `useCanvasOverlayPosition` runs it through the `<svg>`'s matrix, which is
+   * `toLayoutUnits`'s drag conversion in the forward direction.
+   */
+  const headingAnchor = useMemo(
+    () => (retitling ? usecaseHeadingHitBox(layout, UC_HEADING_HIT_PAD) : null),
+    [retitling, layout],
+  );
+  const headingFormAt = useCanvasOverlayPosition({
+    paneRef,
+    svgRef,
+    anchor: headingAnchor,
+    size: HEADING_FORM_SIZE,
+  });
+
+  /**
+   * THE LAYOUT'S OWN SHIFT — what has to come off a dropped point before it
+   * can be written back as a position.
+   *
+   * This notation solves around its own origin and then slides the whole cast
+   * into the margins and down under the heading, so a DRAWN point and the
+   * `(x,y)` the text should state differ by a heading-height. Writing the
+   * drawn point straight through would place the shape that far from the
+   * cursor and walk it further on every drag — silently, with every check
+   * green. The ER canvas needs no equivalent: `layoutEr` writes a stated
+   * coordinate straight onto the box, which is why `ErEditHandlers` says
+   * there is no offset to subtract and this one does.
+   *
+   * THIS WAS A PROBE AND IS NOT ANY MORE. It used to pin one element at the
+   * origin, re-solve the whole document, and read the shift off where that
+   * element landed. That was sound — the shift is a function of solved
+   * geometry alone, so the probe could not perturb what it measured — but it
+   * paid for a second full solve per document to recover a number
+   * `layoutUseCase` already had. `UseCaseLayout.shift` reports it now; the
+   * field's own note carries the argument, and `check:usecase-layout` asserts
+   * that the reported shift is the one actually applied, which is what makes
+   * reading it here as safe as measuring it was.
+   */
+  const layoutShift = layout.shift;
+
+  /**
+   * Client coordinates → LAYOUT units, through the SVG's own matrix.
+   *
+   * `getScreenCTM` rather than arithmetic on `zoom` and the pane's scroll
+   * offsets: it already accounts for the viewBox — whose origin is
+   * `layout.bounds.x`/`y` and goes NEGATIVE the moment something is pinned
+   * left of or above the origin — for the `preserveAspectRatio` letterboxing
+   * a fitted canvas introduces, and for any page transform above the pane.
+   * Three things a hand-rolled conversion has to get right separately, one of
+   * which changes with the pane's aspect ratio.
+   */
+  const toLayoutUnits = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const svg = svgRef.current;
+      const matrix = svg?.getScreenCTM();
+      if (svg == null || matrix == null) return null;
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+      const local = point.matrixTransform(matrix.inverse());
+      return { x: local.x, y: local.y };
+    },
+    [],
+  );
+
+  /**
+   * The in-flight move: which element, and where its top-left would land.
+   * `grab` is the offset from that corner to the pointer, so the shape does
+   * not jump to centre itself under the cursor on the first move.
+   *
+   * `moved` is what separates a click from a drag. The hit rect is both the
+   * focus target and the move handle, so a press that travels less than
+   * `ELEMENT_DRAG_THRESHOLD` stays a click and focuses the element, and one
+   * that travels further places it.
+   */
+  const [elementDrag, setElementDrag] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    grab: { dx: number; dy: number };
+    /** Where the press started, in CLIENT pixels — the threshold's own unit. */
+    from: { clientX: number; clientY: number };
+    moved: boolean;
+  } | null>(null);
+
+  const handleElementDragStart = useCallback(
+    (id: string, event: React.PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      /* A MODIFIER-CLICK IS NOT A MOVE. The flowchart canvas shipped without
+         this and any hand jitter past the threshold turned a modifier-click
+         into a drag; the same three keys are the whole of the gesture's split
+         wherever a canvas has one, so they are read identically here. */
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+      const at = toLayoutUnits(event.clientX, event.clientY);
+      const laid = elementById.get(id);
+      if (at === null || laid === undefined) return;
+      setElementDrag({
+        id,
+        x: laid.x,
+        y: laid.y,
+        grab: { dx: at.x - laid.x, dy: at.y - laid.y },
+        from: { clientX: event.clientX, clientY: event.clientY },
+        moved: false,
+      });
+      /* NO POINTER CAPTURE HERE, and the omission is the whole point: capture
+         on pointerdown retargets the following `click` to the capturing
+         element, so the shape's own `onClick` never runs and clicking an
+         element stops focusing it. Capture is taken LAZILY in the move
+         handler, on the first move that crosses the threshold — by which
+         point there is a real drag to keep hold of and no click to protect. */
+    },
+    [elementById, toLayoutUnits],
+  );
+
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
-      if ((event.target as Element).closest?.(".af-uc-hit") != null) return;
+      /* THE HEADING STANDS THE PAN DOWN TOO. A pan claims the pointer and
+         preventDefaults the press, so without this the click that opens the
+         fields never reaches the heading's own button — the same arbitration
+         the hit rects have always had, extended to the one control that is
+         not a shape. */
+      if (
+        (event.target as Element).closest?.(".af-uc-hit, .af-uc-heading") !=
+        null
+      ) {
+        return;
+      }
       const pane = event.currentTarget;
       const scrollable =
         pane.scrollWidth > pane.clientWidth ||
@@ -416,8 +838,33 @@ export function UseCaseViewer({
     },
     [],
   );
+  /* ONE MOVE HANDLER, deciding between the two gestures rather than two
+     handlers racing for one press — the flowchart canvas's arrangement. A move
+     is in flight or a pan is; never both, because the press that starts one
+     was refused by the other. */
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (elementDrag !== null) {
+        const at = toLayoutUnits(event.clientX, event.clientY);
+        if (at === null) return;
+        const crossed =
+          elementDrag.moved ||
+          Math.abs(event.clientX - elementDrag.from.clientX) +
+            Math.abs(event.clientY - elementDrag.from.clientY) >
+            ELEMENT_DRAG_THRESHOLD;
+        // See `handleElementDragStart`: capture only once this is really a
+        // drag, so a click keeps its own target.
+        if (crossed && !elementDrag.moved) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        setElementDrag({
+          ...elementDrag,
+          x: at.x - elementDrag.grab.dx,
+          y: at.y - elementDrag.grab.dy,
+          moved: crossed,
+        });
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       const dx = event.clientX - state.x;
@@ -427,20 +874,72 @@ export function UseCaseViewer({
       pane.scrollLeft = state.left - dx;
       pane.scrollTop = state.top - dy;
     },
-    [],
+    [elementDrag, toLayoutUnits],
   );
-  const handlePointerUp = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
+  /**
+   * The end of whichever gesture was in flight.
+   *
+   * `cancelled` IS WHY THIS TAKES A FLAG rather than being two handlers. A
+   * pointercancel — a touch the browser turned into its own gesture, a drag
+   * the OS took over — ends the press WITHOUT a trailing click, and the
+   * suppressor below exists only to eat a trailing click. Arming it on a
+   * cancel left it armed, so the NEXT background press was swallowed instead
+   * and the reader's focus stayed put with the dock open: the reported "an
+   * outside click does not exit focus", which needs no gesture of its own to
+   * fix, only the flag not being set for a gesture that produces nothing to
+   * suppress.
+   *
+   * A cancelled move still commits, unchanged: the shape has been dragged
+   * across the canvas and the reader watched it go, so abandoning the
+   * placement at the browser's discretion would be the surprise.
+   */
+  const endPointerGesture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+      if (elementDrag !== null) {
+        setElementDrag(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        /* Under the threshold this was a click, and it is left alone: the
+           shape's own `onClick` runs after this handler and focuses the
+           element, which is what a press that went nowhere has always done. A
+           zero-distance move would also write a coordinate the reader never
+           asked for and opt the shape out of the solver for good. */
+        if (!elementDrag.moved) return;
+        /* The capture above already retargeted the trailing click to the pane,
+           so suppress it there too — otherwise the drag ends by clearing the
+           focus the reader was working with. Not on a cancel: see the flag. */
+        if (!cancelled) panSuppressesClick.current = true;
+        /* MINUS THE LAYOUT'S OWN SHIFT — see `layoutShift`. Writing the drawn
+           coordinate straight through would place the shape a heading's height
+           and a margin away from the cursor, and do it again on every
+           subsequent drag, so the shape walks off the page. */
+        edit?.onMoveElement(elementDrag.id, {
+          x: elementDrag.x - layoutShift.dx,
+          y: elementDrag.y - layoutShift.dy,
+        });
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       panState.current = null;
       setPanning(false);
-      if (state.moved) panSuppressesClick.current = true;
+      if (state.moved && !cancelled) panSuppressesClick.current = true;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
     },
-    [],
+    [edit, elementDrag, layoutShift],
+  );
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      endPointerGesture(event, false),
+    [endPointerGesture],
+  );
+  const handlePointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      endPointerGesture(event, true),
+    [endPointerGesture],
   );
 
   /* The pane is the backdrop — clicking empty canvas clears focus (every
@@ -530,7 +1029,14 @@ export function UseCaseViewer({
                `bg-canvas` while five sibling notations wore nothing, which is
                how the ground behind a diagram came to change shade with the
                notation. */
-            "h-full overflow-auto p-3",
+            /* `relative` SO THE HEADING EDITOR HAS A BOX TO SIT IN. It is an
+               HTML sibling of the drawing rather than a `foreignObject` inside
+               it (that is what stopped it scaling with the viewBox), and it is
+               a child of THIS element rather than of the pane's positioned
+               parent so that it scrolls and clips with the canvas instead of
+               floating over the pane's edge. `useCanvasOverlayPosition`
+               returns its offsets in this element's content coordinates. */
+            "relative h-full overflow-auto p-3",
             /* THE GROUND, filling the pane rather than the drawing.
                `.af-canvas-rule` in globals.css carries the reversal and the
                reason `local` attachment is the whole panning mechanism. */
@@ -544,7 +1050,7 @@ export function UseCaseViewer({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           tabIndex={0}
           role="application"
           aria-label={`Use-case diagram. Arrow keys move focus between elements, Escape clears focus. Pinch or hold ${mod === "⌘" ? "Command" : "Control"} and scroll to zoom between 10 and 400 percent. Elements and lines are buttons — Tab reaches them.`}
@@ -565,9 +1071,75 @@ export function UseCaseViewer({
               zoom={zoom}
               onFocusElement={handleFocusElement}
               onFocusEdge={handleFocusEdge}
+              svgRef={svgRef}
+              onElementDragStart={editing ? handleElementDragStart : undefined}
+              retitle={retitle}
+              /* Only a drag that has really travelled reaches the canvas, so a
+                 press that stays a click never nudges the shape it focuses. */
+              elementDrag={elementDrag?.moved === true ? elementDrag : null}
             />
           </div>
+          {/* ---- the heading's fields, OVER the drawing rather than in it.
+              Its size is `HEADING_FORM_SIZE` in CSS pixels and its position is
+              the heading's own box run through the `<svg>`'s matrix, so the
+              form is the same size at 10% and at 400% — which the canvas lock
+              and the zoom pill have always been, for the same reason: they are
+              HTML siblings of the `<svg>` and not children of it.
+
+              `z-10` puts it over the drawing and under the lock and the dock,
+              which own the pane's corners. ---- */}
+          {retitling && headingFormAt !== null ? (
+            <div
+              /* THE SCROLL LIVES ON THIS BOX rather than on the form, because
+                 this is the box whose height is definite: a percentage
+                 max-height inside an auto-height parent resolves to none, so
+                 the form clipping itself would have needed a second copy of
+                 the number. */
+              /* `af-uc-heading` ON THIS BOX TOO, which is the class the pane's
+                 pointerdown stands the pan down for. Both states of the
+                 heading wear it — the drawn press target inside the `<svg>`
+                 and these fields over it — so a press-and-drag starting on the
+                 form's own padding does not pan the canvas out from under a
+                 reader who is typing. It was free while the fields lived
+                 inside the `foreignObject` that already carried the class. */
+              className="af-uc-heading absolute z-10 overflow-auto"
+              style={{
+                left: headingFormAt.left,
+                top: headingFormAt.top,
+                width: HEADING_FORM_SIZE.width,
+                maxHeight: HEADING_FORM_SIZE.height,
+              }}
+            >
+              <HeadingForm
+                title={file.metadata.title}
+                description={file.metadata.description}
+                onSubmitFields={handleRetitle}
+                onCancel={closeRetitle}
+              />
+            </div>
+          ) : null}
         </div>
+
+        {/* The lock, at the pane's top-right — the corner the C4, sequence and
+            flowchart canvases all put theirs in, so a reader moving between
+            the notations finds it in one place.
+
+            IT SLIDES LEFT OF AN OPEN DOCK, the sequence canvas's fix for the
+            same collision: the dock owns this corner while it is open, and two
+            controls in one corner is how one of them ends up unreachable —
+            which is exactly the failure the lock's own history is about. Below
+            `md` the dock is a bottom sheet, so the corner is never contested
+            there. */}
+        {lockSlot !== undefined ? (
+          <div
+            className={cn(
+              "absolute top-3 z-20",
+              dockOpen ? "right-3 md:right-[18.75rem]" : "right-3",
+            )}
+          >
+            {lockSlot}
+          </div>
+        ) : null}
 
         {/* ---- zoom pill (bottom-right, the house pattern) ---- */}
         <div
@@ -670,30 +1242,142 @@ export function UseCaseViewer({
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
               {focusedElement !== null ? (
                 <dl className="flex flex-col gap-2.5">
-                  <DockRow term="Label" value={focusedElement.label} />
+                  {/* ---- wording: the same four facts, typed into rather
+                      than read off, WHERE THEY ALREADY WERE. The dock this
+                      canvas already opened to show an element's `desc` is the
+                      surface, so nothing new appears beside the diagram and
+                      the placement controls below keep their place — a second
+                      panel would be two authoring surfaces for one model,
+                      which is the refusal the C4 canvas's own dock replaced.
+
+                      KEYED BY THE ELEMENT, so moving focus to another symbol
+                      remounts the form with that symbol's values. A shared
+                      instance would keep the fields a reader had half-typed
+                      and submit them against a different element. */}
+                  {onReviseElement !== undefined ? (
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Wording
+                      </dt>
+                      <dd className="mt-1">
+                        <ElementWordingForm
+                          key={focusedElement.id}
+                          element={{
+                            id: focusedElement.id,
+                            label: focusedElement.label,
+                            technology: focusedElement.technology,
+                            tags: focusedElement.tags,
+                            description: focusedElement.description,
+                          }}
+                          onRevise={reviseAndExit}
+                        />
+                      </dd>
+                    </div>
+                  ) : (
+                    <>
+                      <DockRow term="Label" value={focusedElement.label} />
+                      {/* THE REASON THE DOCK EXISTS for an element with a
+                          `desc`: the symbol shows the title, this shows what
+                          it is short for. */}
+                      {focusedElement.description !== undefined ? (
+                        <DockRow
+                          term="Details"
+                          value={focusedElement.description}
+                        />
+                      ) : null}
+                      {focusedElement.technology !== undefined ? (
+                        <DockRow
+                          term="Technology"
+                          value={focusedElement.technology}
+                          mono
+                        />
+                      ) : null}
+                      {focusedElement.tags !== undefined ? (
+                        <DockRow
+                          term="Tags"
+                          value={focusedElement.tags
+                            .map((t) => `#${t}`)
+                            .join(" ")}
+                          mono
+                        />
+                      ) : null}
+                    </>
+                  )}
+                  {/* OUTSIDE THE BRANCH, in both: `kind` is the one field of
+                      an element the dock states and the form refuses, so it
+                      is read-only whether or not the wording is editable. */}
                   <DockRow term="Kind" value={focusedElement.kind} mono />
-                  {/* THE REASON THE DOCK EXISTS for an element with a
-                      `desc`: the symbol shows the title, this shows what it
-                      is short for. */}
-                  {focusedElement.description !== undefined ? (
-                    <DockRow
-                      term="Details"
-                      value={focusedElement.description}
-                    />
-                  ) : null}
-                  {focusedElement.technology !== undefined ? (
-                    <DockRow
-                      term="Technology"
-                      value={focusedElement.technology}
-                      mono
-                    />
-                  ) : null}
-                  {focusedElement.tags !== undefined ? (
-                    <DockRow
-                      term="Tags"
-                      value={focusedElement.tags.map((t) => `#${t}`).join(" ")}
-                      mono
-                    />
+                  {/* ---- placement: the two gestures a pointer has that a
+                      keyboard does not, plus the two that need a control
+                      either way.
+
+                      THE DRAG IS NAMED RATHER THAN LEFT TO BE DISCOVERED, the
+                      flowchart dock's answer for its own pin gesture. Placing
+                      a shape is a pointer gesture and there is no keyboard
+                      nudge on any canvas here — but RELEASING one and PINNING
+                      it are gestures of their own, and a gesture with no
+                      control is a feature only a mouse can reach, so both are
+                      buttons a Tab lands on.
+
+                      THE CONTROLS APPEAR ONLY WHERE THEY CAN DO SOMETHING:
+                      releasing a shape that states no `(x,y)` and pinning one
+                      with no position to keep are both edits the gesture
+                      module refuses, and a control that cannot change
+                      anything is worse than its absence. */}
+                  {editing ? (
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Placement
+                      </dt>
+                      {(() => {
+                        const stated = file.elements.find(
+                          (element) => element.id === focusedElement.id,
+                        );
+                        if (stated?.position === undefined) {
+                          return (
+                            <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              Laid out from its boundary and its lines. Drag it
+                              to place it yourself.
+                            </dd>
+                          );
+                        }
+                        return (
+                          <dd className="mt-1 flex flex-col gap-2">
+                            <span className="text-xs leading-relaxed text-muted-foreground">
+                              Placed at {Math.round(stated.position.x)},{" "}
+                              {Math.round(stated.position.y)}. Drag it to move
+                              it.
+                            </span>
+                            <span className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  edit?.onReleaseElement(stated.id)
+                                }
+                                className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                              >
+                                Hand back to the layout
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  edit?.onPinElement(
+                                    stated.id,
+                                    stated.pinned !== true,
+                                  )
+                                }
+                                aria-pressed={stated.pinned === true}
+                                className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-secondary"
+                              >
+                                {stated.pinned === true
+                                  ? "Pinned against a sweep"
+                                  : "Pin against a sweep"}
+                              </button>
+                            </span>
+                          </dd>
+                        );
+                      })()}
+                    </div>
                   ) : null}
                   {focusedElementEdges.length > 0 ? (
                     <div>
@@ -743,5 +1427,271 @@ export function UseCaseViewer({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The editable dock                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dock's field styling, in one place — three inputs and a textarea share
+ * it, and a fifth copy is how one of them ends up a pixel out from the others.
+ *
+ * `bg-canvas/60` IS THE SHARED ANSWER rather than a colour picked here: it is
+ * the fill the flowchart dock and the C4 details panel use for the same job, a
+ * control floating over a diagram. `check:canvas-chrome` lets that shade
+ * through and fails a viewer reaching for a full-strength `bg-canvas` or
+ * `bg-background`, because a notation grounding itself is how the ground
+ * behind a diagram came to change shade when the reader changed notation.
+ *
+ * MAINTAINED BY HAND against `FIELD_CLASS` in `flowchart-viewer.tsx`, which
+ * a feature may not deep-import from. The token is the part that has to agree,
+ * and `check:canvas-chrome` is what watches it.
+ */
+const FIELD_CLASS =
+  "w-full rounded-md border border-border bg-canvas/60 px-2 py-1 text-sm text-foreground " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const LABEL_CLASS = "text-xs font-medium text-muted-foreground";
+
+/**
+ * A focused element's own wording, editable in place.
+ *
+ * SUBMIT, NOT KEYSTROKE. Every gesture on this canvas is a source-text patch
+ * and each one lands in the undo ring, so committing per character would fill
+ * that ring with a letter apiece and rewrite the pane under a reader who is
+ * still mid-word. The flowchart dock and the C4 details panel make the same
+ * call.
+ *
+ * ONE FORM FOR BOTH SHAPES. An actor and a use case are one `UseCaseElement`
+ * with a `kind`, so the fields a stick figure offers are the fields an ellipse
+ * offers — nothing here branches on kind, which is the model being right
+ * rather than an omission.
+ */
+function ElementWordingForm({
+  element,
+  onRevise,
+}: {
+  element: {
+    id: string;
+    label: string;
+    technology?: string;
+    tags?: readonly string[];
+    description?: string;
+  };
+  onRevise: (elementId: string, revision: UseCaseElementRevision) => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(element.label);
+  const [technology, setTechnology] = useState(element.technology ?? "");
+  /* Tags round-trip through ONE space-separated string rather than a chip
+     editor, as the flowchart dock's do: the grammar writes them as `#a #b` on
+     the element's own line, and a text field is the shape that matches what
+     the author would have typed. The leading `#` is decoration here —
+     accepted if typed, never required. */
+  const [tags, setTags] = useState((element.tags ?? []).join(" "));
+  const [description, setDescription] = useState(element.description ?? "");
+
+  const submit = (event: React.FormEvent): void => {
+    event.preventDefault();
+    const parsedTags = tags
+      .split(/[\s,]+/)
+      .map((tag) => tag.replace(/^#/, ""))
+      .filter((tag) => tag !== "");
+    onRevise(element.id, {
+      label: label.trim(),
+      // An emptied box REMOVES the field — `undefined` is what the gesture
+      // reads as "drop it", and a blank string would write `[""]` instead.
+      technology: technology.trim() === "" ? undefined : technology.trim(),
+      tags: parsedTags.length === 0 ? undefined : parsedTags,
+      description: description.trim() === "" ? undefined : description.trim(),
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-label">
+          Label
+        </label>
+        <input
+          id="af-uc-label"
+          className={FIELD_CLASS}
+          value={label}
+          required
+          onChange={(event) => setLabel(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-tech">
+          Technology
+        </label>
+        <input
+          id="af-uc-tech"
+          className={FIELD_CLASS}
+          value={technology}
+          placeholder="Stripe"
+          onChange={(event) => setTechnology(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-tags">
+          Tags
+        </label>
+        <input
+          id="af-uc-tags"
+          className={FIELD_CLASS}
+          value={tags}
+          placeholder="checkout billing"
+          onChange={(event) => setTags(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-desc">
+          Details
+        </label>
+        <textarea
+          id="af-uc-desc"
+          className={FIELD_CLASS}
+          rows={3}
+          value={description}
+          placeholder="What this use case is short for"
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </div>
+      <button
+        type="submit"
+        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+    </form>
+  );
+}
+
+/**
+ * The document's own heading, typed into WHERE IT IS DRAWN.
+ *
+ * IT IS MOUNTED OVER THE CANVAS AND NOT IN IT, which is the fix for the
+ * reported "the edit form is as wide as the whole diagram". It used to sit in
+ * a `foreignObject` inside the `<svg>`, where native HTML is laid out in USER
+ * units and multiplied by the viewBox-to-viewport ratio — and this canvas's
+ * "fit" magnifies a small drawing, so on a compact document in a wide pane the
+ * form painted at 2.5x to 4.7x, with a 14px label at 36-66px. It is an
+ * absolutely positioned HTML sibling of the drawing now, the way the canvas
+ * lock and the zoom pill have always been, anchored to the heading's own box
+ * through `useCanvasOverlayPosition` and sized in CSS pixels.
+ *
+ * THE RENDERER STILL OWNS THE GEOMETRY — `usecaseHeadingHitBox` is the one
+ * answer to "where is the heading", read by the canvas for its press target
+ * and by the viewer for this anchor. This owns the fields, because an editor
+ * is state and that renderer is pure.
+ *
+ * SUBMIT, NOT KEYSTROKE, the same call `ElementWordingForm` above makes: every
+ * gesture on this canvas is a source-text patch that lands in the undo ring,
+ * and committing per character would fill the ring a letter at a time and
+ * rewrite the pane under a reader who is still mid-word.
+ *
+ * AN EMPTIED TITLE IS REFUSED BY THE FIELD ITSELF, `required`, rather than
+ * announced after the fact. The gesture module refuses it too — every grammar
+ * here requires a title — but a press that completes and silently changes
+ * nothing is the thing this must not present, and the browser's own message
+ * lands ON the field that is wrong. That is why no announcement is made from
+ * in here: the host owns the single polite live region, a second channel would
+ * race it, and there is no refusal left for it to carry.
+ *
+ * AN EMPTIED DESCRIPTION REMOVES THE LINE, which is why it is submitted as
+ * `""` and not dropped: `undefined` means "leave that line exactly as it is",
+ * and the two answers differ for a reader who cleared the box on purpose.
+ */
+function HeadingForm({
+  title,
+  description,
+  onSubmitFields,
+  onCancel,
+}: {
+  title: string;
+  description?: string;
+  onSubmitFields: (fields: { title?: string; description?: string }) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [nextTitle, setNextTitle] = useState(title);
+  const [nextDescription, setNextDescription] = useState(description ?? "");
+
+  return (
+    <form
+      /* IT SIZES ITSELF TO ITS ROWS, and the wrapper that positions it owns
+         the width and the scroll — see `HEADING_FORM_SIZE`. It used to be
+         `size-full` inside a `foreignObject`, which is where the 4.7x paint
+         came from. */
+      className="flex w-full flex-col gap-2 rounded-md border border-node-border bg-node p-2"
+      /* THE PRESSES IN HERE ARE THE FORM'S, NOT THE PANE'S — the same
+         stand-down the closed heading button makes, and it was missing here:
+         every click while the fields are open reached the viewer's backdrop,
+         which cleared whatever element the reader had focused and announced
+         "Focus cleared." over the top of the retitle sentence. */
+      onClick={(event) => event.stopPropagation()}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmitFields({
+          title: nextTitle.trim(),
+          description: nextDescription.trim(),
+        });
+      }}
+      /* ESCAPE CLOSES THE FIELDS AND NOTHING ELSE. The window-level Escape
+         ladder deliberately stands down inside an input, so the key would
+         otherwise do nothing at all here — and a reader who opened this by
+         pressing the heading expects the same key that clears a focus to put
+         the heading back. */
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-title">
+          Title
+        </label>
+        <input
+          id="af-uc-title"
+          className={FIELD_CLASS}
+          value={nextTitle}
+          required
+          /* The reader pressed the heading to type in it — landing them in the
+             field is what the press asked for. */
+          autoFocus
+          onChange={(event) => setNextTitle(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-description">
+          Description
+        </label>
+        <textarea
+          id="af-uc-description"
+          className={FIELD_CLASS}
+          rows={2}
+          value={nextDescription}
+          placeholder="What this diagram is about"
+          onChange={(event) => setNextDescription(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

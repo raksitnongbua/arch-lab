@@ -260,7 +260,16 @@ export function useCanvasZoom({
       if (
         event.button === 0 &&
         (event.target as Element | null)?.closest(
-          '[role="button"],a,button,input,textarea,select',
+          /* `form` AND `label` JOINED THE LIST when the canvases grew forms
+             drawn ON them. A press on a control stands the pan down already,
+             but the dictionary's title editor and the use-case heading editor
+             are forms inside a `foreignObject` — so a press-and-drag starting
+             on the form's own padding, or on a `<label>` beside a field,
+             panned the canvas out from under the form the reader was typing
+             into. `label` is not redundant with the controls: clicking a
+             label targets the LABEL, and only the resulting synthetic click
+             reaches its input. */
+          '[role="button"],a,button,input,textarea,select,form,label',
         ) !== null
       ) {
         return;

@@ -7,7 +7,96 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **A relationship line can be reworded.** Clicking one opened its detail
+  panel with nothing to edit in it; the verb on the join — the `: places` in
+  `customer ||--o{ order : places` — is editable there now. The cardinalities
+  and the identifying/non-identifying kind stay read-only on purpose: each
+  restates what the schema allows rather than what the diagram says about it.
+- **The dictionary's title editor opened in the wrong place, and its Apply
+  button did nothing.** The form was centred on the title's own line of text
+  instead of anchored to the band it edits, so it opened in the canvas's top
+  margin — and because SVG has no z-index and the title was painted first, the
+  first section's hover strip lay over the form's buttons and swallowed the
+  click that commits the edit.
+- **The use-case title editor was much bigger than the heading it replaces.**
+  It was sized from a fixed constant that ignored the heading the layout had
+  already measured.
+- **Clicking the background leaves focus mode on the ER canvas.** The press was
+  being retargeted away from the diagram, so only Escape worked. On the
+  use-case canvas a cancelled gesture left a flag set that swallowed the _next_
+  background click.
+- **Pressing Apply leaves focus mode on the ER and use-case canvases**, so a
+  finished edit no longer strands you in a dimmed diagram. The other three
+  canvases keep their panel open on Apply, which is a deliberate difference —
+  the cost is that a wording edit there is one per selection.
+- **Typing in a heading or detail form no longer pans the canvas underneath
+  it**, and no longer clears the selection you were editing.
+- **Retyping an element's wording no longer discards what the edit could not
+  name.** An ER entity or a flowchart step carrying a hand-written `!` field
+  from a newer format version lost that line when its label was edited, and a
+  flowchart step you had dragged lost its position.
+
 ### Added
+
+- **The use-case, ER and dictionary canvases can be edited by pointing at the
+  picture.** Drag a use-case actor or an ER entity and it stays where you put
+  it; the position is written into the source text as an `(x,y)` on that
+  element's own line, so the change is a one-line diff you can review in a
+  pull request rather than hidden editor state. A `pin` beside it keeps those
+  coordinates when you hand the rest of the diagram back to the layout, and
+  any single element can be released on its own. A dictionary works
+  differently on purpose: its columns are measured across the whole document
+  so every section shares one grid, and a free coordinate would break the
+  alignment that makes the table readable — so a drag there moves a section or
+  a field **earlier or later in the reading order**, which the text already
+  states.
+- **An entity's and an element's own wording can be edited on the canvas.**
+  Select an ER entity or a use-case actor and its label, technology, tags and
+  details are editable in the panel that already opened to show them — no
+  second inspector. Renaming an element's `id` and changing an actor into a use
+  case are deliberately not offered: both rewrite lines you never pointed at.
+  In a Mermaid pane the fields are refused rather than silently lost, because
+  that convention has nowhere to put a description, a `[technology]` or a
+  `#tag`.
+- **A diagram's title and description can be retyped on the canvas.** Click the
+  heading a use-case diagram draws and retype it; a dictionary's title works
+  the same way above its table. Clearing the description removes the line
+  rather than writing an empty one, and a diagram cannot be left without a
+  title, because no `.alab` document parses without one. Seven canvases refuse
+  this and say which — the ER canvas because it draws no heading at all.
+- **Fixed: retyping a flowchart step's caption no longer un-pins it.** A step
+  you had dragged jumped back to where the layout wanted it the moment you
+  renamed it, and the position vanished from the source text with nothing
+  saying so.
+- **Leaving a position out is still the normal case.** Every use-case, ER and
+  dictionary file already on disk, and in every share link, parses and lays
+  out to exactly the pixel it did before. An element with no `(x,y)` is placed
+  by the boundary or the schema as it always was.
+- **A hand-placed element grows the frame instead of being cropped.** Put
+  something far outside where the layout would have placed it and the picture
+  grows to hold it — on the canvas, in the SVG and PNG exports, and in
+  fit-to-view, negative coordinates included. A use-case boundary grows around
+  a member you drag out of it.
+- **A drag moves the drawn shape, never the structure.** An ER entity keeps
+  the column its relationships put it in, and which flank a use-case actor
+  stands on is still the layout's to choose — so a placed actor's spokes leave
+  from that side and can cross the boundary they used to flank, and a
+  connector into a placed entity can leave the wrong face. Those are accepted
+  costs rather than oversights; the ADR lists them.
+- **`pin` on an element that states no position is refused** rather than
+  quietly ignored, because it would name coordinates to keep that the text
+  does not state.
+- **What each canvas can do is now written in one place and quoted
+  everywhere.** The home page, `/live`, `/faq` and both `llms*.txt` documents
+  assemble their claims from the capability table rather than describing it, so
+  a canvas that learns a gesture cannot ship with the pages still saying it
+  cannot. The `/faq` answer about dragging was rewritten this way after it was
+  found asserting the opposite of what shipped.
+
+  The reasoning, and the costs accepted with it, are in
+  [ADR 0003](docs/adr/0003-usecase-and-er-positions.md).
 
 - **The `.alab` skill installs with the skills CLI, and both routes are
   offered.** `npx skills add raksitnongbua/arch-lab --skill alab` is the

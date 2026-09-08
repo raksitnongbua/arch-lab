@@ -197,6 +197,9 @@ export interface LaidErRelationship {
 }
 
 export interface ErLayout {
+  /** The canvas measured from the origin — the far edges of the drawing plus
+   * a margin. Not a frame: a pin at a negative coordinate draws outside it.
+   * Use `bounds` for anything that has to contain the picture. */
   width: number;
   height: number;
   entities: LaidErEntity[];
@@ -204,6 +207,20 @@ export interface ErLayout {
   /** Highest depth + 1 — the column count, which the entrance uses to cap
    * its stagger so a wide schema compresses instead of trickling. */
   columns: number;
+  /**
+   * THE RECTANGLE THE DRAWING ACTUALLY OCCUPIES — what a viewBox must be.
+   *
+   * The same rectangle as `0 0 width height` for every document without a
+   * pin, which is why this field did not exist until pins did. An author may
+   * pin an entity anywhere, including left of or above the origin, and
+   * rendering `0 0 width height` then cuts it off — the defect ADR 0002 had
+   * to amend for the flowchart after a pinned step was drawn 64% outside the
+   * frame and baked into every export at the same crop.
+   *
+   * So `x`/`y` are at most 0 and reach further out when something does, and
+   * the canvas, the SVG export and the camera all take their frame from here.
+   */
+  bounds: ErRect;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -306,7 +323,13 @@ function depthByEntity(
 /* Routing                                                                     */
 /* -------------------------------------------------------------------------- */
 
-interface Box {
+/**
+ * A rectangle in drawn coordinates — an entity's box, and the frame around
+ * all of them. One shape and one name for both, because `bounds` is measured
+ * from the boxes and a second interface with the same four fields would be
+ * the duplication `dry.md` refuses.
+ */
+export interface ErRect {
   x: number;
   y: number;
   width: number;
@@ -314,24 +337,30 @@ interface Box {
 }
 
 /**
- * Where a connector leaves one box for another, and the orthogonal path
- * between them.
+ * Which side of each box a connector uses. The ONE definition — the fan below
+ * groups by it and `route` draws from it, and a second opinion about which
+ * side a line leaves would fan a connector into a group it does not belong to.
  *
  * SIDES ARE CHOSEN FROM THE BOXES' RELATIVE POSITIONS, never fixed: two
  * entities in the same column connect top-to-bottom, and entities in
  * different columns connect side-to-side. A fixed left/right rule was tried
  * and was wrong — a relationship between two boxes stacked vertically drew a
- * line that left the right edge, doubled back across its own box, and
- * entered the other's right edge, crossing both boxes it joined.
- */
-/**
- * Which side of each box a connector uses. The ONE definition — the fan below
- * groups by it and `route` draws from it, and a second opinion about which
- * side a line leaves would fan a connector into a group it does not belong to.
+ * line that left the right edge, doubled back across its own box, and entered
+ * the other's right edge, crossing both boxes it joined.
+ *
+ * CALLED WITH THE SOLVED BOXES, ALWAYS, and that is the pin compromise. The
+ * side a line uses is what a COLUMN earned, and a pin moves the drawn box and
+ * never the column — so handing this the drawn pair would let a dragged entity
+ * re-choose the faces of every line touching it, and re-choose them
+ * differently from the fan that grouped them. One opinion, taken from the
+ * solver. The visible consequence is that a connector into a pinned entity can
+ * leave the wrong face, and ADR 0003 accepts that as a cost rather than a bug:
+ * nothing here tries to correct it. For an unpinned entity the solved and drawn
+ * rectangles are the same one, which is why this changes no existing drawing.
  */
 function connectorSides(
-  from: Box,
-  to: Box,
+  from: ErRect,
+  to: ErRect,
 ): { fromSide: FanSide; toSide: FanSide } {
   const fromCx = from.x + from.width / 2;
   const toCx = to.x + to.width / 2;
@@ -355,18 +384,36 @@ function connectorSides(
 }
 
 /** Where along a side this connector attaches, given its slot on that side. */
-function attachAt(box: Box, side: FanSide, slot: FanSlot): number {
+function attachAt(box: ErRect, side: FanSide, slot: FanSlot): number {
   const length = side === "top" || side === "bottom" ? box.width : box.height;
   return fanOffset(slot.index, slot.count, length);
 }
 
+/**
+ * The orthogonal path between two boxes, and where its ends point.
+ *
+ * TWO SETS OF RECTANGLES, and the whole pin compromise lives in the
+ * difference. The SOLVED pair decides the sides — through `connectorSides`,
+ * the one definition — because that choice is what a column earned. The DRAWN
+ * pair supplies every coordinate, including the fan offset along the side, so
+ * the crow's foot lands against the box the reader can see rather than on
+ * empty canvas where the solver had put it.
+ *
+ * THE FAN OFFSET IS MEASURED ON THE DRAWN BOX on purpose: a slot is a
+ * fraction of the side's length, and a pinned entity is the same size it
+ * always was, so the two agree — but reading the solved box here would put
+ * the attachment point at a coordinate the drawn box does not occupy the
+ * moment a future change lets a pin resize anything.
+ */
 function route(
-  from: Box,
-  to: Box,
+  from: ErRect,
+  to: ErRect,
+  fromSolved: ErRect,
+  toSolved: ErRect,
   fromSlot: FanSlot,
   toSlot: FanSlot,
 ): { points: { x: number; y: number }[]; fromEnd: Vec; toEnd: Vec } {
-  const { fromSide, toSide } = connectorSides(from, to);
+  const { fromSide, toSide } = connectorSides(fromSolved, toSolved);
 
   if (fromSide === "left" || fromSide === "right") {
     const dir = fromSide === "right" ? 1 : -1;
@@ -428,7 +475,7 @@ function route(
  */
 function fanSlots(
   relationships: readonly { from: string; to: string }[],
-  boxes: ReadonlyMap<string, Box>,
+  boxes: ReadonlyMap<string, ErRect>,
 ): Map<number, { from: FanSlot; to: FanSlot }> {
   interface Attachment {
     at: number;
@@ -468,7 +515,7 @@ function fanSlots(
       return;
     }
     const { fromSide, toSide } = connectorSides(from, to);
-    const alongAxis = (side: FanSide, box: Box): number =>
+    const alongAxis = (side: FanSide, box: ErRect): number =>
       side === "top" || side === "bottom"
         ? box.x + box.width / 2
         : box.y + box.height / 2;
@@ -509,14 +556,14 @@ function fanSlots(
  */
 export function crowdedErSides(
   relationships: readonly { from: string; to: string }[],
-  boxes: ReadonlyMap<string, Box>,
+  boxes: ReadonlyMap<string, ErRect>,
 ): string[] {
   const counts = new Map<string, { count: number; length: number }>();
   relationships.forEach((relationship) => {
     const from = boxes.get(relationship.from);
     const to = boxes.get(relationship.to);
     if (from === undefined || to === undefined) return;
-    const bump = (id: string, side: FanSide, box: Box): void => {
+    const bump = (id: string, side: FanSide, box: ErRect): void => {
       const key = `${id} ${side}`;
       const length =
         side === "top" || side === "bottom" ? box.width : box.height;
@@ -633,7 +680,7 @@ export function layoutEr(file: ErLabFile): ErLayout {
   );
 
   const laid: LaidErEntity[] = [];
-  const boxById = new Map<string, Box>();
+  const boxById = new Map<string, ErRect>();
   let x = ER.margin;
   let tallest = 0;
 
@@ -651,7 +698,7 @@ export function layoutEr(file: ErLabFile): ErLayout {
     for (let position = 0; position < column.length; position += 1) {
       const entity = column[position];
       const height = heights[position];
-      const box: Box = { x, y, width, height };
+      const box: ErRect = { x, y, width, height };
       boxById.set(entity.id, box);
       laid.push({
         id: entity.id,
@@ -716,9 +763,68 @@ export function layoutEr(file: ErLabFile): ErLayout {
     }
   }
 
-  /* Slots first, because a connector's attachment depends on how many OTHERS
-     share its side — which is not knowable one relationship at a time. */
-  const slots = fanSlots(relationships, boxById);
+  /* ---- pins: an author's `(x,y)` replaces the solved place ----------------
+   * RESOLVED PER ENTITY — `entity.position ?? solved` — and applied here,
+   * after the solve, rather than inside the placement loop. A stated
+   * coordinate wins for that one box; every other entity keeps the column
+   * slot it was given, so a document with nothing pinned lays out to the same
+   * pixel it did before this field existed. That is the property that made
+   * the field a minor change rather than a breaking one (ADR 0003), and
+   * `check:er-layout` asserts it rather than trusting this comment.
+   *
+   * THE COLUMN IS NEVER OVERRIDDEN. `depthByEntity` reads the relationships
+   * and nothing else; a column's shared width and its vertical centring are
+   * measured from the entity SIZES, which a pin does not touch. So a pinned
+   * entity keeps its place in the schema's structure while sitting somewhere
+   * else on the page — the same shape of compromise the flowchart made.
+   *
+   * The accepted costs are the ADR's, not this module's to solve: a pinned
+   * box can overlap a solved one, and a connector into it can leave the wrong
+   * face. There is no collision pass and no side correction, deliberately. */
+  const solved = new Map<string, ErRect>(
+    [...boxById].map(([id, box]) => [id, { ...box }]),
+  );
+  for (const entity of entities) {
+    const at = entity.position;
+    if (at === undefined) continue;
+    /* A non-finite coordinate is not a place. The parser refuses one, so
+       reaching here means a hand-built model — solving it is better than
+       drawing at NaN, which paints nothing and poisons the reported frame. */
+    if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
+    const box = boxById.get(entity.id);
+    const item = laid.find((candidate) => candidate.id === entity.id);
+    if (box === undefined || item === undefined) continue;
+    /* Moved as a DELTA, because every row's three x positions and its y are
+       absolute — computed during placement so the key badge can be placed
+       against the type's rendered width. Recomputing them from the pin would
+       be the same arithmetic twice. */
+    const dx = at.x - box.x;
+    const dy = at.y - box.y;
+    box.x = at.x;
+    box.y = at.y;
+    item.x = at.x;
+    item.y = at.y;
+    for (const attribute of item.attributes) {
+      attribute.y += dy;
+      attribute.nameX += dx;
+      attribute.typeX += dx;
+      if (attribute.keysX !== null) attribute.keysX += dx;
+    }
+  }
+
+  /* SLOTS FROM THE SOLVED BOXES, AND AFTER THE PIN PASS ABOVE — the order is
+     load-bearing twice over.
+     AFTER, because `solved` is snapshotted from `boxById` before the pins move
+     it, so the slots have to be taken once that snapshot exists.
+     FROM SOLVED, because a slot's whole job is to say how many OTHER
+     connectors share a side — and which side that is comes from
+     `connectorSides`, which reads the solved pair. Handing the fan the drawn
+     boxes would give it a second opinion about which side a line leaves, and
+     main's own note on `connectorSides` says what that costs: a connector
+     fanned into a group it does not belong to. So the fan and the router agree
+     by construction rather than by coincidence. A document with nothing pinned
+     passes the same map either way, which is why this changes no drawing. */
+  const slots = fanSlots(relationships, solved);
 
   const drawn: LaidErRelationship[] = [];
   for (const [at, relationship] of relationships.entries()) {
@@ -779,7 +885,19 @@ export function layoutEr(file: ErLabFile): ErLayout {
       from: { index: 0, count: 1 },
       to: { index: 0, count: 1 },
     };
-    const { points, fromEnd, toEnd } = route(from, to, slot.from, slot.to);
+    /* DRAWN, SOLVED, THEN THE SLOTS: the coordinates come from the boxes the
+       reader can see, the side choice from the boxes the solver placed. The
+       `?? from` fallbacks cover a relationship naming an entity the snapshot
+       missed, which cannot happen for a parsed document and keeps this
+       total. */
+    const { points, fromEnd, toEnd } = route(
+      from,
+      to,
+      solved.get(relationship.from) ?? from,
+      solved.get(relationship.to) ?? to,
+      slot.from,
+      slot.to,
+    );
     /* WHERE THE LABEL GOES, and why the obvious answer was wrong. It used to
        sit at the midpoint of the middle segment, which keeps it off a BOX but
        nothing else — and on a real schema that is not enough:
@@ -903,23 +1021,53 @@ export function layoutEr(file: ErLabFile): ErLayout {
     }
   }
 
-  const width =
+  const width = Math.max(
     laid.reduce(
       (widest, entity) => Math.max(widest, entity.x + entity.width),
       0,
-    ) + ER.margin;
-  const height =
+    ) + ER.margin,
+    ER.margin * 2,
+  );
+  const height = Math.max(
     laid.reduce(
       (tallestSoFar, entity) =>
         Math.max(tallestSoFar, entity.y + entity.height),
       0,
-    ) + ER.margin;
+    ) + ER.margin,
+    ER.margin * 2,
+  );
+
+  /* THE FRAME GROWS, IT NEVER SHIFTS. A pin takes whatever coordinate the
+     author wrote, negative included, and the drawing is not slid back to
+     reach it — the boxes stay where the author put them and the reported
+     rectangle reaches out to contain them. ADR 0002 had to amend the opposite
+     choice after a pinned step drew 64% outside the frame on screen and
+     cropped identically in the PNG; ADR 0003 declines to repeat it.
+
+     Measured from the same boxes `width`/`height` are measured from, so a
+     document with nothing pinned reports `0 0 width height` and no renderer
+     sees any change. Floored so the frame can never end a fraction short of
+     the ink, and pushed out by the margin the rest of the drawing gets. */
+  const overflowX = Math.floor(
+    laid.reduce((least, e) => Math.min(least, e.x), 0),
+  );
+  const overflowY = Math.floor(
+    laid.reduce((least, e) => Math.min(least, e.y), 0),
+  );
+  const boundsX = overflowX < 0 ? overflowX - ER.margin : 0;
+  const boundsY = overflowY < 0 ? overflowY - ER.margin : 0;
 
   return {
-    width: Math.max(width, ER.margin * 2),
-    height: Math.max(height, ER.margin * 2),
+    width,
+    height,
     entities: laid,
     relationships: drawn,
     columns: columns.length,
+    bounds: {
+      x: boundsX,
+      y: boundsY,
+      width: width - boundsX,
+      height: height - boundsY,
+    },
   };
 }

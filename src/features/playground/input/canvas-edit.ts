@@ -111,7 +111,9 @@ import {
   referenceableNodes,
 } from "@/features/viewer/lib/node-palette";
 import { APP_NAME } from "@/lib/constants";
-import { inWords, joinList, resetLayerLabel } from "@/lib/prose";
+import { inWords, joinList, resetLayerLabel, sentenceCase } from "@/lib/prose";
+
+import { EXAMPLE_NOTATION_LABEL } from "../lib/kind-copy";
 import { slugify } from "@/lib/slug";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
@@ -154,6 +156,17 @@ export type CanvasEditability =
  *     adds messages and lifelines, but those land at an INDEX and write no
  *     coordinate, so they belong to `revise` with the other eight sequence
  *     gestures — see the sequence `create` cell, whose refusal points at them.
+ *   - `"retitle"` — rewrite the DOCUMENT'S OWN `title` and `description`, the
+ *     heading a canvas draws above the drawing. This is the fifth ability, and
+ *     it earned its row on the criterion this union states below: it gates on
+ *     something none of the other four asks about. Every grammar HOLDS the
+ *     two lines — they are the shared header, so a `"grammar"` refusal is
+ *     never the right answer here — and no per-element span, position or
+ *     relationship set is involved. What it gates on instead is whether the
+ *     canvas DRAWS the heading at all, and whether there is anywhere on it to
+ *     type. The ER canvas draws no heading (it names the title only in the
+ *     diagram's accessible name), which is a refusal none of the other four
+ *     abilities could express.
  *   - `"connect"` — write a RELATIONSHIP between two elements: a new line in
  *     the text that names a PAIR and carries no coordinate. Its own row
  *     rather than a stretch of an existing one, by both of the tests this
@@ -186,7 +199,8 @@ export type CanvasEditability =
  * Adding one makes `CANVAS_EDIT_OFFERS` incomplete, which is a type error
  * before it is a check failure.
  */
-export type CanvasEditAbility = "move" | "revise" | "create" | "connect";
+export type CanvasEditAbility =
+  "move" | "revise" | "create" | "connect" | "retitle";
 
 /**
  * The notations a `ViewDocument` can be — the key of the capability table.
@@ -304,6 +318,22 @@ const NO_POSITION_IN_THE_TEXT =
 const NO_EDITOR_ON_THIS_CANVAS =
   "This canvas has no editor on it, so edit this notation in the source pane.";
 
+/** The `"surface"` refusal for `retitle` on a canvas that DRAWS the heading
+ *  and has nothing on it to type into. A smaller statement than it looks: the
+ *  two lines are in every grammar, so this is a dock nobody has built rather
+ *  than a format that cannot hold the edit. */
+const NO_EDITOR_ON_THE_HEADING =
+  "This canvas draws the heading but has no editor on it, so retitle this " +
+  "document in the source pane.";
+
+/** The `"surface"` refusal for `retitle` on a canvas that draws NO heading —
+ *  the ER canvas, which names the document's title only in the drawing's
+ *  accessible name. There is nothing on screen to point at, so this is a
+ *  different refusal from the one above and says so. */
+const NO_HEADING_DRAWN =
+  "This canvas draws no heading — the document's title reaches it only as the " +
+  "diagram's accessible name, so retitle it in the source pane.";
+
 /** The `"grammar"` refusal for `create` on every notation that solves its own
  *  layout: a created element is PLACED, and these have nowhere to write the
  *  placement — the same fact `NO_POSITION_IN_THE_TEXT` states for a move,
@@ -394,12 +424,51 @@ export const CANVAS_EDIT_OFFERS: Record<
           "edit on the canvas.",
       },
     },
+    /* THESE TWO CELLS SAID `"grammar"` — REFUSED PERMANENTLY — AND THAT WAS
+       TRUE WHEN THEY WERE WRITTEN. Neither `UseCaseElement` nor `ErEntity`
+       carried a coordinate, so a drag had nowhere in the text to land and the
+       next parse re-derived the place from the boundary or the schema.
+
+       THE FORMAT CHANGED, which `canvas-editing.md` names as the only
+       legitimate way a `"grammar"` refusal ever moves. Both models now carry
+       an optional `(x,y)` and an optional `pin`, both layouts honour them per
+       element, and the drag writes them. ADR 0003 records the decision and the
+       costs accepted with it, following ADR 0002 for the flowchart.
+
+       ABSENT IS STILL THE NORMAL CASE, which is why this was not a breaking
+       change: an element with no `(x,y)` is solved exactly as before, and
+       every document already on disk lays out to the same pixel. */
     usecase: {
-      offers: false,
-      ground: "grammar",
-      because: NO_POSITION_IN_THE_TEXT,
+      offers: true,
+      noun: "use-case diagrams",
+      shortNoun: "use case",
+      onCanvas:
+        "a use case or an actor drags to a position the text records, and the boundary grows around it rather than cropping it",
+      unlessPane: {
+        format: "mermaid",
+        /* MEASURED, like every other cell's exception: Mermaid has no
+           syntax for a coordinate in a use-case diagram at all, so a dragged
+           element comes back solved. */
+        because:
+          "Mermaid solves its own layout and has no syntax for a position, " +
+          "so a dragged element would snap back. Switch the pane to .alab to " +
+          "edit on the canvas.",
+      },
     },
-    er: { offers: false, ground: "grammar", because: NO_POSITION_IN_THE_TEXT },
+    er: {
+      offers: true,
+      noun: "ER diagrams",
+      shortNoun: "ER",
+      onCanvas:
+        "an ER entity drags to a position the text records, while its connectors still leave the faces the solved columns chose",
+      unlessPane: {
+        format: "mermaid",
+        because:
+          "Mermaid solves its own layout and has no syntax for a position, " +
+          "so a dragged entity would snap back. Switch the pane to .alab to " +
+          "edit on the canvas.",
+      },
+    },
     dict: {
       offers: false,
       ground: "grammar",
@@ -584,16 +653,79 @@ export const CANVAS_EDIT_OFFERS: Record<
           "pane to .alab to edit on the canvas.",
       },
     },
+    /* BOTH CELLS SAID `"surface"` — "this canvas has no editor on it" — AND
+       BOTH MOVED THE WAY A `"surface"` REFUSAL IS SUPPOSED TO: somebody built
+       the surface, in the panel each canvas already opened on selection. The
+       C4 revise cell moved the same way, and the flowchart's did it twice.
+       Neither needed a format change: the fields were always in the grammar,
+       there was simply nowhere to type them. */
     usecase: {
-      offers: false,
-      ground: "surface",
-      because: NO_EDITOR_ON_THIS_CANVAS,
+      offers: true,
+      noun: "use-case diagrams",
+      shortNoun: "use case",
+      onCanvas:
+        "a selected use case or actor's wording, technology and tags are edited in the details dock",
+      unlessPane: {
+        format: "mermaid",
+        /* MEASURED against `serializeMermaidUseCase`, not assumed — its own
+           `MERMAID_USECASE_EXPORT_CAVEAT` names these three among what the
+           convention cannot draw, and `elementToken` writes nothing but the
+           label. Writing a `[technology]` edit through a pane that cannot
+           spell it would show the change once and lose it on the next parse,
+           which is worse than refusing. */
+        because:
+          "Mermaid has no slot for a use-case element's desc detail, " +
+          "[technology] or #tags, so those edits would be lost. Switch the " +
+          "pane to .alab to edit on the canvas.",
+      },
     },
-    er: { offers: false, ground: "surface", because: NO_EDITOR_ON_THIS_CANVAS },
+    er: {
+      offers: true,
+      noun: "ER diagrams",
+      shortNoun: "ER",
+      onCanvas:
+        "a selected ER entity's wording, technology and tags are edited in the detail panel, and a relationship's verb in its own",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: `serializeMermaidEr`
+           writes an entity as its id, an optional `["Label"]` alias and its
+           column lines, and has no emission path for anything else.
+           `MERMAID_ER_EXPORT_CAVEAT` names the [technology], the #tags and
+           the entity's own description as what erDiagram has nowhere to put,
+           and says why — its only comment slot is on a COLUMN, so a column's
+           description survives a round trip and an entity's does not. */
+        because:
+          "Mermaid erDiagram has no slot for an entity's description, its " +
+          "[technology] or its #tags, so those edits would be lost. Switch " +
+          "the pane to .alab to edit on the canvas.",
+      },
+    },
+    /* THIS CELL SAID `"surface"` — "this canvas has no editor on it" — AND
+       THAT REFUSAL MOVED THE WAY A `"surface"` REFUSAL IS SUPPOSED TO:
+       somebody built the surface. The handles are on the section band and the
+       field row the table already drew.
+
+       WHAT IT WRITES IS AN ORDER, NOT A POSITION, and that is why it is here
+       under `revise` rather than under `move`. `canvas-editing.md`: "If your
+       notation's drag would take a neighbour's slot rather than land at a
+       point, you are describing `revise`, not `move`." A dictionary's `move`
+       cell stays refused on grammar grounds and always will — `layoutDict`
+       solves its column widths ONCE across the whole document so every
+       section shares one grid, and that shared grid is what lets a reader
+       scan two sections against each other. A free coordinate would break the
+       alignment that makes the table readable, and there is no graph here for
+       one to fight with.
+
+       SO THIS NEEDED NO FORMAT CHANGE AT ALL: order already IS the text, and
+       a reorder is a line-block swap. ADR 0003 records the decision not to
+       give a dictionary coordinates, beside the decision to give use case and
+       ER them. */
     dict: {
-      offers: false,
-      ground: "surface",
-      because: NO_EDITOR_ON_THIS_CANVAS,
+      offers: true,
+      noun: "data dictionaries",
+      shortNoun: "dictionary",
+      onCanvas:
+        "a dictionary section or field drags to a new place in the reading order, which is the order the text already states",
     },
     /* `"surface"`, and the ground is doing real work here rather than being
        the polite default. A duration is one number on the item's own line, and
@@ -910,6 +1042,90 @@ export const CANVAS_EDIT_OFFERS: Record<
         "connection to draw.",
     },
   },
+  /* THE FIFTH ROW. Every cell is written out, including the six that give the
+     same answer, so a tenth notation is a compile error with ten blanks
+     rather than a silent inheritance — and so the two DIFFERENT refusals here
+     cannot be flattened into one by a reader tidying up.
+
+     NO CELL HERE IS EVER A `"grammar"` REFUSAL, and that is a property of the
+     header rather than an accident: `title` and `description` are the shared
+     header in all nine grammars, so the text can always hold this edit. Every
+     refusal in this row is therefore `"surface"` — a dock nobody has built —
+     which is the honest ground and the one a reader can act on. */
+  retitle: {
+    /* ITS OWN GESTURE, ELSEWHERE. A C4 model is renamed from the breadcrumb in
+       `/editor`, through the model rather than through a line patch — so this
+       refusal names that instead of the derived tail. A dead end on the one
+       notation that CAN be retitled another way sends the reader away from a
+       feature that is right there, the same call the sequence `move` cell
+       makes. */
+    c4: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+      instead: "Open it in the editor and rename it from the breadcrumb.",
+    },
+    sequence: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    flowchart: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    usecase: {
+      offers: true,
+      noun: "use-case diagrams",
+      shortNoun: "use case",
+      onCanvas:
+        "a use case diagram's title and description are retyped in the heading the canvas already draws above the boundary",
+    },
+    /* THE ONE CANVAS WITH NO HEADING TO POINT AT, so its refusal is not the
+       one its neighbours give. `layoutEr` measures no heading block and
+       `er-diagram.tsx` draws none — the document's title reaches that canvas
+       only inside the `aria-label`. Calling this "no editor on the heading"
+       would send a reader looking for a heading that is not there. */
+    er: {
+      offers: false,
+      ground: "surface",
+      because: NO_HEADING_DRAWN,
+    },
+    /* THE TITLE ONLY, AND THE CLAUSE SAYS SO. This canvas draws no document
+       description — `layoutDict` measures a title band and nothing else, and
+       the word "description" in that layout means a FIELD's description, the
+       table's widest column. An earlier draft of this clause promised "title
+       and description" for symmetry with the use-case cell beside it, which
+       would have been the stale claim this whole grid exists to prevent: a
+       sentence describing a surface the reader cannot find.
+
+       The gesture itself takes both fields — the header grammar is shared — so
+       nothing about this cell narrows `retitledEdit`. It is the CANVAS that
+       has one field to offer, and the clause is about the canvas. */
+    dict: {
+      offers: true,
+      noun: "data dictionaries",
+      shortNoun: "dictionary",
+      onCanvas:
+        "a dictionary's title is retyped in the heading above the table",
+    },
+    gantt: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    timeline: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    lifecycle: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+  },
 };
 
 export function canvasEditability(
@@ -938,6 +1154,7 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
   revise: "edited on the canvas",
   create: "given a new element on the canvas",
   connect: "connected on the canvas",
+  retitle: "retitled on the canvas",
 };
 
 /**
@@ -1060,6 +1277,93 @@ export const CANVAS_EDITING_PASSAGE: string = (() => {
 })();
 
 /**
+ * WHY A DRAG DOES NOTHING ON SOME CANVASES — the `/faq` answer, assembled from
+ * the grid.
+ *
+ * THIS REPLACED A HAND-WRITTEN ANSWER THAT WAS ALREADY WRONG TWICE. It said
+ * "Because only the C4 canvas has anywhere to write a POSITION down" and
+ * listed "the remaining seven — flowchart, use case, ER, data dictionary,
+ * gantt, milestone timeline and lifecycle". The flowchart had been draggable
+ * since ADR 0002 when that was written, so the sentence shipped stale; use
+ * case and ER then made it stale a second time, and its question — "Why can't
+ * I drag my ER diagram?" — became the opposite of what ships. No check caught
+ * either: `check:seo`'s C4-only sweep looks for "only C4" and this said "only
+ * the C4 canvas", which the pattern misses.
+ *
+ * `canvas-editing.md` states the rule this answer kept breaking: never
+ * hand-type which notations are editable. So the three groups are read off
+ * `CANVAS_EDIT_OFFERS` — a position, an order, or neither — and the sentence
+ * cannot disagree with the table again.
+ *
+ * THE THREE GROUPS ARE THE REAL DISTINCTION, and it is what a reader arriving
+ * from a drawing tool has to be told before their first drag: a POSITION is
+ * kept where you drop it, an ORDER takes a neighbour's place, and a solved
+ * layout puts the box back on the next render.
+ */
+export const CANVAS_POSITION_PASSAGE: string = (() => {
+  const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
+  const name = (notation: Notation): string => EXAMPLE_NOTATION_LABEL[notation];
+
+  const movers = notations.filter(
+    (notation) => CANVAS_EDIT_OFFERS.move[notation].offers,
+  );
+  /* An ORDER rather than a position: it answers a drag under another ability
+     but has no coordinate to write. `canvas-editing.md`: "If your notation's
+     drag would take a neighbour's slot rather than land at a point, you are
+     describing `revise`, not `move`." */
+  const reorderers = notations.filter(
+    (notation) =>
+      !CANVAS_EDIT_OFFERS.move[notation].offers &&
+      Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
+  );
+  const solved = notations.filter(
+    (notation) =>
+      !Object.values(CANVAS_EDIT_OFFERS).some(
+        (cells) => cells[notation].offers,
+      ),
+  );
+
+  /* EVERY LIST IS A DASH-PARENTHETICAL AFTER A PLURAL HEAD, which is a
+     grammar decision rather than a style one. `EXAMPLE_NOTATION_LABEL` is
+     SINGULAR by design — it is read as "Example gantt chart `store-migration`"
+     — and there is no plural record to derive from. Joined directly into a
+     sentence the singulars read wrong ("sequence diagram is the halfway
+     case", "C4 model, flowchart … carry"), and the fix cannot be an article
+     per name: "a C4 model" against "an ER diagram" turns on the initial vowel
+     SOUND, which no rule here could get right for a name added later. A list
+     set off by dashes needs no article and no plural, and stays correct
+     whatever the counts become. */
+  const movesClause =
+    `A drag needs somewhere in the text to land. ` +
+    `${sentenceCase(inWords(movers.length))} of the ${inWords(notations.length)} notations ` +
+    `carry a per-element position — ${joinList(movers.map(name))} — so ` +
+    `dragging one edits the text and the change survives a reload. Leaving ` +
+    `that position out is still the normal case, which is why a diagram you ` +
+    `have never dragged lays out exactly as it always did.`;
+  const orderClause =
+    reorderers.length === 0
+      ? ""
+      : ` ${sentenceCase(inWords(reorderers.length))} ${reorderers.length === 1 ? "is" : "are"} ` +
+        `the halfway case — ${joinList(reorderers.map(name))} — with no ` +
+        `coordinates but an ORDER, so a drag moves an element in time or ` +
+        `across a column and it takes a neighbour's place rather than ` +
+        `staying where you drop it.`;
+  const solvedClause =
+    solved.length === 0
+      ? ""
+      : ` The remaining ${inWords(solved.length)} work their layout out FROM ` +
+        `the text — ${joinList(solved.map(name))} — where columns come from ` +
+        `the relationships, a dictionary is one table whose columns are ` +
+        `measured across the whole document, a gantt's bars are placed by ` +
+        `the calendar and the dependency graph, and a timeline's events and ` +
+        `a lifecycle's states are placed by the order you wrote them in. A ` +
+        `dragged box would be put back by the next render, and there would ` +
+        `be no line to write it on. Change the text and the layout follows.`;
+
+  return `${movesClause}${orderClause}${solvedClause}`;
+})();
+
+/**
  * The same claim at a fraction of the length, for a BUDGETED surface — a route
  * description has 160 characters for everything it says, and
  * `CANVAS_EDITING_PASSAGE` spends more than twice that.
@@ -1076,20 +1380,30 @@ export const CANVAS_EDITING_PASSAGE: string = (() => {
  * have room for the whole passage and use that instead.
  */
 export const CANVAS_EDITABLE_SUMMARY: string = (() => {
-  const nouns = [
-    ...new Set(
-      Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
-        Object.values(cells)
-          .filter((offer) => offer.offers)
-          .map((offer) => offer.shortNoun),
-      ),
-    ),
-  ];
-  /* "diagrams" ONCE, at the end, rather than inside each name — see
-     `shortNoun`. Three names spelled in full measured 166 against `/live`'s
-     160, and `check:canvas-edit` measures that description now rather than
-     leaving it to a comment to remember. */
-  return `Canvas editing for ${joinList(nouns)} diagrams.`;
+  const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
+  const editable = notations.filter((notation) =>
+    Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
+  );
+  /* A COUNT, NOT A LIST, and the list is what this used to be.
+     `/live`'s meta description has 160 characters for everything it says, and
+     this clause is its tail. Three names spelled in full measured 166 against
+     that 160 and were shortened to `shortNoun`s, which bought 154. The fourth
+     and fifth editable canvases — use case and ER — took it to 170, and the
+     honest fix was already written down in `src/app/live/page.tsx` and in
+     `canvas-editing.md`: when the list overflows again, drop the list and
+     name the count, exactly as `APP_DESCRIPTION` did for the notations.
+
+     So the names moved to `CANVAS_EDITING_PASSAGE`, which has room for them
+     and is what a reader who wants to know WHICH canvases reads. This clause
+     answers "can I edit on the canvas at all" in the one place that is
+     budgeted, and it stops growing: a sixth editable canvas changes one word.
+
+     `shortNoun` is still required on every offering cell, and still read by
+     the passage and by `check:seo` — dropping the list here does not make the
+     field optional. */
+  return `Canvas editing for ${inWords(editable.length)} of ${inWords(
+    notations.length,
+  )} notations.`;
 })();
 
 /* -------------------------------------------------------------------------- */

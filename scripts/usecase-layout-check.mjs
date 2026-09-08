@@ -39,6 +39,13 @@
  *  10. A long spaceless Thai label still fits its ellipse — the flowchart
  *      shipped a slice() that cut Thai base characters from combining
  *      marks; the ellipse case is proven here, measured, not assumed.
+ *  13. PINS (an author-stated `(x,y)`): a document that states none lays
+ *      out to the same pixel it did before the field existed; a stated
+ *      corner wins for that element ALONE — every neighbour keeps its solved
+ *      slot, an actor keeps the walk-on order its solved flank earned it,
+ *      and a member pinned clear of its boundary GROWS the rectangle instead
+ *      of being cropped out of it. Negative coordinates are honoured, and
+ *      `bounds` is the frame that proves nothing was cut off.
  *  11. TS↔CSS motion pins: every duration fallback in usecase-motion.css
  *      equals its USECASE_DURATIONS constant; everything animated (and the
  *      draw's dasharray) sits inside the reduced-motion gate; and NOTHING
@@ -48,6 +55,21 @@
  *      role pairs `USECASE_ROLE_BY_KIND` maps to (screen and export cannot
  *      diverge), each declared exactly once so no theme block can shadow
  *      one into a half-populated variant.
+ *  14. THE HEADING'S PRESS TARGET, measured — and the retitle form's
+ *      SCALE-INDEPENDENCE, which is what replaced an editor-box section
+ *      here. The target is drawn geometry and tracks the heading it covers.
+ *      The FORM is not: it is an HTML sibling of the drawing, sized in CSS
+ *      pixels, because everything inside a `foreignObject` is multiplied by
+ *      the viewBox-to-viewport ratio and this canvas's "fit" MAGNIFIES a
+ *      small drawing — the reported "the edit form is as wide as the whole
+ *      diagram", measured at up to 4.7x with a 66px label.
+ *  15. THE FOCUS EXITS, pinned from the viewer's SOURCE because the
+ *      behaviour lives in a `.tsx` no harness here can load: a wording
+ *      Apply drops the focus after the host's handler runs and without a
+ *      second announcement, a pointercancel does not arm the click
+ *      suppressor (which is what swallowed the next background press), the
+ *      pane backdrop still clears focus, and the open heading form keeps its
+ *      own clicks off that backdrop.
  *
  * Exits non-zero on any failure. Run with: pnpm check:usecase-layout
  */
@@ -89,9 +111,11 @@ registerHooks({
 const { parseUseCaseText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutUseCase, UC } = await import(
+const usecaseLayoutModule = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/layout.ts")).href
 );
+const { layoutUseCase, UC, UC_HEADING_HIT_PAD, usecaseHeadingHitBox } =
+  usecaseLayoutModule;
 const { USECASE_KIND_TOKENS, USECASE_ROLE_BY_KIND } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/shapes.ts")).href
 );
@@ -185,6 +209,24 @@ const segments = (edge) => {
   return out;
 };
 
+/* THE FRAME IS `bounds`, NOT `0 0 width height`. They are the same rectangle
+   for every document that pins nothing; a pin at a negative coordinate
+   legitimately draws left of the origin, and measuring against the origin
+   would demand the clamp the whole design refuses. */
+const insideFrame = (layout) => {
+  const frame = layout.bounds;
+  const held = (p) =>
+    p.x >= frame.x &&
+    p.x <= frame.x + frame.width &&
+    p.y >= frame.y &&
+    p.y <= frame.y + frame.height;
+  return (
+    layout.elements.every((e) => rectInside(e, frame)) &&
+    layout.boundaries.every((b) => rectInside(b, frame)) &&
+    layout.edges.every((e) => segments(e).every((seg) => seg.every(held)))
+  );
+};
+
 const rectInside = (inner, outer, pad = 0) =>
   inner.x >= outer.x + pad &&
   inner.y >= outer.y + pad &&
@@ -211,36 +253,9 @@ function assertStructure(label, file, layout) {
   );
 
   check(
-    `${label}: every element, boundary, edge point and label lies inside the canvas — clipped geometry is invisible geometry`,
-    layout.elements.every(
-      (e) =>
-        e.x >= 0 &&
-        e.y >= 0 &&
-        e.x + e.width <= layout.width &&
-        e.y + e.height <= layout.height,
-    ) &&
-      layout.boundaries.every((b) =>
-        rectInside(b, {
-          x: 0,
-          y: 0,
-          width: layout.width,
-          height: layout.height,
-        }),
-      ) &&
-      layout.edges.every((e) =>
-        segments(e).every(
-          ([a, b]) =>
-            a.x >= 0 &&
-            a.x <= layout.width &&
-            b.x >= 0 &&
-            b.x <= layout.width &&
-            a.y >= 0 &&
-            a.y <= layout.height &&
-            b.y >= 0 &&
-            b.y <= layout.height,
-        ),
-      ),
-    `canvas ${layout.width}×${layout.height}`,
+    `${label}: every element, boundary, edge point and label lies inside the frame the layout REPORTS — clipped geometry is invisible geometry, and every surface takes its viewBox from that frame`,
+    insideFrame(layout),
+    `frame ${box(layout.bounds)} in a ${layout.width}×${layout.height} canvas`,
   );
 
   /* THE semantic of the picture. */
@@ -771,6 +786,432 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
+/* The heading's press target, and the form's SCALE-INDEPENDENCE            */
+/*                                                                          */
+/* THE BUG THIS SECTION IS THE PROOF FOR. The retitle form used to be a     */
+/* native `<form>` in a `foreignObject` INSIDE this canvas's `<svg>`.       */
+/* Everything in there is laid out in USER UNITS and multiplied by the      */
+/* viewBox-to-viewport ratio — and this canvas's "fit" deliberately         */
+/* MAGNIFIES a small drawing, so the form was painted at the camera's       */
+/* scale. Measured on real documents in a 1400x800 pane: a two-use-case     */
+/* diagram fits at 2.59x and a one-actor sketch at 4.71x, which turned a    */
+/* 240x184-unit box into 621x476 and 1131x740 CSS px and a 14px label into  */
+/* 36px and 66px. The reader's screenshot showed the form as wide as the    */
+/* whole boundary with an Apply button larger than the diagram's nodes.     */
+/*                                                                          */
+/* THE PROPERTY THAT CATCHES IT is scale-independence: the form's on-screen */
+/* size must not change when `bounds` does. No script here can measure real */
+/* layout — these modules are loaded through Node's type stripping, which   */
+/* cannot read a `.tsx` at all — so the property is pinned in the two       */
+/* places it can actually be broken: there is NO unit-space box left in the */
+/* layout for a form to be sized from, and NO React node crosses the        */
+/* renderer's retitle surface, which is the only way HTML gets inside an    */
+/* `<svg>`. Break either and the form is back in the drawing.               */
+/*                                                                          */
+/* WHAT IS STILL MEASURED HERE is the PRESS TARGET, which did not move: it  */
+/* covers a measured heading, so it belongs in the heading's units and is   */
+/* right to scale with the picture. THE PAD IS AN ARGUMENT the layout owns  */
+/* and this reads back, so the box and the check cannot drift.              */
+/* ----------------------------------------------------------------------- */
+
+console.log("the heading's press target (measured, inside the frame)");
+
+{
+  const hitBox = (l) => usecaseHeadingHitBox(l, UC_HEADING_HIT_PAD);
+
+  /* Two documents that differ ONLY in their title's length: a constant-sized
+     target gives them the same width, a measured one does not, and the gap is
+     the gap between the two headings. */
+  const titled = (title) =>
+    layoutUseCase(
+      parseUseCaseText(
+        `archlab 1.0 usecase\ntitle "${title}"\n\n@usecase\n` +
+          `  actor a "Author"\n  boundary "System"\n` +
+          `    usecase draft "Draft the note"\n    usecase publish "Publish it"\n\n` +
+          `  a -- draft\n  a -- publish\n`,
+      ),
+    );
+  const shortTitle = titled("Editorial review workflow, in brief");
+  const longTitle = titled(
+    "Editorial review workflow, in brief, with the second half spelled out",
+  );
+  check(
+    "the press target is MEASURED off the heading, not sized from a constant — two documents differing only in title length get targets whose widths differ by exactly what their headings' widths differ by",
+    Math.abs(
+      hitBox(longTitle).width -
+        hitBox(shortTitle).width -
+        (longTitle.heading.width - shortTitle.heading.width),
+    ) < 1e-9 && hitBox(longTitle).width > hitBox(shortTitle).width,
+    `${box(hitBox(shortTitle))} vs ${box(hitBox(longTitle))}`,
+  );
+  check(
+    "the press target covers the heading it offers to change, pad included — a target ending before the words does not read as 'the title is the button'",
+    hitBox(shortTitle).width >= shortTitle.heading.width &&
+      hitBox(shortTitle).height >= shortTitle.heading.height,
+    box(hitBox(shortTitle)),
+  );
+  /* THE PAD IS SMALLER THAN THE MARGINS, which is what keeps the target inside
+     the frame the `<svg>` clips its viewport to without any clamp at all — the
+     old editor box needed one because it was form-sized rather than
+     heading-sized. Asserted on every fixture, including the smallest document
+     there is. */
+  for (const [label, l] of [
+    ["bare", bareLayout],
+    ["food delivery", layout],
+    ["thai", thaiLayout],
+  ]) {
+    const hit = hitBox(l);
+    check(
+      `${label}: the press target stays inside bounds on both axes — past the frame the <svg> clips its viewport and the affordance is partly unpressable`,
+      hit.x >= l.bounds.x &&
+        hit.y >= l.bounds.y &&
+        hit.x + hit.width <= l.bounds.x + l.bounds.width + 1e-9 &&
+        hit.y + hit.height <= l.bounds.y + l.bounds.height + 1e-9,
+      `${box(hit)} in bounds ${box(l.bounds)}`,
+    );
+  }
+}
+
+console.log("the retitle form's size does not depend on the diagram's");
+
+{
+  /* THE NAMED SCALE-INDEPENDENCE ASSERTION, module half. `usecaseHeadingEditorBox`
+     returned the form's box in LAYOUT UNITS, which is what let the camera
+     multiply it. Its deletion is asserted rather than assumed, because
+     reintroducing it is precisely what putting the form back inside the
+     `foreignObject` would require — and a helper with no reader is the mistake
+     `docs/adr/0003-usecase-and-er-positions.md` records twice on this branch. */
+  check(
+    "the layout exports NO unit-space editor box for the retitle form to be sized from — a form measured in layout units is a form the viewBox scale multiplies, which is the reported 'the edit form is as wide as the whole diagram'",
+    usecaseLayoutModule.usecaseHeadingEditorBox === undefined,
+    "usecaseHeadingEditorBox is back; a box in layout units cannot describe a control whose size must not change with the camera",
+  );
+  check(
+    "and the press target's pad is the LAYOUT's constant, read by both the canvas that draws the target and the viewer that anchors the form to it — two copies is how the editor box came to be solved in a renderer",
+    typeof UC_HEADING_HIT_PAD?.x === "number" &&
+      typeof UC_HEADING_HIT_PAD?.y === "number" &&
+      UC_HEADING_HIT_PAD.x < UC.marginX &&
+      UC_HEADING_HIT_PAD.y < UC.marginTop,
+    JSON.stringify(UC_HEADING_HIT_PAD),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Fixture 4 — pins: an author-stated (x,y) on one element                  */
+/*                                                                          */
+/* Every assertion here is a DIFFERENCE between two layouts of the SAME      */
+/* document, one with the token and one without, because that difference is  */
+/* exactly what the promise is about: a pin moves one shape and nothing      */
+/* else. Absolute coordinates are never hand-typed — a pin is stated in the  */
+/* layout's own solved space, which the shift then moves, so a literal here  */
+/* would only restate the shift.                                            */
+/* ----------------------------------------------------------------------- */
+
+console.log("pins (a stated position wins for one element and nothing else)");
+
+/** One document with a seam per element to hang an `(x,y)` token off. */
+const pinnedDoc = (pins = {}) => `archlab 1.0 usecase
+title "Billing, placed by hand"
+
+@usecase
+  actor customer "Customer"
+  actor admin "Administrator"
+  boundary "Billing"
+    usecase pay "Pay online"${pins.pay ?? ""}
+    usecase refund "Issue a refund"${pins.refund ?? ""}
+    usecase invoice "Send the invoice"${pins.invoice ?? ""}
+  actor auditor "Auditor"${pins.auditor ?? ""}
+
+  customer -- pay
+  customer -- invoice
+  admin -- refund
+  auditor -- invoice
+  refund ..> pay : include
+`;
+const laidOut = (pins) => layoutUseCase(parseUseCaseText(pinnedDoc(pins)));
+
+const solvedLayout = laidOut();
+assertStructure("solved", parseUseCaseText(pinnedDoc()), solvedLayout);
+
+check(
+  "a document that states no position reports a frame that IS its canvas measured from the origin — the frame only ever grows around something that reaches past it, so nothing in the pin machinery moved a document that pins nothing",
+  solvedLayout.bounds.x === 0 &&
+    solvedLayout.bounds.y === 0 &&
+    solvedLayout.bounds.width === solvedLayout.width &&
+    solvedLayout.bounds.height === solvedLayout.height,
+  `bounds ${box(solvedLayout.bounds)} vs canvas ${solvedLayout.width}×${solvedLayout.height}`,
+);
+
+/** The NEIGHBOURS' side of a pin: everything the pinned element is not, and
+ * no line that touches it.
+ *
+ * THREE THINGS ARE LEFT OUT, each because it is SUPPOSED to answer to a pin.
+ * The canvas and the boundary rectangle grow around a far-flung one, and each
+ * is asserted where that growth is the subject. An edge LABEL is placed, not
+ * solved — it walks outward until it clears every line in the picture — so a
+ * pinned element's own spoke sweeping across the page can legitimately push a
+ * stranger's label aside, and the alternative is a label sitting on a line. */
+const neighbours = (layout, ids) => ({
+  heading: layout.heading,
+  elements: layout.elements.filter((e) => !ids.includes(e.id)),
+  edges: layout.edges
+    .filter((e) => !ids.includes(e.from) && !ids.includes(e.to))
+    .map(({ index, kind, from, to, points, tip, labelLines }) => ({
+      index,
+      kind,
+      from,
+      to,
+      points,
+      tip,
+      labelLines,
+    })),
+  unbounded: layout.unbounded,
+});
+
+/* WHAT A PINNED DOCUMENT IS STILL HELD TO, and it is deliberately not the
+ * whole structural suite. ADR 0003 accepts that a pinned element can overlap a
+ * solved one, that a line into it can cross an ellipse it does not connect,
+ * and that a label can end up beside that line — asserting those here would
+ * assert the opposite of what was decided. The SOLVED twin of every fixture
+ * below goes through `assertStructure` in full, so the picture the solver
+ * draws is still held to all of it. */
+const assertPinnedInvariants = (label, file, layout) => {
+  check(
+    `${label}: the same model twice gives byte-identical layout — a pin must not make the layout a function of anything but the document`,
+    JSON.stringify(layoutUseCase(file)) === JSON.stringify(layout),
+  );
+  check(
+    `${label}: every element, boundary and edge point lies inside the frame the layout reports — the frame grows around a pin instead of cropping it, which is the amendment ADR 0002 had to make`,
+    insideFrame(layout),
+    `frame ${box(layout.bounds)} in a ${layout.width}×${layout.height} canvas`,
+  );
+};
+
+/* ---- a member pinned clear of its own boundary ---- */
+{
+  /* Below the columns the solver packed and outside the rectangle they
+     measured: the case that used to be unspellable and, once spellable, the
+     case a frame can crop. */
+  const source = pinnedDoc({ pay: " (-60,300)" });
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("pinned member", parseUseCaseText(source), pinned);
+  const el = (id) => pinned.elements.find((e) => e.id === id);
+  const solvedEl = (id) => solvedLayout.elements.find((e) => e.id === id);
+
+  check(
+    "the stated position wins for that element and moves nothing else: every other element, the heading, the canvas and every line that does not touch it are byte-identical to the same document without the token — the guarantee that made this a minor change rather than a breaking one",
+    JSON.stringify(neighbours(pinned, ["pay"])) ===
+      JSON.stringify(neighbours(solvedLayout, ["pay"])),
+  );
+  check(
+    "the pinned use case did move — without this the assertions around it would be proving properties of a document that ignores its own token",
+    el("pay").x !== solvedEl("pay").x && el("pay").y !== solvedEl("pay").y,
+    `pinned ${box(el("pay"))} vs solved ${box(solvedEl("pay"))}`,
+  );
+  check(
+    "moving the token by 20 moves the drawn shape by exactly 20 in each axis — the coordinate is honoured one-to-one and is neither re-solved, snapped to a grid, nor nudged back toward its column",
+    (() => {
+      const moved = layoutUseCase(
+        parseUseCaseText(pinnedDoc({ pay: " (-40,320)" })),
+      ).elements.find((e) => e.id === "pay");
+      return moved.x - el("pay").x === 20 && moved.y - el("pay").y === 20;
+    })(),
+  );
+  check(
+    "the token is the shape's TOP-LEFT for an ellipse as well as a figure: two elements pinned 300 apart on one row have top-left corners exactly 300 apart and level, which a centre-based read of the same token could not produce (a use case would sit rx left and ry up of it)",
+    (() => {
+      const both = layoutUseCase(
+        parseUseCaseText(
+          pinnedDoc({ auditor: " (-40,300)", invoice: " (260,300)" }),
+        ),
+      );
+      const a = both.elements.find((e) => e.id === "auditor");
+      const u = both.elements.find((e) => e.id === "invoice");
+      return u.x - a.x === 300 && u.y === a.y;
+    })(),
+  );
+
+  const frame = pinned.boundaries[0];
+  const solvedFrame = solvedLayout.boundaries[0];
+  check(
+    "the boundary GROWS around the member pinned outside it rather than the member being cropped out of the box that declares it a member — the amendment ADR 0002 had to make after a pinned flowchart step drew 64% outside its frame",
+    frame.height > solvedFrame.height &&
+      frame.width === solvedFrame.width &&
+      rectInside(el("pay"), frame),
+    `grown ${box(frame)} from ${box(solvedFrame)} around ${box(el("pay"))}`,
+  );
+  check(
+    "the title band did not move when the rectangle grew — the frame grows and the drawing does not shift, so the name stays over the members it names instead of drifting into the space a pin opened up",
+    JSON.stringify(frame.labelBox) === JSON.stringify(solvedFrame.labelBox),
+  );
+  check(
+    "the lines into the pinned use case still TOUCH it — a route planned on solved geometry whose ends were left behind draws spokes into empty space, which reads exactly like a broken layout",
+    pinned.edges
+      .filter((e) => e.from === "pay" || e.to === "pay")
+      .every((e) => {
+        const points = e.tip === null ? e.points : [...e.points, e.tip];
+        const end = e.from === "pay" ? points[0] : points[points.length - 1];
+        return rectsOverlap(
+          { x: end.x, y: end.y, width: 0, height: 0 },
+          el("pay"),
+          1,
+        );
+      }),
+    pinned.edges
+      .filter((e) => e.from === "pay" || e.to === "pay")
+      .map((e) => `${e.from}->${e.to} ${JSON.stringify(e.points)}`)
+      .join(" "),
+  );
+}
+
+/* ---- an actor pinned across the boundary it used to flank ---- */
+{
+  /* Across to the right flank AND above every other actor, so an order read
+     off the drawn boxes instead of the solved ones would put this actor
+     first — the fixture has to be able to tell the two apart. */
+  const source = pinnedDoc({ auditor: " (200,-300)" });
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("pinned actor", parseUseCaseText(source), pinned);
+  const auditor = pinned.elements.find((e) => e.id === "auditor");
+  const solvedAuditor = solvedLayout.elements.find((e) => e.id === "auditor");
+  const frame = pinned.boundaries[0];
+
+  check(
+    "a pinned actor keeps the SIDE the solver gave it: the walk-on order is read off the solved flanks, so an actor pinned across the picture and above the whole cast keeps the index its solved flank earned it — the reveal must stagger the cast the layout composed, not the one a pin rearranged",
+    auditor.cast === solvedAuditor.cast &&
+      auditor.cast ===
+        solvedLayout.elements.filter((e) => e.kind === "actor").length - 1 &&
+      auditor.y <
+        Math.min(
+          ...pinned.elements
+            .filter((e) => e.kind === "actor" && e.id !== "auditor")
+            .map((e) => e.y),
+        ),
+    `cast ${auditor.cast} at x ${auditor.x} (solved ${solvedAuditor.cast} at x ${solvedAuditor.x})`,
+  );
+  check(
+    "and its spoke therefore still leaves from that side and now CROSSES the boundary it used to flank — ADR 0003 accepts this cost explicitly; a spoke re-planned around the box would mean the routing had begun reading pinned geometry, which is what keeps every OTHER line where it was",
+    pinned.edges
+      .filter((e) => e.from === "auditor" || e.to === "auditor")
+      .every((e) => segments(e).some(([a, b]) => segmentHitsRect(a, b, frame))),
+  );
+  check(
+    "every element the token did not name keeps its solved slot, the pinned actor's own use case included — a pin that re-balanced the flanks would repack the columns and move the whole cast",
+    JSON.stringify(neighbours(pinned, ["auditor"])) ===
+      JSON.stringify(neighbours(solvedLayout, ["auditor"])),
+  );
+}
+
+/* ---- a negative coordinate, in a document with no boundary at all ---- */
+{
+  const sketch = (pin = "") => `archlab 1.0 usecase
+title "Sketch"
+
+@usecase
+  actor a "Author"
+  usecase draft "Draft the note"${pin}
+  usecase publish "Publish the note"
+
+  a -- draft
+  a -- publish
+`;
+  const solvedSketch = layoutUseCase(parseUseCaseText(sketch()));
+  assertStructure("sketch", parseUseCaseText(sketch()), solvedSketch);
+  const source = sketch(" pin (-900,-400)");
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("negative pin", parseUseCaseText(source), pinned);
+  const draft = pinned.elements.find((e) => e.id === "draft");
+
+  check(
+    "a NEGATIVE coordinate is honoured rather than clamped into the canvas: the pinned use case draws above and left of the origin, which is where the author asked for it",
+    draft.x < 0 && draft.y < 0,
+    box(draft),
+  );
+  check(
+    "and the reported frame reaches out to hold it, so it is cropped neither on screen nor in the PNG that inherits the same viewBox",
+    pinned.bounds.x < draft.x &&
+      pinned.bounds.y < draft.y &&
+      rectInside(draft, pinned.bounds),
+    `frame ${box(pinned.bounds)} around ${box(draft)}`,
+  );
+  check(
+    "and the drawing did NOT shift to reach it: the canvas measured from the origin is unchanged and every unpinned element sits on the pixel it sat on before the token existed — the shift is a function of the solved layout alone",
+    pinned.width === solvedSketch.width &&
+      pinned.height === solvedSketch.height &&
+      JSON.stringify(neighbours(pinned, ["draft"])) ===
+        JSON.stringify(neighbours(solvedSketch, ["draft"])),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The reported shift is the one that was applied                           */
+/* ----------------------------------------------------------------------- */
+
+console.log(
+  "\nthe reported shift inverts (a drag can write back what it drew)",
+);
+
+/* WHY THIS EXISTS. The canvas turns a DROPPED point into a `position` by
+   subtracting `layout.shift`, and it takes that number on trust: it used to
+   recover the shift by PROBING — pin one element at the origin, re-solve, read
+   where it landed — which was self-checking, because a probe that read the
+   wrong number would have been reading the layout's own answer. Reading a
+   reported field is cheaper and is not self-checking, so the property the
+   probe got for free has to be asserted here instead.
+
+   MEASURED AS A ROUND TRIP, not as a restatement of `dx`/`dy`: take a document
+   that states no position, subtract the reported shift from where an element
+   is DRAWN, feed that back as its `position`, and the element must lay out on
+   the same drawn point. That is exactly the arithmetic the drag performs, so a
+   reported shift that is not the applied one fails here rather than on
+   somebody's screen. Fed through the MODEL rather than through `pin (x,y)`
+   text, because the round trip is exact arithmetic and the grammar's token is
+   written in whole units.
+
+   IT IS SOUND because the shift is measured off SOLVED geometry alone (the
+   extents pass), so pinning the element under test cannot move the quantity
+   being inverted — the promise the block above this one already asserts from
+   the other side. */
+{
+  const solvedShift = solvedLayout.shift;
+
+  /* NOT VACUOUS FIRST. A document whose shift happened to be zero would pass
+     the round trip whatever the field said, so the case is only worth
+     inverting once this document is known to be shifted at all. */
+  check(
+    "this document really is shifted, so inverting it is not a no-op",
+    solvedShift.dx !== 0 && solvedShift.dy !== 0,
+    `shift ${JSON.stringify(solvedShift)}`,
+  );
+
+  /* An actor and a boundary member both, because they are placed by different
+     passes and only one of them would notice a shift applied per zone. */
+  for (const id of ["pay", "refund", "invoice", "auditor", "customer"]) {
+    const drawn = solvedLayout.elements.find((e) => e.id === id);
+    const model = parseUseCaseText(pinnedDoc());
+    const stated = {
+      x: drawn.x - solvedShift.dx,
+      y: drawn.y - solvedShift.dy,
+    };
+    const replayed = layoutUseCase({
+      ...model,
+      elements: model.elements.map((element) =>
+        element.id === id ? { ...element, position: stated } : element,
+      ),
+    });
+    const back = replayed.elements.find((e) => e.id === id);
+    /* Compared to a millionth of a unit. The inversion is exact arithmetic;
+       the tolerance is IEEE representation of `(a - b) + b`, not slack in the
+       contract — a shift off by even one unit is thousands of times this. */
+    check(
+      `${id}: drawn point → minus the reported shift → back to the same drawn point`,
+      Math.abs(back.x - drawn.x) < 1e-6 && Math.abs(back.y - drawn.y) < 1e-6,
+      `drew ${box(drawn)}, stated ${JSON.stringify(stated)}, laid back out at ${box(back)}`,
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* TS ↔ CSS pins — motion                                                   */
 /* ----------------------------------------------------------------------- */
 
@@ -939,6 +1380,88 @@ const VAR_TO_KEY = Object.fromEntries(
         /strokeWidth=\{focused \? UC_FOCUS_STROKE : UC_STROKE\}/.test(
           diagramSrc,
         ),
+    );
+    /* ---- THE FOCUS EXITS. Three reported symptoms, all of them "the dock
+       stays open over a diagram I have finished with", and none of them
+       visible to any assertion that measures geometry. They are pinned from
+       the source because the behaviour lives in a `.tsx` component that no
+       harness here can load — and each regex names the STATEMENT that would
+       have to go missing, not the shape of the code around it. ---- */
+    /* THE NAMED SCALE-INDEPENDENCE ASSERTION, renderer half — the one that
+       goes red if the form is put back inside the `foreignObject`. A
+       `foreignObject` can only ever hold what this component is HANDED, and
+       the only thing that could be handed is a React node, so the surface
+       carrying none is the whole guard. The box it draws is the heading's own
+       press target, which is drawn geometry and right to scale; the FORM is
+       the viewer's, over the drawing, in CSS pixels. */
+    check(
+      "the retitle FORM is never mounted inside the <svg>: the canvas's retitle surface carries no React node, and the one foreignObject it draws is the heading's own press target — HTML in there is laid out in user units and multiplied by the viewBox scale, which is the reported 'the edit form is as wide as the whole diagram'",
+      !/React\.ReactNode/.test(diagramSrc) &&
+        !/retitle\.form|headingFields/.test(diagramSrc) &&
+        /usecaseHeadingHitBox\(layout, UC_HEADING_HIT_PAD\)/.test(diagramSrc),
+      "a node crossing UseCaseRetitleSurface is a form back inside the drawing",
+    );
+    check(
+      "the diagram takes that press target from the shared layout helper rather than solving it — the viewer anchors the form to the same box, and two copies of the arithmetic is how the old editor box came to be placed by a clamp",
+      /usecaseHeadingHitBox\(/.test(diagramSrc) &&
+        !/HEADING_EDITOR|HEADING_HIT_PAD = /.test(diagramSrc),
+    );
+    check(
+      "and the viewer positions the form from the heading's SCREEN rect through the shared canvas overlay, at a size stated in CSS pixels with no layout term in it — `getScreenCTM` is the drag's own conversion run forwards, and it already knows the viewBox origin, the letterboxing and any transform above the pane",
+      /useCanvasOverlayPosition\(\{/.test(viewerSrc) &&
+        /usecaseHeadingHitBox\(layout, UC_HEADING_HIT_PAD\)/.test(viewerSrc) &&
+        /const HEADING_FORM_SIZE = \{ width: \d+, height: \d+ \}/.test(
+          viewerSrc,
+        ),
+      "the form is sized from something other than a CSS-pixel constant, or placed by hand-rolled arithmetic on zoom and scroll",
+    );
+    /* AND NO `foreignObject` REACHES AN EXPORT. That is what makes a native
+       control on this canvas safe at all: the share image, the PNG and the SVG
+       download render from the MODEL through `export/render-svg.ts`, which is
+       handed no interactive surface and must never grow one. */
+    check(
+      "the exporter serialises no foreignObject — a native control in a downloaded SVG renders as nothing in most consumers, and as a form in the rest",
+      !/foreignObject/.test(src("src/features/usecase/export/render-svg.ts")),
+    );
+    check(
+      "applying a wording edit DROPS THE FOCUS, and drops it after the host's handler has run — the dock left standing over an element the reader has just finished rewriting is the reported bug, and clearing first would take the form away mid-submit",
+      /onReviseElement\(elementId, revision\);\s*\n\s*setRawFocus\(null\);/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "that exit does NOT route through handleClearFocus — its 'Focus cleared.' would land in the single polite live region one setState after the host's own edit sentence and swallow it, so the reader would hear that their focus went and never what their edit did",
+      /onReviseElement\(elementId, revision\);\s*\n\s*setRawFocus\(null\);\s*\n\s*paneFocusClaim\.current = true;/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "the exit's pane-focus claim is ANSWERED by an effect that focuses the pane — the Apply button unmounts with the dock, and a keyboard reader left at the top of the page cannot make a second edit without tabbing in from nowhere",
+      /if \(!paneFocusClaim\.current\) return;\s*\n\s*paneFocusClaim\.current = false;\s*\n\s*paneRef\.current\?\.focus\(\);/.test(
+        viewerSrc,
+      ),
+    );
+    check(
+      "a CANCELLED pointer gesture does not arm the click suppressor — a pointercancel produces no trailing click to suppress, so arming it left the flag set and the NEXT background press was swallowed instead: the reported 'an outside click does not exit focus'",
+      /if \(!cancelled\) panSuppressesClick\.current = true;/.test(viewerSrc) &&
+        /if \(state\.moved && !cancelled\) panSuppressesClick\.current = true;/.test(
+          viewerSrc,
+        ) &&
+        /onPointerCancel=\{handlePointerCancel\}/.test(viewerSrc),
+    );
+    check(
+      "the pane backdrop still clears focus, behind the drag suppressor and the scrollbar-gutter test — the gesture the sequence, flowchart and C4 canvases all carry, and the one an exit-on-apply change must not quietly replace",
+      /onClick=\{handleBackdropClick\}/.test(viewerSrc) &&
+        /panSuppressesClick\.current\) \{\s*\n\s*panSuppressesClick\.current = false;\s*\n\s*return;/.test(
+          viewerSrc,
+        ) &&
+        /clientWidth \|\|[\s\S]{0,80}clientHeight\s*\n\s*\) \{\s*\n\s*return;\s*\n\s*\}\s*\n\s*handleClearFocus\(\);/.test(
+          viewerSrc,
+        ),
+    );
+    check(
+      "the OPEN heading form stops its own clicks reaching the backdrop, as the closed heading button already did — without it every press inside the fields cleared the reader's element focus and announced 'Focus cleared.' over the retitle sentence",
+      /onClick=\{\(event\) => event\.stopPropagation\(\)\}/.test(viewerSrc),
     );
     check(
       "no source file reaches for Math.random() — the breath scatter is a hash so a re-render cannot reshuffle a resting diagram and the exporter stays deterministic",

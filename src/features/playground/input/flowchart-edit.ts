@@ -135,6 +135,22 @@ export function revisedFlowNodeEdit(
     label,
     ...(technology === undefined ? {} : { technology }),
     ...(tags === undefined || tags.length === 0 ? {} : { tags }),
+    /* CARRIED, AND IT WAS NOT. This node is REBUILT from the revision rather
+       than spread from `current`, which is what keeps a refused field
+       (`shape`) from riding in — but `position` was left out of the rebuild,
+       and a block patch respells the WHOLE declaration line. So retyping a
+       step's caption silently deleted its `(x,y)`: the reader dragged a node,
+       renamed it, and watched it jump back to where the solver wanted it,
+       with the pin gone from the text and nothing saying so.
+
+       Shipped, and invisible to every assertion — because nothing loads this
+       module. `check:canvas-edit` pins the purity of `canvas-edit.ts`,
+       `sequence-edit.ts` and this file's siblings, but no script imports
+       `flowchart-edit.ts`, so none of its nine gestures has a direct
+       assertion. The ER and use-case wording gestures carry their placement
+       keys for this reason and assert it; the guard below does the same for
+       this one. The wider gap is real and is bigger than this fix. */
+    ...(current.position === undefined ? {} : { position: current.position }),
     ...(description === undefined ? {} : { description }),
   };
   const edited: FlowchartLabFile = {

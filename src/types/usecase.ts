@@ -61,6 +61,8 @@ import type { ArchLabMetadata } from "./c4";
  * statement the element makes, and "unstated" would just be a second
  * spelling of one of them.
  */
+import type { PinnedPoint } from "./geometry";
+
 export type UseCaseElementKind = "actor" | "usecase";
 
 /** One participant. Array position in `UseCaseLabFile.elements` is the
@@ -78,6 +80,54 @@ export interface UseCaseElement {
   /** Same `#tag` vocabulary as a C4 node, for the same reason the flowchart
    * shares it: one tag namespace across the document kinds. */
   tags?: string[];
+  /**
+   * WHERE THIS element IS PINNED, when the author has pinned it — the one
+   * field in this model that overrides the layout rather than feeding it.
+   *
+   * OPTIONAL, AND THAT IS THE WHOLE DESIGN. Absent is the normal case and
+   * means "solve my place from the boundary and the associations", which is what every use-case document did before this field
+   * existed and what every one on disk still says. A document with nothing
+   * pinned lays out byte-identically to how it did before, which is why
+   * adding this was not a breaking change.
+   *
+   * WHAT IT OVERRIDES, PRECISELY: the drawn shape's top-left corner. It does
+   * NOT override WHICH SIDE OF THE BOUNDARY THE SOLVER GAVE AN ACTOR — the side is refined from the solved geometry, so a pinned actor's spokes still leave from the side the layout chose — so a pinned element keeps its place in the
+   * document's structure while sitting somewhere else on the page.
+   *
+   * THE COSTS ARE REAL AND WERE ACCEPTED (ADR 0003, which follows ADR 0002's
+   * reasoning for the flowchart): a pinned element can overlap a solved one, a pinned actor's spokes can cross the boundary they used to flank, and a pinned use case OUTSIDE the solved bounds grows the boundary rectangle rather than being cropped out of it — the frame grows, the drawing never shifts, which is the amendment ADR 0002 had to make after a pinned step was cropped identically on screen and in the PNG. `purpose.md` calls
+   * correct-and-ugly a bug here, so a pin is a tool for an author who wants a
+   * specific picture, not a default anybody falls into.
+   *
+   * Same `(x,y)` spelling as a flowchart node's position and a C4 node's
+   * geometry minus the size — a element's size is measured from its own
+   * contents and is not the author's to set. One vocabulary across the kinds,
+   * as `[technology]` and `#tag` already are.
+   */
+  position?: PinnedPoint;
+  /**
+   * KEEP THIS element'S COORDINATES when the diagram is handed back to the
+   * layout. The reset sweep strips `(x,y)` from every element it can and
+   * skips this one, so an author who has placed one thing deliberately can
+   * release the rest without losing it.
+   *
+   * It is not a layout input: nothing consults it while positions are being
+   * solved, because a positioned element is never solved in the first place.
+   * The same field on `C4Node` spent two releases documenting a feature that
+   * did not exist and that no consumer read — so this one ships WITH the
+   * sweep it exempts from, or it does not ship.
+   *
+   * `pin` ON AN ELEMENT WITH NO `(x,y)` IS A PARSE ERROR, not a tolerated
+   * no-op. It would name coordinates to keep that the text does not state,
+   * and neither the flowchart grammar (a bare `(x,y)`, no keyword) nor the C4
+   * one (a keyword beside a MANDATORY geometry) answers what it should mean.
+   * Refusing it is the answer that cannot be misread later.
+   *
+   * A per-element release still honours a direct request: pointing at THIS
+   * element and asking the layout to place it releases it. The exemption is
+   * from the sweep, not from the author.
+   */
+  pinned?: boolean;
   /** <= 500 chars, same budget as `C4Node.description`: the detail behind
    * the label, revealed on focus, never drawn inside the ellipse. */
   description?: string;

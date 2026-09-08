@@ -41,8 +41,14 @@ import type { ErCardinality, ErLabFile } from "@/types";
 
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { META_KEYS, splitUnknowns } from "../schema";
-import { bangLine, isRecord, tagsLine, techBody } from "../serialize";
-import { BARE_ID_RE, valueToken } from "../text";
+import {
+  bangLine,
+  isFiniteNumber,
+  isRecord,
+  tagsLine,
+  techBody,
+} from "../serialize";
+import { BARE_ID_RE, numberToken, valueToken } from "../text";
 import {
   ATTRIBUTE_KEYS,
   ATTRIBUTE_KEYWORD,
@@ -220,6 +226,85 @@ export function serializeErText(file: ErLabFile): string {
 /* Entities                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks, for the editable canvas                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE ENTITY'S CANONICAL LINES — declaration, `desc`, `!` escapes and every
+ * column — so a canvas gesture can splice them into the author's own text
+ * instead of re-emitting the file. `canonicalNodeBlock` (C4),
+ * `canonicalParticipantBlock` (sequence) and `canonicalFlowNodeBlock`
+ * (flowchart) are the same idea, and `line-patch.ts` holds the argument for
+ * why every gesture must go through one of them.
+ *
+ * A BLOCK, NOT A LINE: an entity's columns and continuations are lines an
+ * edit may add, replace or remove, so the unit has to be the whole block.
+ * Continuations inside the replaced block come back in canonical ORDER even
+ * where the author wrote them the other way round; every byte OUTSIDE it is
+ * untouched, which is the guarantee that matters.
+ *
+ * NO `pad` PARAMETER, and this is where it differs from its three siblings.
+ * A flowchart node sits at two spaces or four depending on whether a `group`
+ * encloses it, so its helper cannot know its own indentation; an ER entity is
+ * pinned by the parser to exactly one level (`itemIndent` is 2 whenever no
+ * entity is open, and entities do not nest), so there is one possible answer
+ * and a parameter could only ever hold it. Configuration for a fixed value is
+ * a place for the two to disagree, not flexibility.
+ *
+ * Returns `null` when `entityId` is not in `file`.
+ */
+export function canonicalErEntityBlock(
+  file: ErLabFile,
+  entityId: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const entities = file.entities;
+  if (!Array.isArray(entities)) invalid("entities", entities);
+  const entity = entities.find(
+    (candidate) => isRecord(candidate) && candidate.id === entityId,
+  );
+  if (entity === undefined) return null;
+  const lines: string[] = [];
+  emitEntity(lines, entity);
+  return lines;
+}
+
+/**
+ * ONE RELATIONSHIP'S CANONICAL LINES — its own line plus any `!` escapes it
+ * carries — so the canvas can splice a re-worded join into the author's text
+ * instead of re-emitting the file.
+ *
+ * BY INDEX, matching `ErSpans.relationships` and the model's own array. A
+ * relationship has no id and two between the same pair are legal text, so a
+ * `from`/`to` pair does not name one; `canonicalFlowEdgeBlock` addresses a
+ * flowchart arrow by index for the same reason.
+ *
+ * A BLOCK, NOT A LINE, for the reason its entity sibling gives: an `!` escape
+ * is a line an edit may replace, so the unit has to be everything the span
+ * covers.
+ *
+ * NO `pad` PARAMETER, and for a stronger reason than the entity helper's: a
+ * relationship line sits at the ER body's one indent always — the parser
+ * refuses one nested inside an entity block at all — so there is exactly one
+ * answer and a parameter could only hold it.
+ *
+ * Returns `null` when `index` names no relationship in `file`.
+ */
+export function canonicalErRelationshipBlock(
+  file: ErLabFile,
+  index: number,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const relationships = file.relationships;
+  if (!Array.isArray(relationships)) invalid("relationships", relationships);
+  const relationship = relationships[index];
+  if (relationship === undefined) return null;
+  const lines: string[] = [];
+  emitRelationship(lines, relationship);
+  return lines;
+}
+
 function emitEntity(lines: string[], value: unknown): void {
   if (!isRecord(value)) invalid("an entity", value);
   const id = value.id;
@@ -242,6 +327,41 @@ function emitEntity(lines: string[], value: unknown): void {
   const tags = tagsLine(value.tags);
   if (tags !== undefined) line += ` ${tags}`;
   else if (value.tags !== undefined) fallback.push(["tags", value.tags]);
+
+  /* `pin` BEFORE the `(x,y)`, matching `ER_ENTITY_KEYS` and a C4 node's
+     `pin (x,y w×h)`. `false` is written OUT rather than omitted: absent and
+     explicitly-off are different documents, and a toggle that omitted the
+     `false` would silently delete an author's `pin=false` — the bug
+     `canvas-editing.md` records for the numbering toggle, in the same shape. */
+  const pinned = value.pinned;
+  if (pinned === true) line += " pin";
+  else if (pinned === false) line += " pin=false";
+  else if (pinned !== undefined) fallback.push(["pinned", pinned]);
+
+  /* `(x,y)` LAST ON THE LINE. Written only when the author pinned the entity:
+     an absent position is the normal case and means "solve my place from the
+     schema", so emitting the SOLVED coordinate here would turn every
+     unpositioned entity into a positioned one on the first save — the round
+     trip would still be byte-stable and the document would have silently
+     changed meaning. */
+  const position = value.position;
+  if (position !== undefined) {
+    /* EXACTLY x AND y, and the key COUNT is the load-bearing half of this
+       test — the flowchart serializer's own note explains why: checking only
+       that x and y are numbers writes `{"x":1,"y":2,"z":3}` back as `(1,2)`
+       and silently drops the `z`. A `(x,y)` token cannot spell a third
+       coordinate, so a point that has one rides the `!` escape whole. */
+    const spellable =
+      isRecord(position) &&
+      isFiniteNumber(position.x) &&
+      isFiniteNumber(position.y) &&
+      Object.keys(position).length === 2;
+    if (spellable) {
+      line += ` (${numberToken(position.x as number)},${numberToken(position.y as number)})`;
+    } else {
+      fallback.push(["position", position]);
+    }
+  }
   lines.push(line);
 
   /* `desc` FIRST, before the columns — the parser's window for an entity's
