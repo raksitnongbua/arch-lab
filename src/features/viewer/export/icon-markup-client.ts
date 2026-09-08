@@ -19,15 +19,17 @@ import { createRoot } from "react-dom/client";
 import { createIconEmbedder, type EmbedIcon } from "./icon-markup";
 
 /** Renders each icon into a detached DOM node and captures its `innerHTML`. */
-export const embeddedIconSvg: EmbedIcon = createIconEmbedder((component) => {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  // flushSync: the markup must exist synchronously, before unmount below.
-  // Called from an event handler, never during a React render pass.
-  flushSync(() => {
-    root.render(createElement(component));
-  });
-  const markup = host.innerHTML;
-  root.unmount();
-  return markup;
-});
+export const embeddedIconSvg: EmbedIcon = createIconEmbedder(
+  ({ component }) => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    // flushSync: the markup must exist synchronously, before unmount below.
+    // Called from an event handler, never during a React render pass.
+    flushSync(() => {
+      root.render(createElement(component));
+    });
+    const markup = host.innerHTML;
+    root.unmount();
+    return markup;
+  },
+);

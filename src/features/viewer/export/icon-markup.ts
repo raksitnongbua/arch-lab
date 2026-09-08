@@ -8,11 +8,11 @@
  * CONSTRUCTION: the exported markup is the same string the canvas renders,
  * own colours included, not a second drawing of the logo.
  *
- * TWO RENDERERS, ONE RECIPE, and that is what {@link createIconEmbedder} is
- * for. Rendering a component to markup is the only step that differs between
- * a browser and a route handler — the cache, the positioning and the
- * `<g color>` wrapper are the same work either way, and were duplicated once
- * before this factory existed.
+ * TWO SOURCES, ONE RECIPE, and that is what {@link createIconEmbedder} is
+ * for. Getting the artwork is the only step that differs between a browser
+ * (render the component) and a route handler (look it up in the generated
+ * table) — the cache, the positioning and the `<g color>` wrapper are the same
+ * work either way, and were duplicated once before this factory existed.
  *
  * THIS MODULE IMPORTS NEITHER RENDERER, and that is not tidiness — it is what
  * makes `/api/render` possible at all. `embeddedIconSvg` lived here with its
@@ -21,8 +21,9 @@
  * "You're importing a component that imports react-dom/client." A default is
  * an import, and an import is a bundle. So the browser embedder sits in
  * `icon-markup-client.ts` with the directive it needs, the server takes
- * {@link omitIcon} below, and the caller says which one it is —
- * `renderDiagramSvg` cannot guess and no longer pretends to.
+ * {@link embeddedIconSvgServer} below — the build-time table, no renderer at
+ * all — and the caller says which one it is: `renderDiagramSvg` cannot guess
+ * and no longer pretends to.
  *
  * Results are memoised per icon slug — sound because every registry icon is
  * theme-independent: monochrome icons take colour from the OUTSIDE (the
@@ -41,6 +42,7 @@ import type { C4Node } from "@/types";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import type { IconStyle } from "@/lib/icon-style";
 
+import { ICON_MARKUP } from "./icon-markup.generated";
 import { positionIconSvg } from "./icon-position";
 
 /** One registry icon's artwork, as the registry stores it. */
@@ -60,6 +62,14 @@ export type EmbedIcon = (
   style: IconStyle,
 ) => string;
 
+/** Which artwork an embedder is being asked for. */
+export interface IconArtworkRequest {
+  slug: string;
+  style: IconStyle;
+  /** The registry's component. The build-time table ignores it. */
+  component: IconComponent;
+}
+
 /**
  * An embedder over one way of turning an icon component into markup.
  *
@@ -69,7 +79,7 @@ export type EmbedIcon = (
  * other.
  */
 export function createIconEmbedder(
-  toMarkup: (component: IconComponent) => string,
+  toMarkup: (icon: IconArtworkRequest) => string,
 ): EmbedIcon {
   /**
    * Keyed by STYLE AND SLUG, not slug alone. A slug-only key was the shape
@@ -90,7 +100,11 @@ export function createIconEmbedder(
     const cached = markupByStyleAndSlug.get(key);
     if (cached !== undefined) return cached;
 
-    const markup = toMarkup(def.byStyle[style]);
+    const markup = toMarkup({
+      slug: def.slug,
+      style,
+      component: def.byStyle[style],
+    });
     markupByStyleAndSlug.set(key, markup);
     return markup;
   };
@@ -116,23 +130,20 @@ export function createIconEmbedder(
 }
 
 /**
- * AN EMBEDDER THAT DRAWS NO ICON — what the server has instead of one, today.
+ * THE SERVER EMBEDDER — the build-time artwork table, no React renderer.
  *
- * The registry's marks are React components, and rendering a component to
- * markup needs a React renderer: `react-dom/client` needs a document, and
- * `react-dom/server` is rejected outright inside Next's route graph ("You're
- * importing a component that imports react-dom/server"). So a diagram drawn by
- * `/api/render` currently arrives with its nodes' shapes, fills, borders and
- * labels — and no logos.
+ * `/api/render` draws in a route handler, where `react-dom/client` has no
+ * document and Next refuses a `react-dom/server` import outright. Rendering
+ * the registry's components at BUILD time answers both: the table in
+ * `icon-markup.generated.ts` holds what those same components draw, and
+ * `check:icon-markup` regenerates it to prove that stays true.
  *
- * THAT IS A REAL LOSS AND NOT A DESIGN, which is why this is named for what it
- * does rather than dressed up as a policy. `purpose.md` calls the icon set one
- * of the customisation surfaces the product promises, and a container labelled
- * "MongoDB" without its mark is exactly the flattening the render route was
- * built to avoid. The way out is a build-time table of slug → markup so the
- * server needs no renderer at all, checked against the components the canvas
- * draws; `scripts/lib/icon-artwork.mjs` already extracts the brand half of it.
- * Until that exists, this returns nothing rather than a placeholder — a wrong
- * mark is worse than an absent one.
+ * A MISSING SLUG DRAWS NOTHING rather than a placeholder. It should be
+ * unreachable — the table is generated from the whole registry — so reaching
+ * it means the table is stale, and a wrong mark on a logo is worse than an
+ * absent one. `check:icon-markup` is what turns that into a build failure
+ * instead of a silent gap.
  */
-export const omitIcon: EmbedIcon = () => "";
+export const embeddedIconSvgServer: EmbedIcon = createIconEmbedder(
+  ({ slug, style }) => ICON_MARKUP[`${style}:${slug}`] ?? "",
+);

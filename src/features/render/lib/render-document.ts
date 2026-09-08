@@ -16,6 +16,10 @@
  *   - **The palette.** `resolveExportTheme()` reads the live computed styles.
  *     The route passes `exportPaletteFor(theme)` instead — the same tokens,
  *     resolved from `globals.css` at build time (`palette.generated.ts`).
+ *   - **Icons.** The registry's marks are React components and the server has
+ *     no renderer for them, so `embeddedIconSvgServer` reads the artwork out
+ *     of `icon-markup.generated.ts` — rendered from those same components at
+ *     build time, and byte-compared to them by `check:icon-markup`.
  *   - **The ground.** `resolveExportGround()` returns its EMPTY pair away from
  *     a browser, so a server-drawn diagram has no ruling and no grain. That is
  *     a REAL loss on `blueprint`, `paper` and `eink`, whose own module argues
@@ -32,13 +36,14 @@
  * explicit design in its own header; there is no model-to-string builder for
  * it in the repo.
  *
- * C4 USED TO BE REFUSED HERE TOO, for a reason worth keeping written down: its
+ * C4 USED TO BE REFUSED HERE TOO, for two reasons worth keeping written down,
+ * because both were about a browser dependency rather than the notation. Its
  * connector geometry came from `getBezierPath`, a client-only export of
  * `@xyflow/react`, so `edge-geometry.ts` threw the moment it was reached from
- * a route. The curve is now `lib/bezier-path.ts` — the same arithmetic, pinned
- * to React Flow's by `check:bezier-path` — and C4 draws. Its ICONS are still
- * missing (see `omitIcon`), which is a gap in the drawing rather than a reason
- * to refuse the whole notation.
+ * a route; the curve is now `lib/bezier-path.ts`, the same arithmetic pinned
+ * to React Flow's by `check:bezier-path`. And its icons needed a React
+ * renderer; they now come from the generated table above. C4 draws, with its
+ * marks.
  *
  * AND A BACKSTOP UNDER ALL OF THEM. Every builder runs inside a `try`, because
  * this route is reached by a URL a stranger composed and a 500 with an empty
@@ -48,7 +53,7 @@
 
 import { parseViewSource } from "@/features/playground/input/parse";
 import { exportPaletteFor } from "@/features/viewer/export/palette.generated";
-import { omitIcon } from "@/features/viewer/export/icon-markup";
+import { embeddedIconSvgServer } from "@/features/viewer/export/icon-markup";
 import { renderDiagramSvg } from "@/features/viewer/export/render-svg";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 import { renderFlowchartSvg } from "@/features/flowchart/export/render-svg";
@@ -176,7 +181,7 @@ function draw(
         );
       }
       return renderDiagramSvg(diagram, file.metadata.title, theme, {
-        embedIcon: omitIcon,
+        embedIcon: embeddedIconSvgServer,
       });
     }
     case "flowchart":
