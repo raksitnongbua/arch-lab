@@ -26,21 +26,19 @@
  *     relative-colour expression the browser evaluates, so `tagColors` is
  *     dropped here and the role palette draws instead. Same reason, same fix.
  *
- * TWO KINDS THIS CANNOT DRAW YET, each refused by name rather than allowed to
- * fail somewhere deeper. Both refusals are in {@link SERVER_REFUSALS}, and
- * both are about a dependency that only exists in a browser — not about the
- * notation:
+ * ONE KIND THIS CANNOT DRAW — `sequence`, refused by name in
+ * {@link SERVER_REFUSALS} rather than allowed to fail somewhere deeper.
+ * `renderSequenceSvg` takes a live `SVGSVGElement` and clones the canvas, by
+ * explicit design in its own header; there is no model-to-string builder for
+ * it in the repo.
  *
- *   - **sequence** — `renderSequenceSvg` takes a live `SVGSVGElement` and
- *     clones the canvas, by explicit design in its own header. There is no
- *     model-to-string builder for it in the repo.
- *   - **c4** — its connector geometry comes from `getBezierPath`, a
- *     client-only export of `@xyflow/react`, so `edge-geometry.ts` throws the
- *     moment it is reached from a route ("Attempted to call getBezierPath()
- *     from the server"). Its icons are a second, separate wall: the registry's
- *     marks are React components and neither React renderer is usable here.
- *     Both are why the `embedIcon` seam and `omitIcon` exist — the wiring is
- *     ready and the geometry is not.
+ * C4 USED TO BE REFUSED HERE TOO, for a reason worth keeping written down: its
+ * connector geometry came from `getBezierPath`, a client-only export of
+ * `@xyflow/react`, so `edge-geometry.ts` threw the moment it was reached from
+ * a route. The curve is now `lib/bezier-path.ts` — the same arithmetic, pinned
+ * to React Flow's by `check:bezier-path` — and C4 draws. Its ICONS are still
+ * missing (see `omitIcon`), which is a gap in the drawing rather than a reason
+ * to refuse the whole notation.
  *
  * AND A BACKSTOP UNDER ALL OF THEM. Every builder runs inside a `try`, because
  * this route is reached by a URL a stranger composed and a 500 with an empty
@@ -50,6 +48,8 @@
 
 import { parseViewSource } from "@/features/playground/input/parse";
 import { exportPaletteFor } from "@/features/viewer/export/palette.generated";
+import { omitIcon } from "@/features/viewer/export/icon-markup";
+import { renderDiagramSvg } from "@/features/viewer/export/render-svg";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 import { renderFlowchartSvg } from "@/features/flowchart/export/render-svg";
 import { renderUseCaseSvg } from "@/features/usecase/export/render-svg";
@@ -72,8 +72,21 @@ import type { Theme } from "@/lib/constants";
 const SERVER_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
   sequence:
     "sequence diagrams cannot be drawn as an image yet — their renderer reads the live canvas rather than the model. The share link opens this one in full, with its motion.",
-  c4: "C4 models cannot be drawn as an image yet — their connector curves and their icons both come from the canvas's own renderer, which needs a browser. The share link opens this one in full. Every other notation renders here.",
 };
+
+/**
+ * Asked for a diagram this model does not hold. Thrown rather than returned
+ * because it is discovered inside {@link draw}, three frames below the only
+ * function that knows how to answer a request.
+ */
+class DiagramNotFound extends Error {
+  constructor(wanted: string, available: readonly string[]) {
+    super(
+      `this model has no diagram called "${wanted}" — it holds ${available.join(", ")}`,
+    );
+    this.name = "DiagramNotFound";
+  }
+}
 
 export type RenderOutcome =
   | { status: "ok"; rendered: RenderedSvg }
@@ -119,8 +132,17 @@ export function renderDocument(request: RenderRequest): RenderOutcome {
   const theme = exportPaletteFor(request.theme);
 
   try {
-    return { status: "ok", rendered: draw(document_, theme) };
+    return {
+      status: "ok",
+      rendered: draw(document_, theme, request.diagramId),
+    };
   } catch (error) {
+    /* A diagram id the reader asked for and this model does not have is a BAD
+       REQUEST, not a defect, so it carries its own error rather than arriving
+       as "could not be drawn". */
+    if (error instanceof DiagramNotFound) {
+      return { status: "error", message: error.message };
+    }
     /* A builder threw on a document the parser accepted — a shape nobody
        anticipated, or a browser-only dependency reached down a path this
        module does not know about. `describeError` keeps the wording the rest
@@ -133,13 +155,30 @@ export function renderDocument(request: RenderRequest): RenderOutcome {
 }
 
 /** Dispatches to the notation's own builder. Throws only on a real defect. */
-function draw(document_: ViewDocument, theme: ExportTheme): RenderedSvg {
+function draw(
+  document_: ViewDocument,
+  theme: ExportTheme,
+  diagramId: string | null,
+): RenderedSvg {
   switch (document_.kind) {
-    case "c4":
     case "sequence":
       /* Refused above, by name. Reaching here means SERVER_REFUSALS and this
          switch disagree, which is a defect rather than a bad request. */
       throw new Error(`${document_.kind} is refused, not drawn`);
+    case "c4": {
+      const file = document_.synced.file;
+      const wanted = diagramId ?? file.rootDiagramId;
+      const diagram = file.diagrams.find((d) => d.id === wanted);
+      if (diagram === undefined) {
+        throw new DiagramNotFound(
+          wanted,
+          file.diagrams.map((d) => d.id),
+        );
+      }
+      return renderDiagramSvg(diagram, file.metadata.title, theme, {
+        embedIcon: omitIcon,
+      });
+    }
     case "flowchart":
       return renderFlowchartSvg(withoutTagColors(document_.file), theme);
     case "usecase":

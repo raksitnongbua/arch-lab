@@ -97,6 +97,7 @@
     "check:viewer-labels": "node scripts/viewer-label-check.mjs",
     "check:connector-density": "node scripts/connector-density-check.mjs",
     "check:curve-clearance": "node scripts/curve-clearance-check.mjs",
+    "check:bezier-path": "node scripts/bezier-path-check.mjs",
     "check:mcp-motion": "node scripts/mcp-motion-check.mjs",
     "check:icon-embed": "node scripts/icon-embed-check.mjs",
     "check:icon-contrast": "node scripts/icon-contrast-check.mjs",
