@@ -80,7 +80,7 @@ which Mermaid has no slot for and which is never faked with a typed
 lifecycle has NO Mermaid dialect in either direction and none was invented:
 \`stateDiagram-v2\` is a state machine — every transition that could happen —
 rather than one subject's ordered history.
-Everything runs in the browser — there is no account, and nothing is uploaded.
+Everything runs in the browser — there is no account, and nothing is uploaded\nto open, edit or share a diagram. The one exception is the optional image URL\nfrom Copy markdown (/api/render), which carries the model in its query string.
 
 ## Gantt charts
 

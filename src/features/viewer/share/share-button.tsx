@@ -49,7 +49,16 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Check, Copy, Download, Share2 } from "lucide-react";
+import { useTheme } from "next-themes";
+
+import { THEMES, DEFAULT_THEME_BY_SCHEME, type Theme } from "@/lib/constants";
+import { useIconStyle } from "@/lib/icon-style-store";
+
+import {
+  BUNDLED_MARKDOWN_REFUSAL,
+  buildRenderMarkdown,
+} from "./render-markdown";
+import { Check, Copy, Download, FileCode2, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
@@ -92,6 +101,12 @@ type LinkState =
   | {
       status: "ready";
       url: string;
+      /**
+       * The fragment body this link was built from, kept so Copy Markdown can
+       * put the SAME payload — same diagram, same expiry — in a query string
+       * without re-encoding it. Absent for a bundled link, which has none.
+       */
+      fragment?: string;
       expiresAt: number | null;
       expiryNote?: string;
       /**
@@ -199,6 +214,18 @@ export interface ShareButtonProps {
    * handed out is named for what it actually contains.
    */
   downloadExtension?: string;
+  /**
+   * Why this document cannot be copied as markdown, when it cannot.
+   *
+   * ABSENT MEANS AVAILABLE — one field rather than a boolean beside a string,
+   * so a caller cannot say "unavailable" and forget the reason, or give a
+   * reason that never shows. A sequence viewer passes one because
+   * `/api/render` cannot draw its notation; every other notation passes
+   * nothing. The control is DISABLED with the sentence on it rather than
+   * hidden: a reader who is looking for the button should find out why it is
+   * not for them, not wonder whether they misremembered it.
+   */
+  markdownRefusal?: string;
   /** Announce through the host page's existing polite live region. */
   onAnnounce: (message: string) => void;
 }
@@ -212,10 +239,18 @@ export function ShareButton({
   rootDiagramId,
   panelSide = "up",
   downloadExtension = ARCHTEXT_EXTENSION,
+  markdownRefusal,
   onAnnounce,
 }: ShareButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+  /* The theme and icon style go INTO the render URL, so the image in someone
+     else's page matches the screen this was copied from. Neither travels in a
+     share link — the reader at the other end sees their own preferences — so a
+     render URL is the only place either choice can be expressed at all. */
+  const { theme: activeTheme } = useTheme();
+  const [iconStyle] = useIconStyle();
   const [link, setLink] = useState<LinkState>({ status: "building" });
   /** Seconds; null = never expires, which stays the default (opt-in). */
   const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
@@ -372,6 +407,7 @@ export function ShareButton({
             : {
                 status: "ready",
                 url,
+                fragment,
                 expiresAt: expiry?.expiresAt ?? null,
                 expiryNote,
                 overSafeLength: url.length > SHARE_URL_SAFE_LENGTH,
@@ -499,6 +535,48 @@ export function ShareButton({
     },
     [onAnnounce],
   );
+
+  const handleCopyMarkdown = useCallback(
+    (url: string, fragment: string) => {
+      const markdown = buildRenderMarkdown({
+        origin: window.location.origin,
+        fragment,
+        shareUrl: url,
+        /* Validated against `THEMES` rather than trusted: next-themes hands
+           back whatever is stored, including `undefined` on the first paint
+           and a stale name after a theme is removed. The route would fall back
+           to the same default, but a URL naming a theme that does not exist is
+           a URL nobody can debug. */
+        theme: THEMES.includes(activeTheme as Theme)
+          ? (activeTheme as Theme)
+          : DEFAULT_THEME_BY_SCHEME.light,
+        iconStyle,
+        title: documentTitle,
+      });
+      navigator.clipboard
+        .writeText(markdown)
+        .then(() => {
+          setCopiedMarkdown(true);
+          onAnnounce(
+            "Markdown copied to clipboard — an image of this diagram, linked to the share link.",
+          );
+          window.setTimeout(() => setCopiedMarkdown(false), 2_000);
+        })
+        .catch(() => {
+          onAnnounce(
+            "Copying was blocked by the browser — copy the share link instead and use it by hand.",
+          );
+        });
+    },
+    [activeTheme, iconStyle, documentTitle, onAnnounce],
+  );
+
+  /* Bundled models have no payload to draw from; the caller's own refusal
+     wins over that, because a notation the route cannot draw at all is the
+     more useful thing to tell a reader. */
+  const markdownUnavailable =
+    markdownRefusal ??
+    (share.kind === "bundled" ? BUNDLED_MARKDOWN_REFUSAL : undefined);
 
   const canWebShare =
     typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -732,6 +810,31 @@ export function ShareButton({
                     Share…
                   </button>
                 ) : null}
+                {markdownUnavailable === undefined &&
+                link.fragment !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMarkdown(link.url, link.fragment as string)
+                    }
+                    // Same rebuild guard as Copy link, and for a stronger
+                    // reason: this hands over an IMAGE URL as well as a link,
+                    // so a stale press would paste a picture of the previous
+                    // expiry into somebody's README.
+                    disabled={rebuilding}
+                    className={cn(
+                      buttonClasses({ variant: "outline", size: "sm" }),
+                      rebuilding && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    {copiedMarkdown ? (
+                      <Check aria-hidden="true" />
+                    ) : (
+                      <FileCode2 aria-hidden="true" />
+                    )}
+                    {copiedMarkdown ? "Copied" : "Copy markdown"}
+                  </button>
+                ) : null}
                 {share.kind === "payload" ? (
                   <button
                     type="button"
@@ -743,6 +846,24 @@ export function ShareButton({
                   </button>
                 ) : null}
               </div>
+              {markdownUnavailable !== undefined ? (
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    No markdown for this one —
+                  </span>{" "}
+                  {markdownUnavailable}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Copy markdown
+                  </span>{" "}
+                  gives you an image of this {noun} for a README or a ticket,
+                  linked back to the diagram. Unlike the link, the image asks
+                  our server to draw it — so the {noun} travels in that URL
+                  every time the page is opened.
+                </p>
+              )}
             </>
           ) : null}
 

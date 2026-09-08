@@ -99,8 +99,12 @@ as plain text. It reads nine kinds of document — C4 models (context, container
 component and code levels), UML-style sequence diagrams, flowcharts, use-case
 diagrams, entity-relationship diagrams, data dictionaries, gantt charts,
 milestone timelines and lifecycles — and renders every
-one of them live. Nothing is uploaded and no account is required: a document is
-a file you keep, and git is the collaboration layer.
+one of them live. No account is required, and nothing is uploaded to open, edit
+or share a document: a document is a file you keep, and git is the
+collaboration layer. The one exception is opt-in — Copy markdown mints an
+/api/render image URL for a README or a ticket, and because an image is a
+request, that URL carries the document to the server every time the page
+holding it is opened.
 
 ## Editing a diagram: as text, or on the canvas
 

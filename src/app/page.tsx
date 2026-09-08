@@ -416,7 +416,14 @@ export default function Home() {
           <div>
             <Badge variant="accent" className="mb-6">
               <span className="size-1.5 rounded-full bg-accent" />
-              Runs in your browser · no account, nothing uploaded
+              {/* THE UPLOAD CLAIM CAME OUT OF THIS BADGE, not because it
+                  stopped being true of links, but because a badge has no room
+                  for the exception that now exists: Copy markdown mints an
+                  image URL that does reach the server. The full sentence lives
+                  further down the page and in the FAQ, where the exception
+                  fits beside it. A badge that needs a footnote is a badge that
+                  should say less. */}
+              Runs in your browser · no account
             </Badge>
 
             {/* The promise is what the diagram DOES, not what it is made of.
@@ -900,8 +907,12 @@ export default function Home() {
               text file — stable ids, one line per element, deterministic order,
               so a diff shows what changed in the architecture rather than a
               reshuffled blob. JSON is one click away for tools that want it,
-              and Mermaid pastes straight in. No account, no server, nothing
-              uploaded: git is the collaboration layer.{" "}
+              and Mermaid pastes straight in. No account, and nothing uploaded
+              to open, edit or share it: git is the collaboration layer. Only
+              the optional image URL behind{" "}
+              <span className="font-medium text-foreground">Copy markdown</span>{" "}
+              sends a diagram to our server, and only while the page holding
+              that image is open.{" "}
               <Link
                 href="/demo"
                 className="font-medium text-primary hover:underline"

@@ -40,6 +40,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Copy markdown, in the Share panel.** One press puts
+  `[![title](image)](share link)` on your clipboard — an image of the diagram
+  for a README, a ticket or a Notion page, wrapped in a link back to the live
+  one. The image is drawn in the theme and icon style you were looking at. A
+  sequence document refuses, with the reason on the control: its diagram is
+  drawn from the canvas rather than the model, so there is nothing for the
+  image route to draw.
 - **A diagram can be an image at a URL.** `/api/render?m=…` draws a document
   on the server and answers with SVG, so a diagram can sit in a README, a
   Notion page or a ticket looking the way arch-lab draws it — themes, role
@@ -50,8 +57,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   to know before using one: it travels in the query string, so it is in the
   request log and it travels again every time anybody opens the page holding
   the image. A share link is unchanged — it still carries its model in the `#`
-  fragment, which no browser ever sends anywhere — and nothing in the product
-  mints a render URL for you yet.
+  fragment, which no browser ever sends anywhere — and no render URL is minted
+  unless you press Copy markdown. The site's own "nothing is uploaded" wording
+  now names this exception everywhere it appears, and the FAQ answers it
+  directly.
 - **A render URL that cannot be drawn answers with a picture that says why**,
   not a broken image: a truncated payload, an expired link, a document that
   will not parse, or a sequence diagram — whose renderer reads the live canvas

@@ -6,8 +6,13 @@ data dictionaries, gantt charts, milestone timelines and lifecycles — written
 in a small text format and rendered live in the browser. Two of the nine can
 also be edited on the canvas; which
 two, and what a gesture writes, is one table and one guideline
-([`canvas-editing.md`](.claude/rules/canvas-editing.md)). No account, nothing
-uploaded — a diagram is a file you own, and git is the collaboration layer.
+([`canvas-editing.md`](.claude/rules/canvas-editing.md)). No account, and
+nothing is uploaded to open, edit or share a diagram — a share link carries the
+model in its URL fragment, which browsers never send anywhere. A diagram is a
+file you own, and git is the collaboration layer. The one exception is opt-in
+and explicit: **Copy markdown** hands you an image URL for a README or a
+ticket, and an image is a request, so that URL carries the model to the server
+each time the page holding it is opened.
 
 Open source under the [MIT licence](LICENSE). Contributions welcome; the
 conventions below are worth five minutes before your first pull request,
