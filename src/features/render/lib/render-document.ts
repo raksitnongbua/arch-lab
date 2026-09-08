@@ -26,9 +26,11 @@
  *     that a blueprint without its ruling is not a blueprint. It is recorded
  *     here rather than glossed, and it is the next thing to fix — the palette
  *     generator is the shape the fix takes.
- *   - **Author tag colours.** `resolveTagPaint` rebuilds the fill with a
- *     relative-colour expression the browser evaluates, so `tagColors` is
- *     dropped here and the role palette draws instead. Same reason, same fix.
+ *   - **Author tag colours.** `resolveTagPaint` has the browser evaluate a
+ *     relative-colour expression. `lib/tag-paint.ts` does the same arithmetic
+ *     in TypeScript, so a `tagcolor` the app itself can write survives; an
+ *     exotic CSS colour the grammar also accepts degrades to the role palette
+ *     rather than throwing.
  *
  * ONE KIND THIS CANNOT DRAW — `sequence`, refused by name in
  * {@link SERVER_REFUSALS} rather than allowed to fail somewhere deeper.
@@ -66,6 +68,7 @@ import { renderLifecycleSvg } from "@/features/lifecycle/export/render-svg";
 import type { ViewDocument } from "@/features/playground/input/parse";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { describeError } from "@/lib/errors";
+import { tagPaint } from "@/lib/tag-paint";
 import type { Theme } from "@/lib/constants";
 import type { IconStyle } from "@/lib/icon-style";
 
@@ -109,21 +112,19 @@ export interface RenderRequest {
 }
 
 /**
- * Strips the author's `tagColors` from a file's metadata.
+ * The author's `tagcolor`, computed rather than asked of a browser.
  *
- * The flowchart and use-case builders read them off the file and paint them
- * through `resolveTagPaint`, which needs a document; removing them here makes
- * those builders take their own role palette instead. Degrading the colour is
- * the honest failure — calling a DOM function on the server would be a 500 for
- * every document that happens to tint a node.
+ * Every renderer that paints tag colours takes this as a seam, defaulting to
+ * the browser's own evaluation. `lib/tag-paint.ts` carries the argument for
+ * why the arithmetic lives beside that rather than replacing it, and what it
+ * degrades to for a colour it cannot canonicalise.
  */
-function withoutTagColors<T extends { metadata: { tagColors?: unknown } }>(
-  file: T,
-): T {
-  if (file.metadata.tagColors === undefined) return file;
-  const metadata = { ...file.metadata };
-  delete metadata.tagColors;
-  return { ...file, metadata };
+function paintForTagColor(theme: ExportTheme) {
+  return (tagColor: string) =>
+    tagPaint(tagColor, theme.tagFill, {
+      fill: theme.node,
+      stroke: theme.nodeBorder,
+    });
 }
 
 /** Draws one document, or says why it cannot. Never throws for bad input. */
@@ -186,12 +187,18 @@ function draw(
       return renderDiagramSvg(diagram, file.metadata.title, theme, {
         embedIcon: embeddedIconSvgServer,
         iconStyle: request.iconStyle,
+        tagColors: file.metadata.tagColors,
+        paintForTagColor: paintForTagColor(theme),
       });
     }
     case "flowchart":
-      return renderFlowchartSvg(withoutTagColors(document_.file), theme);
+      return renderFlowchartSvg(document_.file, theme, {
+        paintForTagColor: paintForTagColor(theme),
+      });
     case "usecase":
-      return renderUseCaseSvg(withoutTagColors(document_.file), theme);
+      return renderUseCaseSvg(document_.file, theme, {
+        paintForTagColor: paintForTagColor(theme),
+      });
     case "er":
       return renderErSvg(document_.file, theme);
     case "dict":

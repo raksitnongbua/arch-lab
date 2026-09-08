@@ -237,6 +237,14 @@ function paletteFor(theme) {
       ]),
     );
 
+  /** A bare numeric token — mirrors `finiteOr` in `theme.ts`. */
+  const number = (token, fallback) => {
+    const parsed = Number.parseFloat(
+      resolveToken(token, tokens, baseline) ?? "",
+    );
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
   const rawOpacity = Number.parseFloat(
     resolveToken("--role-texture-opacity", tokens, baseline) ?? "",
   );
@@ -253,6 +261,10 @@ function paletteFor(theme) {
     canvasGrid: paint("--canvas-grid", scalars.nodeBorder),
     nodeRoles: pairs(ROLES),
     flowShapes: pairs(FLOW_SHAPES),
+    tagFill: {
+      lightness: number("--tag-fill-l", 0.93),
+      chromaCap: number("--tag-fill-c", 0.055),
+    },
     roleTexture: {
       ink: paint("--role-texture-ink", scalars.nodeBorder),
       // Degrades to 0 — no texture — which is the safe direction: a plainer

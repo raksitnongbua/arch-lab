@@ -83,7 +83,11 @@ export interface RenderedUseCaseSvg {
 export function renderUseCaseSvg(
   file: UseCaseLabFile,
   theme: ExportTheme,
+  options: RenderUseCaseOptions = {},
 ): RenderedUseCaseSvg {
+  const paintForTagColor =
+    options.paintForTagColor ??
+    ((tagColor: string) => resolveTagPaint(tagColor, theme));
   const layout = layoutUseCase(file);
   const parts: string[] = [];
   const push = (part: string): void => {
@@ -200,7 +204,12 @@ export function renderUseCaseSvg(
   const textures = new TextureRegistry(theme);
   const elementParts: string[] = [];
   for (const element of layout.elements) {
-    const paint = elementExportPaint(element, file.metadata.tagColors, theme);
+    const paint = elementExportPaint(
+      element,
+      file.metadata.tagColors,
+      theme,
+      paintForTagColor,
+    );
     elementParts.push(
       `<g class="af-export-uc-element" data-uc-kind="${element.kind}">`,
     );
@@ -302,16 +311,31 @@ export function renderUseCaseSvg(
  * `USECASE_ROLE_BY_KIND`, the same aliases the stylesheet declares, so the
  * export and the screen cannot resolve different pairs.
  */
+export interface RenderUseCaseOptions {
+  /**
+   * How an author's `tagcolor` becomes a concrete pair.
+   *
+   * Defaults to `resolveTagPaint`, which asks the browser to evaluate the same
+   * relative-colour expression the canvas paints — exact, and impossible without
+   * a document. `/api/render` passes `lib/tag-paint.ts`'s arithmetic instead.
+   * A seam rather than a branch inside the renderer, because only the caller
+   * knows which environment it is in, and the browser path must stay
+   * byte-for-byte what it was.
+   */
+  paintForTagColor?: (tagColor: string) => { fill: string; stroke: string };
+}
+
 function elementExportPaint(
   element: LaidUseCaseElement,
   tagColors: Readonly<Record<string, string>> | undefined,
   theme: ExportTheme,
+  paintForTagColor: (tagColor: string) => { fill: string; stroke: string },
 ): { fill: string; stroke: string } {
   const tagColor = resolveTagColor(
     { tags: element.tags === undefined ? undefined : [...element.tags] },
     tagColors,
   );
-  if (tagColor !== null) return resolveTagPaint(tagColor, theme);
+  if (tagColor !== null) return paintForTagColor(tagColor);
   const role = theme.nodeRoles[USECASE_ROLE_BY_KIND[element.kind]];
   return { fill: role.fill, stroke: role.border };
 }

@@ -109,6 +109,7 @@
     "check:hero": "node scripts/hero-check.mjs",
     "check:svg-a11y": "node scripts/svg-a11y-check.mjs",
     "check:themes": "node scripts/theme-check.mjs",
+    "check:tag-paint": "node scripts/tag-paint-check.mjs",
     "check:export-palette": "node scripts/export-palette-check.mjs",
     "check:icon-markup": "node scripts/icon-markup-check.mjs",
     "check:eink": "node scripts/eink-check.mjs",

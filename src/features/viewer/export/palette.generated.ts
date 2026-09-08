@@ -80,6 +80,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "border": "#7553bd"
       }
     },
+    "tagFill": {
+      "lightness": 0.93,
+      "chromaCap": 0.055
+    },
     "roleTexture": {
       "ink": "#83868e",
       "opacity": 0
@@ -148,6 +152,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "fill": "rgba(0, 0, 0, 0)",
         "border": "#7553bd"
       }
+    },
+    "tagFill": {
+      "lightness": 0.942,
+      "chromaCap": 0.055
     },
     "roleTexture": {
       "ink": "#7a7064",
@@ -218,6 +226,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "border": "#7457a3"
       }
     },
+    "tagFill": {
+      "lightness": 0.93,
+      "chromaCap": 0.055
+    },
     "roleTexture": {
       "ink": "#7f7f8a",
       "opacity": 0
@@ -286,6 +298,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "fill": "#e9e4fe",
         "border": "#7553bd"
       }
+    },
+    "tagFill": {
+      "lightness": 0.93,
+      "chromaCap": 0.055
     },
     "roleTexture": {
       "ink": "#83868e",
@@ -356,6 +372,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "border": "#a489ed"
       }
     },
+    "tagFill": {
+      "lightness": 0.33,
+      "chromaCap": 0.06
+    },
     "roleTexture": {
       "ink": "#757983",
       "opacity": 0
@@ -424,6 +444,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "fill": "#2c2047",
         "border": "#9f85e5"
       }
+    },
+    "tagFill": {
+      "lightness": 0.275,
+      "chromaCap": 0.06
     },
     "roleTexture": {
       "ink": "#676b7a",
@@ -494,6 +518,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "border": "#d4bbff"
       }
     },
+    "tagFill": {
+      "lightness": 0.2,
+      "chromaCap": 0.06
+    },
     "roleTexture": {
       "ink": "#cdd0df",
       "opacity": 0
@@ -563,6 +591,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "border": "#a98cf4"
       }
     },
+    "tagFill": {
+      "lightness": 0.33,
+      "chromaCap": 0.06
+    },
     "roleTexture": {
       "ink": "#6c839b",
       "opacity": 0
@@ -631,6 +663,10 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
         "fill": "#dfdfdf",
         "border": "#636363"
       }
+    },
+    "tagFill": {
+      "lightness": 0.93,
+      "chromaCap": 0.055
     },
     "roleTexture": {
       "ink": "#4d4d4d",

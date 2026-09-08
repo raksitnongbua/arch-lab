@@ -53,6 +53,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   colours and stack icons included — rather than the way whatever tool the page
   belongs to would draw it. C4, flowchart, use-case, ER, dictionary, gantt,
   timeline and lifecycle all render, in any of the nine themes.
+- **A server-drawn image keeps the author's `tagcolor`.** A tag fill is the
+  author's hue at the theme's own pinned lightness, so the same colour lands
+  legibly on `light` and on `blueprint`; the border stays the colour that was
+  written. A colour the grammar accepts but the app itself never writes — a
+  CSS keyword, say — falls back to the plain role palette rather than failing.
 - **A render URL's payload does reach the server**, and that is the one thing
   to know before using one: it travels in the query string, so it is in the
   request log and it travels again every time anybody opens the page holding

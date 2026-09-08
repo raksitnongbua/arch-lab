@@ -92,6 +92,13 @@ export interface ExportTheme {
    * their exported bytes identical to what they were before this existed.
    */
   roleTexture: { ink: string; opacity: number };
+  /**
+   * The two pins a constructed tag fill lands on (`--tag-fill-l`,
+   * `--tag-fill-c`). Resolved here so a caller with no document can rebuild an
+   * author's `tagcolor` arithmetically — `lib/tag-paint.ts` explains why the
+   * server needs that and why it does not replace {@link resolveTagPaint}.
+   */
+  tagFill: { lightness: number; chromaCap: number };
 }
 
 const TOKEN_VARS = {
@@ -157,6 +164,12 @@ function normalizeColor(
  * Reads the export palette from the document's LIVE computed styles — the
  * active theme, light or dark, exactly as rendered. Must run in the browser.
  */
+/** A bare numeric token, or `fallback` when it is absent or unparseable. */
+function finiteOr(raw: string, fallback: number): number {
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function resolveExportTheme(): ExportTheme {
   const styles = getComputedStyle(document.documentElement);
   const canvas = document.createElement("canvas");
@@ -226,6 +239,14 @@ export function resolveExportTheme(): ExportTheme {
     roleTexture: {
       ink: resolveExpression(TOKEN_VARS.roleTextureInk, nodeBorder),
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
+    },
+    tagFill: {
+      /* Bare numbers, so they parse straight out of the property rather than
+         through the colour normaliser. A value that does not parse degrades to
+         the light theme's own pins, which is a legible fill in every palette —
+         never to 0, which would paint every tag fill black. */
+      lightness: finiteOr(styles.getPropertyValue("--tag-fill-l"), 0.93),
+      chromaCap: finiteOr(styles.getPropertyValue("--tag-fill-c"), 0.055),
     },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
     node,
