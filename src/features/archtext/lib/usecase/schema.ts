@@ -44,6 +44,14 @@ export const USECASE_ELEMENT_KEYS = [
   "label",
   "technology",
   "tags",
+  /* `position` and `pinned` sit between `tags` and `description` for the
+     reason the comment above gives: the key order IS the line order. A pinned
+     element reads `usecase pay "Pay for the order" [Stripe] pin (420,300)` —
+     `pin` then the `(x,y)`, matching a C4 node's `pin (x,y w×h)` — and
+     `description` is a continuation line below it, so this is where they
+     belong in the walk. */
+  "pinned",
+  "position",
   "description",
 ] as const;
 
@@ -78,6 +86,12 @@ export const USECASE_META_RAW: ReadonlySet<string> = SEQ_META_RAW;
 export const USECASE_ELEMENT_RAW: ReadonlySet<string> = new Set([
   "technology",
   "tags",
+  /* Both ride the `!` escape like their neighbours, and `position` is the
+     field that most needs to: a newer minor could carry a point with a `z`, a
+     unit or a name on it, and a reader that dropped the whole element would
+     lose the author's diagram rather than one coordinate. */
+  "pinned",
+  "position",
   "description",
 ]);
 

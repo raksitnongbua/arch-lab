@@ -70,6 +70,8 @@ import type { ArchLabMetadata } from "./c4";
  * Mermaid — one spelling per value, normalised at the parser, in the manner
  * of `FlowchartGroup.tint`.
  */
+import type { PinnedPoint } from "./geometry";
+
 export type ErAttributeKey = "pk" | "fk" | "uk";
 
 /**
@@ -133,6 +135,54 @@ export interface ErEntity {
   tags?: string[];
   /** <= 500 chars — what the entity IS, revealed on focus. */
   description?: string;
+  /**
+   * WHERE THIS entity IS PINNED, when the author has pinned it — the one
+   * field in this model that overrides the layout rather than feeding it.
+   *
+   * OPTIONAL, AND THAT IS THE WHOLE DESIGN. Absent is the normal case and
+   * means "solve my place from the schema", which is what every ER document did before this field
+   * existed and what every one on disk still says. A document with nothing
+   * pinned lays out byte-identically to how it did before, which is why
+   * adding this was not a breaking change.
+   *
+   * WHAT IT OVERRIDES, PRECISELY: the drawn shape's top-left corner. It does
+   * NOT override WHICH COLUMN THE SOLVER PUT THIS ENTITY IN — the column is its longest-path dependency depth, the relationships are unchanged, and the connector routing is still built from the solved sides — so a pinned entity keeps its place in the
+   * document's structure while sitting somewhere else on the page.
+   *
+   * THE COSTS ARE REAL AND WERE ACCEPTED (ADR 0003, which follows ADR 0002's
+   * reasoning for the flowchart): a pinned entity can overlap a solved one, a connector into it can leave the wrong face, and pinning one entity can shift another's absolute `y`, because a column's vertical centring is measured from the heights the solver still owns. `purpose.md` calls
+   * correct-and-ugly a bug here, so a pin is a tool for an author who wants a
+   * specific picture, not a default anybody falls into.
+   *
+   * Same `(x,y)` spelling as a flowchart node's position and a C4 node's
+   * geometry minus the size — a entity's size is measured from its own
+   * contents and is not the author's to set. One vocabulary across the kinds,
+   * as `[technology]` and `#tag` already are.
+   */
+  position?: PinnedPoint;
+  /**
+   * KEEP THIS entity'S COORDINATES when the diagram is handed back to the
+   * layout. The reset sweep strips `(x,y)` from every element it can and
+   * skips this one, so an author who has placed one thing deliberately can
+   * release the rest without losing it.
+   *
+   * It is not a layout input: nothing consults it while positions are being
+   * solved, because a positioned element is never solved in the first place.
+   * The same field on `C4Node` spent two releases documenting a feature that
+   * did not exist and that no consumer read — so this one ships WITH the
+   * sweep it exempts from, or it does not ship.
+   *
+   * `pin` ON AN ELEMENT WITH NO `(x,y)` IS A PARSE ERROR, not a tolerated
+   * no-op. It would name coordinates to keep that the text does not state,
+   * and neither the flowchart grammar (a bare `(x,y)`, no keyword) nor the C4
+   * one (a keyword beside a MANDATORY geometry) answers what it should mean.
+   * Refusing it is the answer that cannot be misread later.
+   *
+   * A per-element release still honours a direct request: pointing at THIS
+   * element and asking the layout to place it releases it. The exemption is
+   * from the sweep, not from the author.
+   */
+  pinned?: boolean;
   /**
    * The columns, in the order written. Optional and never an empty array:
    * an entity with no attributes is a legitimate diagram — the overview that

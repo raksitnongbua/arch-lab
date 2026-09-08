@@ -146,14 +146,14 @@ reviewed 2026-08-05T00:00:00Z
   actor customer "Customer"
     desc "Orders food from nearby restaurants."
     ! x-persona after label : "guest"
-  actor admin "Administrator" [internal] #ops
+  actor admin "Administrator" [internal] #ops pin (84,268)
   boundary "Food Delivery Service" tint=#bfdfff
     ! x-lane : "core"
     usecase search "Search restaurants"
       desc "Browse and filter by cuisine, distance and rating."
-    usecase order "Place an order" #checkout
+    usecase order "Place an order" #checkout (432,116)
     usecase pay "Take payment" [Stripe]
-    usecase refund "Issue a refund"
+    usecase refund "Issue a refund" pin=false (316,428)
 
   customer -- search
   customer -- order : "1..*"
@@ -447,6 +447,85 @@ check(
 /* ----------------------------------------------------------------------- */
 /* 5. Malformed inputs — line, column and a quotable source line            */
 /* ----------------------------------------------------------------------- */
+/* A stated position, and the pin that keeps it                            */
+/* ----------------------------------------------------------------------- */
+
+/* The kitchen sink above already round-trips all three spellings — `pin
+   (x,y)`, a bare `(x,y)` and `pin=false (x,y)` — so this section asserts what
+   a byte-identical round trip CANNOT: that absence stays absence, that the
+   information-losing direction of the toggle survives, and that a point this
+   token cannot spell rides the `!` escape rather than being truncated.
+
+   The same three assertions stand in `check:er`, because both grammars grew
+   the field from one shared reader and either serializer could lose it on its
+   own. */
+
+console.log("");
+console.log("a stated position, and the pin that keeps it");
+
+{
+  const byId = (id) => sink.elements.find((element) => element.id === id);
+
+  check(
+    "`pin (x,y)` reaches the model as both fields",
+    byId("admin")?.pinned === true &&
+      byId("admin")?.position?.x === 84 &&
+      byId("admin")?.position?.y === 268,
+    JSON.stringify(byId("admin")),
+  );
+  check(
+    "a bare `(x,y)` is a position with NO pin key at all",
+    byId("order")?.position?.x === 432 && !("pinned" in (byId("order") ?? {})),
+    "a bare position must not invent a pin: " + JSON.stringify(byId("order")),
+  );
+  check(
+    "`pin=false` reaches the model as false, not as absent",
+    byId("refund")?.pinned === false,
+    JSON.stringify(byId("refund")),
+  );
+  check(
+    "an element the layout places carries NEITHER key",
+    !("position" in (byId("customer") ?? {})) &&
+      !("pinned" in (byId("customer") ?? {})),
+    "absent is the normal case: " + JSON.stringify(byId("customer")),
+  );
+
+  /* THE INFORMATION-LOSING TRANSITION `canvas-editing.md` asks to be
+     asserted: omitting `pin=false` at its default would silently delete an
+     author's explicit "do not keep this", and every other document's round
+     trip would stay byte-stable. */
+  check(
+    "an explicit `pin=false` is written out rather than omitted at default",
+    serializeUseCaseText(sink).includes("pin=false"),
+    "the toggle deleted the author's explicit off",
+  );
+
+  /* `(x,y)` has room for exactly two numbers, so a point carrying a third key
+     from a newer minor rides the `!` escape whole. */
+  const odd = serializeUseCaseText({
+    ...sink,
+    elements: sink.elements.map((element) =>
+      element.id === "order"
+        ? { ...element, position: { x: 1, y: 2, z: 3 } }
+        : element,
+    ),
+  });
+  check(
+    "a point with a third key rides the `!` escape instead of being truncated",
+    odd.includes("! position") && !odd.includes("(1,2)"),
+    "the `z` was dropped and the document silently changed meaning",
+  );
+  check(
+    "and that escape parses back to the same point",
+    JSON.stringify(
+      parseUseCaseText(odd).elements.find((element) => element.id === "order")
+        ?.position,
+    ) === JSON.stringify({ x: 1, y: 2, z: 3 }),
+    "the escape did not survive the round trip",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("malformed inputs (.alab usecase)");
 
@@ -512,6 +591,36 @@ const USE_HEAD =
   'archlab 1.0 usecase\ntitle "T"\n\n@usecase\n  actor a "A"\n  usecase b "B"\n  usecase c "C"\n';
 
 usecaseError("empty source is refused", "", "archlab");
+usecaseError(
+  "`pin` on an element that states no position is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin'),
+  "states none",
+);
+usecaseError(
+  "`pin=false` on an element that states no position, refused the same way",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin=false'),
+  "states none",
+);
+usecaseError(
+  "a `pin=` value outside true/false is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin=maybe (0,0)'),
+  '"true" or "false"',
+);
+usecaseError(
+  "two positions on one element line are refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" (1,2) (3,4)'),
+  "duplicate (x,y)",
+);
+usecaseError(
+  "two pins on one element line are refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" pin pin (1,2)'),
+  'duplicate "pin"',
+);
+usecaseError(
+  "a position missing its comma is refused",
+  `${USE_HEAD}`.replace('  actor a "A"', '  actor a "A" (1 2)'),
+  "between x and y",
+);
 usecaseError(
   "a newer major version is refused",
   'archlab 2.0 usecase\ntitle "T"\n\n@usecase\n',

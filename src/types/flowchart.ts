@@ -47,6 +47,8 @@ import type { ArchLabMetadata } from "./c4";
  * spelling of `step`, and two spellings of one meaning is what this format
  * exists to avoid.
  */
+import type { PinnedPoint } from "./geometry";
+
 export type FlowchartNodeShape =
   "start" | "end" | "step" | "decision" | "io" | "call";
 
@@ -97,13 +99,17 @@ export interface FlowchartNode {
   description?: string;
 }
 
-/** A pinned node's top-left corner, in the same user units the layout works
- *  in. Its own interface rather than an inline shape so the parser, the
- *  serializer and the canvas all name one thing. */
-export interface FlowchartPoint {
-  x: number;
-  y: number;
-}
+/**
+ * A pinned node's top-left corner.
+ *
+ * NOW AN ALIAS OF THE SHARED SHAPE. This was `FlowchartPoint`'s own interface
+ * while the flowchart was the only notation with an optional position; the
+ * use-case and ER grammars grew the same two numbers, and `dry.md` asks for
+ * one definition once the copies would not diverge. The name is kept as an
+ * alias rather than deleted because it reads correctly at the flowchart's own
+ * call sites, and `PinnedPoint` carries the doc.
+ */
+export type FlowchartPoint = PinnedPoint;
 
 /* -------------------------------------------------------------------------- */
 /* Edges                                                                       */

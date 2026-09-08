@@ -74,6 +74,7 @@ import {
   pick,
   readBangTail,
   readPath,
+  readPointToken,
   readTag,
   readTechnology,
   segString,
@@ -125,6 +126,8 @@ interface PendEntity extends Loc {
   label: string;
   technology?: string;
   tags?: string[];
+  position?: { x: number; y: number };
+  pinned?: boolean;
   description?: string;
   attributes: PendAttribute[];
   /** Names already used in this entity, for the duplicate-column error —
@@ -690,6 +693,17 @@ function parseBodyLine(
 /* --------------------------------- entities -------------------------------- */
 
 /**
+ * `pin` as a whole word, for the attribute loop below.
+ *
+ * A LOOKAHEAD RATHER THAN A CONSUMING READ, so that a word this grammar does
+ * not know still reaches `expectEnd` and produces the error message it always
+ * has. Anchored against a following word character or hyphen so that a label
+ * fragment beginning "pin" — there is no such attribute today, but `pinned`
+ * would be the obvious near-miss — is not read as the flag.
+ */
+const PIN_AHEAD_RE = /^pin(?![\w-])/;
+
+/**
  * `entity customer "Customer" [PostgreSQL] #billing`, with its columns nested
  * one level in.
  *
@@ -773,7 +787,70 @@ function parseEntityOpener(
       entity.tags.push(readTag(cursor));
       continue;
     }
+    /* `(x,y)` — the author has PINNED this entity. The same paren spelling a
+       flowchart node's position and a C4 node's geometry use, minus the
+       `w×h`: a entity's size is measured from its own contents and is not the
+       author's to set, so there is nothing for a size to mean here. Reusing
+       the token rather than inventing `at x,y` keeps one vocabulary across
+       the kinds, as `[technology]` and `#tag` on this very line already do. */
+    if (cursor.peek() === "(") {
+      if (entity.position !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, "duplicate (x,y) attribute");
+      }
+      entity.position = readPointToken(cursor);
+      continue;
+    }
+    /* `pin` / `pin=false` — keep these coordinates when the diagram is handed
+       back to the layout. PEEKED RATHER THAN READ AS A WORD: this loop breaks
+       on anything it does not recognise and lets `expectEnd` report it, and
+       switching to C4's read-a-word-then-refuse shape would reword an error
+       message this grammar's own checks assert. `pin` on an element with no
+       `(x,y)` is refused after the loop, where the position is known. */
+    if (PIN_AHEAD_RE.test(cursor.text.slice(cursor.pos))) {
+      if (entity.pinned !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, 'duplicate "pin" attribute');
+      }
+      cursor.pos += 3;
+      if (cursor.eat("=")) {
+        const valueLoc = { line: cursor.line, column: cursor.column };
+        const value = cursor.readBare(/^[a-z]+/, '"true" or "false"');
+        if (value !== "true" && value !== "false") {
+          failAt(
+            valueLoc.line,
+            valueLoc.column,
+            `pin= must be "true" or "false", got "${value}"`,
+            value,
+          );
+        }
+        entity.pinned = value === "true";
+      } else {
+        entity.pinned = true;
+      }
+      continue;
+    }
     break;
+  }
+  /* `pin` NAMES COORDINATES TO KEEP, so it cannot stand on an element that
+     states none — it would be a flag with nothing to protect, which is the
+     shape `C4Node.pinned` wore for two releases while documenting a feature
+     that did not exist. Refused in BOTH directions, `pin` and `pin=false`
+     alike: "explicitly not keeping a position I never stated" is not a
+     document anybody meant to write, and one rule is easier to hold than a
+     rule with an exception. Checked here rather than in the loop because
+     `pin` is written BEFORE the `(x,y)` on the line.
+
+     THIS REFUSAL IS THE REASON `pin` COULD BE ADDED AT ALL. Neither
+     precedent answers what a bare `pin` means: the flowchart grammar has no
+     keyword (a `(x,y)` alone IS the pin) and the C4 one sits beside a
+     MANDATORY geometry, so the case cannot arise there. Refusing it is the
+     answer that cannot be misread later. */
+  if (entity.pinned !== undefined && entity.position === undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      '"pin" keeps an entity\'s stated coordinates, and this entity states ' +
+        "none — add an (x,y) position or remove the pin",
+    );
   }
   cursor.expectEnd("the entity line");
   state.openEntityBlock(entity);
@@ -1079,6 +1156,10 @@ function resolve(
     add("label", entity.label);
     add("technology", pick(entity.technology, entity.raw, "technology"));
     add("tags", pick(entity.tags, entity.raw, "tags"));
+    /* In `ER_ENTITY_KEYS` order, which is the order the line writes them —
+       `pin` before the `(x,y)`, as a C4 node writes `pin (x,y w×h)`. */
+    add("pinned", pick(entity.pinned, entity.raw, "pinned"));
+    add("position", pick(entity.position, entity.raw, "position"));
     add("description", pick(entity.description, entity.raw, "description"));
     /* Omitted when the entity draws no columns: an empty array and no array
        would be two spellings of "no columns", and the serializer writes

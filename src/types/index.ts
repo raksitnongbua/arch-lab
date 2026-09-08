@@ -1,6 +1,7 @@
 export * from "./c4";
 export * from "./sequence";
 export * from "./flowchart";
+export * from "./geometry";
 export * from "./usecase";
 export * from "./er";
 export * from "./dict";

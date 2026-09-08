@@ -35,8 +35,14 @@ import { isNormalizedTint } from "@/lib/tint";
 
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { META_KEYS, splitUnknowns } from "../schema";
-import { bangLine, isRecord, tagsLine, techBody } from "../serialize";
-import { BARE_ID_RE, valueToken } from "../text";
+import {
+  bangLine,
+  isFiniteNumber,
+  isRecord,
+  tagsLine,
+  techBody,
+} from "../serialize";
+import { BARE_ID_RE, numberToken, valueToken } from "../text";
 import { TINT_ATTRIBUTE } from "../sequence/keywords";
 import {
   BOUNDARY_KEYWORD,
@@ -328,6 +334,40 @@ function emitElement(lines: string[], value: unknown, pad: string): void {
   const tags = tagsLine(value.tags);
   if (tags !== undefined) line += ` ${tags}`;
   else if (value.tags !== undefined) fallback.push(["tags", value.tags]);
+
+  /* `pin` BEFORE the `(x,y)`, matching `USECASE_ELEMENT_KEYS` and a C4 node's
+     `pin (x,y w×h)`. `false` is written OUT rather than omitted: absent and
+     explicitly-off are different documents, and a toggle that omitted the
+     `false` would silently delete an author's `pin=false` — the bug
+     `canvas-editing.md` records for the numbering toggle, in the same shape. */
+  const pinned = value.pinned;
+  if (pinned === true) line += " pin";
+  else if (pinned === false) line += " pin=false";
+  else if (pinned !== undefined) fallback.push(["pinned", pinned]);
+
+  /* `(x,y)` LAST ON THE LINE. Written only when the author pinned the
+     element: an absent position is the normal case and means "solve my place
+     from the boundary and the associations", so emitting the SOLVED
+     coordinate here would turn every unpositioned element into a positioned
+     one on the first save — the round trip would still be byte-stable and the
+     document would have silently changed meaning. */
+  const position = value.position;
+  if (position !== undefined) {
+    /* EXACTLY x AND y, and the key COUNT is the load-bearing half: checking
+       only that x and y are numbers writes `{"x":1,"y":2,"z":3}` back as
+       `(1,2)` and silently drops the `z`. A `(x,y)` token cannot spell a
+       third coordinate, so a point that has one rides the `!` escape whole. */
+    const spellable =
+      isRecord(position) &&
+      isFiniteNumber(position.x) &&
+      isFiniteNumber(position.y) &&
+      Object.keys(position).length === 2;
+    if (spellable) {
+      line += ` (${numberToken(position.x as number)},${numberToken(position.y as number)})`;
+    } else {
+      fallback.push(["position", position]);
+    }
+  }
   lines.push(line);
 
   const description = value.description;

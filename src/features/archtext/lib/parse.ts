@@ -321,6 +321,37 @@ export function readTag(cursor: LineCursor): string {
   return cursor.readBare(/^[A-Za-z0-9_][A-Za-z0-9_.:-]*/, "a tag name");
 }
 
+/**
+ * `(x,y)` — the paren position token, from the opening paren through the
+ * closing one, with the cursor left after it.
+ *
+ * SHARED BY THREE GRAMMARS, and extracted the day the third wanted it. The
+ * flowchart grammar wrote this inline first; the use-case and ER grammars grew
+ * the same token, and `dry.md`'s rule is that identical bodies get one
+ * definition — three copies of a two-number reader is exactly the
+ * "copy-paste fingerprint" it names. Asked what the copies would have to do
+ * differently in future, the answer is nothing: a point is a point, and the
+ * spelling is deliberately one vocabulary across the kinds.
+ *
+ * NOT the C4 node's reader, which is a DIFFERENT token — `(x,y w×h)` carries a
+ * size, because a C4 node's box is the author's to set and a use-case ellipse,
+ * an ER box and a flowchart symbol are all measured from their own contents.
+ * Merging the two would mean a size that is meaningless in three of four
+ * callers, so C4 keeps its own and this one stays the `(x,y)` form.
+ */
+export function readPointToken(cursor: LineCursor): { x: number; y: number } {
+  cursor.expect("(", 'a position ("(x,y)")');
+  cursor.skipSpaces();
+  const x = cursor.readNumber("the x position");
+  cursor.skipSpaces();
+  cursor.expect(",", '"," between x and y');
+  cursor.skipSpaces();
+  const y = cursor.readNumber("the y position");
+  cursor.skipSpaces();
+  cursor.expect(")", '")" closing the position');
+  return { x, y };
+}
+
 /** Reads a `!` path: `seg(.seg)*` where a segment is bare, quoted or an index. */
 export function readPath(cursor: LineCursor): PathSegment[] {
   const segments: PathSegment[] = [];

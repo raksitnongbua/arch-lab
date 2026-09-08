@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A use-case element and an ER entity can be given a position.** Both
+  grammars accept an optional `(x,y)` on the declaration line — the same token
+  a flowchart node already uses — and an optional `pin` beside it, the same
+  keyword a C4 node uses, which keeps those coordinates when the rest of the
+  diagram is handed back to the layout. Leaving them out is still the normal
+  case and still means "work my place out from the document", so every
+  use-case and ER file already on disk lays out to exactly the pixel it did
+  before. `pin` on an element that states no position is refused rather than
+  ignored. The reasoning, and the four costs accepted with it, are in
+  [ADR 0003](docs/adr/0003-usecase-and-er-positions.md).
 - **The `.alab` skill installs with the skills CLI, and both routes are
   offered.** `npx skills add raksitnongbua/arch-lab --skill alab` is the
   recommended command — it brings a lockfile you can commit, `skills update`
