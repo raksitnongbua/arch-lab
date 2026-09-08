@@ -62,6 +62,13 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
+import {
+  DIAGRAM_FOOTER_DIAL,
+  DIAGRAM_FOOTER_FRAME,
+  diagramFooterControl,
+  diagramFooterPad,
+  diagramFooterTitle,
+} from "@/lib/diagram-footer";
 import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
@@ -382,7 +389,7 @@ export function ViewerShell({
   const controlClasses = buttonClasses({
     variant: "outline",
     size: "sm",
-    className: "shrink-0",
+    className: diagramFooterControl(isImmersive),
   });
 
   /*
@@ -469,16 +476,17 @@ export function ViewerShell({
       <header className="border-t border-border/60 bg-background">
         <div
           className={cn(
-            "mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between sm:px-8",
-            /* Tighter while immersive, because the row is shorter there — the
-               description is gone, so nothing in it is taller than an `h-8`
-               control and `py-3` was padding a line that is no longer set. */
-            isImmersive ? "py-2" : "py-3",
+            DIAGRAM_FOOTER_FRAME,
+            /* LAYOUT IS THIS PANE'S OWN, and the shared module says why: only
+               this footer has a title block to stack above its controls on a
+               phone. The metrics beside it are not. */
+            "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+            diagramFooterPad(isImmersive),
           )}
         >
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <TitleTag className="truncate text-lg font-semibold tracking-tight text-foreground">
+              <TitleTag className={diagramFooterTitle(isImmersive)}>
                 {frozenModel.title}
               </TitleTag>
               {/* NO STATE TAG HERE. This carried "View mode · read-only" beside
@@ -528,23 +536,46 @@ export function ViewerShell({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {share !== undefined ? (
-              <ShareButton
-                share={share}
-                documentTitle={frozenModel.title}
-                route="/live"
-                noun="model"
-                diagram={currentDiagram}
-                rootDiagramId={frozenModel.rootDiagramId}
-                onAnnounce={setAnnouncement}
-              />
-            ) : null}
-            <ViewerExportButton
-              modelTitle={frozenModel.title}
-              diagram={currentDiagram}
-              allDiagrams={allDiagrams}
-              tagColors={frozenModel.file.metadata.tagColors}
-            />
+            {/* NOT WHILE IMMERSIVE, which is what the playground's footer has
+                always done with the same two controls and what this one was
+                the last to learn. Both act on the document rather than on the
+                view of it — Share hands the model over, Export writes a file —
+                so they belong to the reader preparing a diagram, not to the
+                reader presenting one, and the mode that exists to clear
+                everything but the drawing is the wrong place to keep them.
+
+                Their panels are the sharper half of it: both open UPWARD from
+                this row, and a tall menu unfolding over a diagram that fills
+                the screen covers the thing it was opened to act on.
+
+                Nothing is lost by the reader who wants them. The strip keeps
+                the exit one click away, and leaving the mode is what puts
+                them back — which is also why the pair is hidden rather than
+                disabled: a control greyed out with no way to reach it from
+                here explains nothing. `check:canvas-chrome` pins both panes
+                to this, because it was already written down there as
+                something both of them did while only one of them did it. */}
+            {isImmersive ? null : (
+              <>
+                {share !== undefined ? (
+                  <ShareButton
+                    share={share}
+                    documentTitle={frozenModel.title}
+                    route="/live"
+                    noun="model"
+                    diagram={currentDiagram}
+                    rootDiagramId={frozenModel.rootDiagramId}
+                    onAnnounce={setAnnouncement}
+                  />
+                ) : null}
+                <ViewerExportButton
+                  modelTitle={frozenModel.title}
+                  diagram={currentDiagram}
+                  allDiagrams={allDiagrams}
+                  tagColors={frozenModel.file.metadata.tagColors}
+                />
+              </>
+            )}
             {/* The tour's replay button. In this strip rather than on the
                 canvas: the canvas corners are all taken (breadcrumb, detail
                 panel, zoom pill, minimap), and the strip is already where
@@ -622,7 +653,10 @@ export function ViewerShell({
                 Its Escape is consumed by the menu, so it costs the immersive
                 ladder nothing — one press shuts the menu, the next exits. */}
             {isImmersive ? (
-              <ThemeToggle panelSide="up" triggerClassName="size-8" />
+              <ThemeToggle
+                panelSide="up"
+                triggerClassName={DIAGRAM_FOOTER_DIAL}
+              />
             ) : null}
             <button
               type="button"
@@ -673,8 +707,17 @@ export function ViewerShell({
                 which is only whether editing is on this instant: locking the
                 canvas withdraws the handlers, and gating on those alone made
                 the link reappear the moment a reader locked the diagram to
-                present it. */}
-            {edit !== undefined ||
+                present it.
+
+                AND NOT WHILE IMMERSIVE, with Share and Export above: "go and
+                author this somewhere else" is the same offer they are, made
+                to a reader who has just asked for everything but the drawing
+                to go away. It would also be the one control in the row still
+                sized for a browser window — it sets its own `size: "sm"`
+                rather than taking this footer's — so leaving it in would put
+                a 32px button in a 28px row. */}
+            {isImmersive ||
+            edit !== undefined ||
             canEdit === true ? null : CANVAS_EDIT_ENABLED ? (
               <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (

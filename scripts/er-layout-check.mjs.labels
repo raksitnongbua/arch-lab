@@ -1,0 +1,38 @@
+a document that states no (x,y) lays out exactly where it di
+a key badge never overlaps its row
+a key badge never overlaps its row
+a key badge stays inside its own box
+a negative (x,y) is honoured rather than clamped to the orig
+a parent is never placed right of its child
+a pin beyond the solved bounds GROWS width and height rather
+a self-join routes beside its box, not through it
+a stated (x,y) is where that entity is drawn, to the pixel
+a two-table cycle lays out instead of hanging or throwing
+and every box in that layout — pinned and solved alike — lie
+and every connector still leaves and enters the faces the SO
+and its three unpinned neighbours are byte-identical to the 
+and the camera measures the content from the bounds, so fit-
+connectors leaving one side are ordered the way their target
+entities keep declaration order within their column
+every box is inside the canvas it reports
+every box is tall enough for its header and every row
+every connector segment is horizontal or vertical
+every crow
+every end direction is a unit axis vector
+every registered example — all of them token-free — reports 
+every row sits between its box
+no label is drawn over a crow
+no label plate overlaps a box (${ALL_LAYOUTS.length} documen
+no side carries more connectors than it can separate
+no two connectors attach at the same point on a box
+no two entity boxes overlap
+no two relationship labels overlap each other
+pinning one entity leaves EVERY entity
+the SVG exporter frames the file from the same bounds, so th
+the bounds always CONTAIN the origin-measured canvas, so no 
+the bounds reach past the origin to contain it while the sol
+the canvas sets its viewBox from the layout
+the example exercises key badges at all (${keyed} keyed rows
+the example is deep enough to be a layout, not a row
+the fixtures really do pin outside the origin-measured canva
+the pinned entity

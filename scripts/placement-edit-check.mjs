@@ -1174,30 +1174,42 @@ console.log("er: the ways out of focus");
 
   /* 33. A PRESS ON THE GROUND EXITS FOCUS, AND A DRAG DOES NOT. Both halves,
      because either alone is a bug: with no handler the focus is stuck, and
-     with no travel guard every pan and every table drag clears the focus the
-     reader was working inside. The guard is asserted as "the click handler
-     measures the press against the drag threshold", which is the one fact
-     that makes it a click rather than the end of a gesture. */
-  const backdrop = (() => {
-    const at = viewer.indexOf("const handleBackdropClick");
-    if (at < 0) return "";
-    const end = viewer.indexOf("\n  );", at);
-    return end < 0 ? viewer.slice(at) : viewer.slice(at, end);
-  })();
+     with no drag guard every pan and every table drag clears the focus the
+     reader was working inside.
+
+     REWRITTEN, NOT DELETED, WHEN `main` FIXED THIS BETTER. These two used to
+     assert this branch's own implementation — a `handleBackdropClick` that
+     measured the press against `ENTITY_DRAG_THRESHOLD` in a ref — and its own
+     comment said the better fix was to give the camera the flag instead.
+     `main` (#128) then shipped exactly that: `useCanvasZoom` takes pointer
+     capture LAZILY once a drag has travelled, and offers a pan-click guard the
+     pane's handler consults. So the ref and both handlers are gone, and the
+     assertions follow the mechanism rather than being dropped with it — the
+     BEHAVIOUR they pin is unchanged and still worth pinning, and deleting them
+     because the code moved is how a canvas silently loses the gesture every
+     canvas tool has.
+
+     Asserted through the CAMERA's own guard rather than through a threshold
+     comparison in this file, because there is no longer a travel measurement
+     here to find — which is the point of the fix. */
+  const paneClickAt = viewer.search(/onClick=\{\(event\)/);
   check(
     "a press on the pane's own ground clears focus",
-    /onClick=\{handleBackdropClick\}/.test(viewer) &&
-      /setRawFocus\(null\)/.test(backdrop),
+    paneClickAt >= 0 &&
+      viewer.indexOf("setRawFocus(null)", paneClickAt) > paneClickAt,
     "the pane takes the press (the camera's capture retargets the click away " +
-      "from the diagram's backdrop rect) and nothing clears the focus",
+      "from the diagram, which no longer draws a backdrop rect at all) and " +
+      "nothing clears the focus",
   );
   check(
     "a press that DRAGGED does not clear focus",
-    /onPointerDown=\{handlePanePointerDown\}/.test(viewer) &&
-      backdrop.includes("ENTITY_DRAG_THRESHOLD") &&
-      /panPress\.current/.test(backdrop),
-    "panning the canvas or dragging a table also clears the focus, because " +
-      "`useCanvasZoom` keeps no moved flag and nothing else measures the travel",
+    paneClickAt >= 0 &&
+      /consumePanClick\(\)/.test(viewer.slice(paneClickAt)) &&
+      viewer.search(/consumePanClick\(\)/) >= paneClickAt &&
+      viewer.indexOf("consumePanClick()", paneClickAt) <
+        viewer.indexOf("setRawFocus(null)", paneClickAt),
+    "the pan guard must come BEFORE the clear inside the pane's handler, or " +
+      "panning the canvas throws away the focus the reader had set",
   );
 
   /* 34. ESCAPE STILL CLEARS. It was the ONLY way out before the two above,

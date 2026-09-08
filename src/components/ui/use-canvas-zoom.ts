@@ -21,7 +21,10 @@
  * IT ALSO OWNS DRAG-TO-PAN, because panning and zooming are one camera and
  * splitting them across two hooks means two things reading the same scroll
  * offsets. The drag defers to anything that owns a click, so focusing a table
- * still works.
+ * still works — twice over: it never starts on an interactive target, and it
+ * does not capture the pointer until a gesture has travelled far enough to be
+ * a drag rather than a press. `consumePanClick` is the other half of that
+ * split, for the one caller that has to tell a click from a pan's tail.
  *
  * THE ANCHOR IS THE SUBTLE PART. Zooming changes the scrollable size, so a
  * naive implementation leaves the reader looking somewhere else. The anchor is
@@ -49,6 +52,14 @@ export interface CanvasZoom {
   zoomOut: () => void;
   fit: () => void;
   zoomTo: (scale: number) => void;
+  /**
+   * True if the click now arriving is the tail of a real pan, and not a click
+   * at all. READS AND CLEARS, so it must be called exactly once per click —
+   * from the pane's backdrop handler, which is the only thing that has to tell
+   * the two apart. A pane whose backdrop clears a selection would otherwise
+   * throw the reader's selection away every time they dragged the canvas.
+   */
+  consumePanClick: () => boolean;
 }
 
 /**
@@ -230,6 +241,8 @@ export function useCanvasZoom({
      not interactive — otherwise clicking a table would jitter the canvas and
      sometimes fail to focus at all. A middle-button drag always pans, because
      nothing else claims it. */
+  const panSuppressesClick = useRef(false);
+
   useEffect(() => {
     const pane = paneRef.current;
     if (pane === null) return;
@@ -239,6 +252,7 @@ export function useCanvasZoom({
       left: number;
       top: number;
       id: number;
+      moved: boolean;
     } | null = null;
 
     const onDown = (event: PointerEvent): void => {
@@ -266,20 +280,44 @@ export function useCanvasZoom({
         left: pane.scrollLeft,
         top: pane.scrollTop,
         id: event.pointerId,
+        moved: false,
       };
-      pane.setPointerCapture(event.pointerId);
+      /* NO POINTER CAPTURE HERE, and the omission is the whole fix for a bug
+         you could see: capturing on pointerdown RETARGETS the following
+         `click` to the pane, so a click on anything under the pointer never
+         reached its own handler. On the ER canvas that meant clicking empty
+         space did not clear the focus — the backdrop's `onClick` was never
+         the click's target — and the panel read as stuck. Capture is taken
+         LAZILY on the first move past the threshold instead, by which point
+         there is a real drag to keep hold of and no click left to protect.
+         The flowchart canvas learned this on its node drag and states the
+         same rule beside `handleNodeDragStart`. */
       pane.style.cursor = "grabbing";
     };
 
     const onMove = (event: PointerEvent): void => {
       if (origin === null || event.pointerId !== origin.id) return;
+      const dx = event.clientX - origin.x;
+      const dy = event.clientY - origin.y;
+      /* THE THRESHOLD, in the same 4px the flowchart uses: a press with a few
+         pixels of hand jitter in it is a click, and treating it as a pan both
+         nudges the canvas and eats the click. */
+      if (!origin.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+        origin.moved = true;
+        pane.setPointerCapture(event.pointerId);
+      }
+      if (!origin.moved) return;
       event.preventDefault();
-      pane.scrollLeft = origin.left - (event.clientX - origin.x);
-      pane.scrollTop = origin.top - (event.clientY - origin.y);
+      pane.scrollLeft = origin.left - dx;
+      pane.scrollTop = origin.top - dy;
     };
 
     const onUp = (event: PointerEvent): void => {
       if (origin === null || event.pointerId !== origin.id) return;
+      /* A real drag is followed by a `click` the reader did not mean. Flagged
+         here and consumed by the pane's backdrop handler, so panning never
+         throws away the focus the reader had set. */
+      if (origin.moved) panSuppressesClick.current = true;
       origin = null;
       pane.style.cursor = "";
       if (pane.hasPointerCapture(event.pointerId)) {
@@ -311,5 +349,10 @@ export function useCanvasZoom({
       onAnnounce?.("Diagram fitted to view — the whole diagram is on screen.");
     },
     zoomTo: (next: number) => apply(next),
+    consumePanClick: () => {
+      const panned = panSuppressesClick.current;
+      panSuppressesClick.current = false;
+      return panned;
+    },
   };
 }

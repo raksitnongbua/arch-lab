@@ -82,7 +82,13 @@ registerHooks({
 const { parseErText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutEr, ER, labelPlateWidth, LABEL_PLATE_HALF_HEIGHT } = await import(
+const {
+  layoutEr,
+  ER,
+  labelPlateWidth,
+  LABEL_PLATE_HALF_HEIGHT,
+  crowdedErSides,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/er/lib/layout.ts")).href
 );
 const { ER_EXAMPLE } = await import(
@@ -477,6 +483,126 @@ title "Self"
 }
 
 /* ----------------------------------------------------------------------- */
+/* BOTH SECTIONS BELOW ARE NEW, from two branches that did not know about
+   each other: `main` added the fan (#128, the connector overlap reported as
+   "the highlight is a rectangle") and this branch added the pins (ADR 0003).
+   Neither replaces the other and neither was dropped to make the other pass.
+   The fan comes first because it describes the base drawing that a pin then
+   overrides for one entity — and because the pin section's golden depends on
+   the fan being settled: it pins the coordinates an unpinned document lays
+   out to, which the fan changed. */
+
+console.log("the fan");
+
+/* THE DEFECT THIS SECTION EXISTS FOR, and it passed all 19 assertions before
+   this file learned to ask. Every connector attached at the MIDPOINT of the
+   side facing the other box, so `customer -> order` and `customer -> address`
+   left `customer` at one identical point, ran the same stub and turned at the
+   same corridor. Focusing the table lit both, and the pair drew three sides of
+   a RECTANGLE around empty canvas — reported as "the highlight is a rectangle".
+   Each line was correct on its own, which is exactly why nothing caught it:
+   the bug is in the RELATIONSHIP between two connectors, so an assertion about
+   one connector can never see it. */
+{
+  const collisions = [];
+  const crowded = [];
+  for (const [id, laid] of ALL_LAYOUTS) {
+    const seen = new Map();
+    for (const relationship of laid.relationships) {
+      for (const end of [relationship.fromEnd, relationship.toEnd]) {
+        /* Rounded, because two attachments a hundredth of a unit apart are one
+           attachment to every reader and every renderer. */
+        const key = `${Math.round(end.x)},${Math.round(end.y)}`;
+        const other = seen.get(key);
+        if (other !== undefined) {
+          collisions.push(
+            `${id}: ${other} and ${relationship.from}->${relationship.to} both attach at ${key}`,
+          );
+        }
+        seen.set(key, `${relationship.from}->${relationship.to}`);
+      }
+    }
+    const boxes = new Map(
+      laid.entities.map((entity) => [
+        entity.id,
+        {
+          x: entity.x,
+          y: entity.y,
+          width: entity.width,
+          height: entity.height,
+        },
+      ]),
+    );
+    for (const side of crowdedErSides(laid.relationships, boxes)) {
+      crowded.push(`${id}: ${side}`);
+    }
+  }
+
+  check(
+    "no two connectors attach at the same point on a box",
+    collisions.length === 0,
+    collisions.join("; "),
+  );
+
+  /* REPORTED, NOT REPAIRED — `lib/edge-fan` argues the case: a side that
+     cannot give every connector its 12px is a diagram with too much on one
+     table, and shrinking the gap until the lines touch hides that behind
+     attachments which merely look placed. If a bundled example ever trips
+     this, the example is what changes. */
+  check(
+    "no side carries more connectors than it can separate",
+    crowded.length === 0,
+    crowded.join("; "),
+  );
+
+  /* THE ORDER, which is the half a naive fan gets wrong: spreading the
+     attachments apart and then crossing them over each other on the way out is
+     two defects for the price of one fix. Attachments on a side must run the
+     same way their targets do. */
+  const crossings = [];
+  for (const [id, laid] of ALL_LAYOUTS) {
+    const bySide = new Map();
+    for (const relationship of laid.relationships) {
+      if (relationship.from === relationship.to) continue;
+      const key = `${relationship.from}|${Math.round(relationship.fromEnd.x)}`;
+      const list = bySide.get(key) ?? [];
+      list.push(relationship);
+      bySide.set(key, list);
+    }
+    for (const [key, group] of bySide) {
+      if (group.length < 2) continue;
+      const far = new Map(
+        laid.entities.map((entity) => [
+          entity.id,
+          entity.y + entity.height / 2,
+        ]),
+      );
+      const sorted = [...group].sort((a, b) => a.fromEnd.y - b.fromEnd.y);
+      for (let i = 1; i < sorted.length; i += 1) {
+        const previous = far.get(sorted[i - 1].to);
+        const current = far.get(sorted[i].to);
+        if (
+          previous !== undefined &&
+          current !== undefined &&
+          current < previous
+        ) {
+          crossings.push(
+            `${id}: ${key} attaches ${sorted[i - 1].to} above ${sorted[i].to}`,
+          );
+        }
+      }
+    }
+  }
+  check(
+    "connectors leaving one side are ordered the way their targets are",
+    crossings.length === 0,
+    crossings.join("; "),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+
+console.log("");
 console.log("pins");
 
 /* THE SAME SCHEMA TWICE: once stating nothing, once pinning one entity a long

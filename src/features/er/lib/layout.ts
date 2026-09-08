@@ -52,6 +52,12 @@ import type {
   ErRelationshipKind,
 } from "@/types";
 
+import {
+  fanOffset,
+  isCrowded,
+  type FanSide,
+  type FanSlot,
+} from "@/lib/edge-fan";
 import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
 /**
@@ -331,85 +337,253 @@ export interface ErRect {
 }
 
 /**
- * Where a connector leaves one box for another, and the orthogonal path
- * between them.
+ * Which side of each box a connector uses. The ONE definition — the fan below
+ * groups by it and `route` draws from it, and a second opinion about which
+ * side a line leaves would fan a connector into a group it does not belong to.
  *
  * SIDES ARE CHOSEN FROM THE BOXES' RELATIVE POSITIONS, never fixed: two
  * entities in the same column connect top-to-bottom, and entities in
  * different columns connect side-to-side. A fixed left/right rule was tried
  * and was wrong — a relationship between two boxes stacked vertically drew a
- * line that left the right edge, doubled back across its own box, and
- * entered the other's right edge, crossing both boxes it joined.
+ * line that left the right edge, doubled back across its own box, and entered
+ * the other's right edge, crossing both boxes it joined.
+ *
+ * CALLED WITH THE SOLVED BOXES, ALWAYS, and that is the pin compromise. The
+ * side a line uses is what a COLUMN earned, and a pin moves the drawn box and
+ * never the column — so handing this the drawn pair would let a dragged entity
+ * re-choose the faces of every line touching it, and re-choose them
+ * differently from the fan that grouped them. One opinion, taken from the
+ * solver. The visible consequence is that a connector into a pinned entity can
+ * leave the wrong face, and ADR 0003 accepts that as a cost rather than a bug:
+ * nothing here tries to correct it. For an unpinned entity the solved and drawn
+ * rectangles are the same one, which is why this changes no existing drawing.
+ */
+function connectorSides(
+  from: ErRect,
+  to: ErRect,
+): { fromSide: FanSide; toSide: FanSide } {
+  const fromCx = from.x + from.width / 2;
+  const toCx = to.x + to.width / 2;
+  const fromCy = from.y + from.height / 2;
+  const toCy = to.y + to.height / 2;
+
+  const horizontal =
+    Math.abs(toCx - fromCx) >= Math.abs(toCy - fromCy) ||
+    /* Boxes that overlap horizontally have no clean side-to-side run. */
+    to.x > from.x + from.width ||
+    from.x > to.x + to.width;
+
+  if (horizontal) {
+    return toCx >= fromCx
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
+  }
+  return toCy >= fromCy
+    ? { fromSide: "bottom", toSide: "top" }
+    : { fromSide: "top", toSide: "bottom" };
+}
+
+/** Where along a side this connector attaches, given its slot on that side. */
+function attachAt(box: ErRect, side: FanSide, slot: FanSlot): number {
+  const length = side === "top" || side === "bottom" ? box.width : box.height;
+  return fanOffset(slot.index, slot.count, length);
+}
+
+/**
+ * The orthogonal path between two boxes, and where its ends point.
  *
  * TWO SETS OF RECTANGLES, and the whole pin compromise lives in the
- * difference. The SOLVED pair decides the sides — which faces the line uses
- * and which way it runs — because that choice is what a column earned, and a
- * pin moves the drawn box, never the column. The DRAWN pair supplies every
- * coordinate, so the crow's foot lands against the box the reader can see
- * rather than on empty canvas where the solver had put it. The visible
- * consequence is that a connector into a pinned entity can leave the wrong
- * face, and ADR 0003 accepts that as a cost rather than a bug: nothing here
- * tries to correct it. For an unpinned entity the two rectangles are the same
- * one, which is why this split changes no existing drawing.
+ * difference. The SOLVED pair decides the sides — through `connectorSides`,
+ * the one definition — because that choice is what a column earned. The DRAWN
+ * pair supplies every coordinate, including the fan offset along the side, so
+ * the crow's foot lands against the box the reader can see rather than on
+ * empty canvas where the solver had put it.
+ *
+ * THE FAN OFFSET IS MEASURED ON THE DRAWN BOX on purpose: a slot is a
+ * fraction of the side's length, and a pinned entity is the same size it
+ * always was, so the two agree — but reading the solved box here would put
+ * the attachment point at a coordinate the drawn box does not occupy the
+ * moment a future change lets a pin resize anything.
  */
 function route(
   from: ErRect,
   to: ErRect,
   fromSolved: ErRect,
   toSolved: ErRect,
+  fromSlot: FanSlot,
+  toSlot: FanSlot,
 ): { points: { x: number; y: number }[]; fromEnd: Vec; toEnd: Vec } {
-  const fromCx = from.x + from.width / 2;
-  const toCx = to.x + to.width / 2;
-  const fromCy = from.y + from.height / 2;
-  const toCy = to.y + to.height / 2;
+  const { fromSide, toSide } = connectorSides(fromSolved, toSolved);
 
-  /* The side choice, and only the side choice, is measured here — see the
-     two-rectangles note above. */
-  const solvedFromCx = fromSolved.x + fromSolved.width / 2;
-  const solvedToCx = toSolved.x + toSolved.width / 2;
-  const solvedFromCy = fromSolved.y + fromSolved.height / 2;
-  const solvedToCy = toSolved.y + toSolved.height / 2;
-
-  const horizontal =
-    Math.abs(solvedToCx - solvedFromCx) >=
-      Math.abs(solvedToCy - solvedFromCy) ||
-    /* Boxes that overlap horizontally have no clean side-to-side run. */
-    toSolved.x > fromSolved.x + fromSolved.width ||
-    fromSolved.x > toSolved.x + toSolved.width;
-
-  if (horizontal) {
-    const leftToRight = solvedToCx >= solvedFromCx;
-    const startX = leftToRight ? from.x + from.width : from.x;
-    const endX = leftToRight ? to.x : to.x + to.width;
-    const dir = leftToRight ? 1 : -1;
+  if (fromSide === "left" || fromSide === "right") {
+    const dir = fromSide === "right" ? 1 : -1;
+    const startX = fromSide === "right" ? from.x + from.width : from.x;
+    const endX = toSide === "left" ? to.x : to.x + to.width;
+    const startY = from.y + attachAt(from, fromSide, fromSlot);
+    const endY = to.y + attachAt(to, toSide, toSlot);
     const midX = (startX + dir * ER.stub + (endX - dir * ER.stub)) / 2;
     return {
       points: [
-        { x: startX, y: fromCy },
-        { x: midX, y: fromCy },
-        { x: midX, y: toCy },
-        { x: endX, y: toCy },
+        { x: startX, y: startY },
+        { x: midX, y: startY },
+        { x: midX, y: endY },
+        { x: endX, y: endY },
       ],
-      fromEnd: { x: startX, y: fromCy, dx: dir, dy: 0 },
-      toEnd: { x: endX, y: toCy, dx: -dir, dy: 0 },
+      fromEnd: { x: startX, y: startY, dx: dir, dy: 0 },
+      toEnd: { x: endX, y: endY, dx: -dir, dy: 0 },
     };
   }
 
-  const topToBottom = solvedToCy >= solvedFromCy;
-  const startY = topToBottom ? from.y + from.height : from.y;
-  const endY = topToBottom ? to.y : to.y + to.height;
-  const dir = topToBottom ? 1 : -1;
+  const dir = fromSide === "bottom" ? 1 : -1;
+  const startY = fromSide === "bottom" ? from.y + from.height : from.y;
+  const endY = toSide === "top" ? to.y : to.y + to.height;
+  const startX = from.x + attachAt(from, fromSide, fromSlot);
+  const endX = to.x + attachAt(to, toSide, toSlot);
   const midY = (startY + dir * ER.stub + (endY - dir * ER.stub)) / 2;
   return {
     points: [
-      { x: fromCx, y: startY },
-      { x: fromCx, y: midY },
-      { x: toCx, y: midY },
-      { x: toCx, y: endY },
+      { x: startX, y: startY },
+      { x: startX, y: midY },
+      { x: endX, y: midY },
+      { x: endX, y: endY },
     ],
-    fromEnd: { x: fromCx, y: startY, dx: 0, dy: dir },
-    toEnd: { x: toCx, y: endY, dx: 0, dy: -dir },
+    fromEnd: { x: startX, y: startY, dx: 0, dy: dir },
+    toEnd: { x: endX, y: endY, dx: 0, dy: -dir },
   };
+}
+
+/**
+ * Every connector's slot at both ends, so two lines leaving one table do not
+ * leave from one pixel.
+ *
+ * THE DEFECT THIS EXISTS FOR, and it was visible on the bundled example. Both
+ * ends attached at the side's MIDPOINT, so `customer -> order` and
+ * `customer -> address` began at exactly the same point, ran the same stub,
+ * and turned at the same corridor x — one line above and one below. Focusing
+ * the table lit both, and the two together drew three sides of a RECTANGLE
+ * around empty canvas. Each line was correct; the picture was a box.
+ *
+ * THE FORMULA AND THE ORDERING RULE ARE `lib/edge-fan`'s, not a second copy:
+ * attach at `L·k/(N+1)`, ordered by where the far end sits along this side's
+ * own axis so the lines leave without crossing. `assignFanSlots` itself is NOT
+ * used, and that is deliberate — it derives the side from `facingSide`, which
+ * normalises by the node's half-extents, while this canvas has its own
+ * documented side rule (`connectorSides`). Two opinions about which side a
+ * connector uses is exactly how a fan puts a line in the wrong group, so the
+ * grouping is done here against the one rule this layout draws from, and only
+ * the geometry is shared.
+ */
+function fanSlots(
+  relationships: readonly { from: string; to: string }[],
+  boxes: ReadonlyMap<string, ErRect>,
+): Map<number, { from: FanSlot; to: FanSlot }> {
+  interface Attachment {
+    at: number;
+    end: "from" | "to";
+    /** Where the OTHER end sits along this side's axis — the sort key. */
+    along: number;
+  }
+  const bySide = new Map<string, Attachment[]>();
+  const push = (id: string, side: FanSide, attachment: Attachment): void => {
+    const key = `${id}|${side}`;
+    const list = bySide.get(key);
+    if (list === undefined) bySide.set(key, [attachment]);
+    else list.push(attachment);
+  };
+
+  relationships.forEach((relationship, at) => {
+    const from = boxes.get(relationship.from);
+    const to = boxes.get(relationship.to);
+    if (from === undefined || to === undefined) return;
+    /* A SELF-RELATIONSHIP IS IN THE FAN, on the two sides its hook actually
+       uses. Leaving it out was tried and `check:er-layout` caught it on
+       `course-catalogue`: the hook kept the side's midpoint while the one
+       other connector on that side was fanned to the midpoint too, and the two
+       left the box from the same pixel. A connector that is drawn occupies its
+       side whether or not it goes anywhere else. */
+    if (relationship.from === relationship.to) {
+      push(relationship.from, "right", {
+        at,
+        end: "from",
+        along: from.y + from.height / 2,
+      });
+      push(relationship.from, "top", {
+        at,
+        end: "to",
+        along: from.x + from.width / 2,
+      });
+      return;
+    }
+    const { fromSide, toSide } = connectorSides(from, to);
+    const alongAxis = (side: FanSide, box: ErRect): number =>
+      side === "top" || side === "bottom"
+        ? box.x + box.width / 2
+        : box.y + box.height / 2;
+    push(relationship.from, fromSide, {
+      at,
+      end: "from",
+      along: alongAxis(fromSide, to),
+    });
+    push(relationship.to, toSide, {
+      at,
+      end: "to",
+      along: alongAxis(toSide, from),
+    });
+  });
+
+  const centre: FanSlot = { index: 0, count: 1 };
+  const slots = new Map<number, { from: FanSlot; to: FanSlot }>();
+  for (const attachments of bySide.values()) {
+    /* Declaration order is the tie-break, so the result is stable across
+       renders and two connectors to targets at the same height do not swap. */
+    attachments.sort((a, b) => a.along - b.along || a.at - b.at);
+    attachments.forEach((attachment, index) => {
+      const existing = slots.get(attachment.at) ?? { from: centre, to: centre };
+      slots.set(attachment.at, {
+        ...existing,
+        [attachment.end]: { index, count: attachments.length },
+      });
+    });
+  }
+  return slots;
+}
+
+/**
+ * The sides carrying more connectors than they can separate, as
+ * `"<entity> <side>"`. Reported rather than repaired, which is the call
+ * `lib/edge-fan` documents: squeezing the gap below the floor hides a
+ * too-dense diagram behind attachments that merely look placed.
+ */
+export function crowdedErSides(
+  relationships: readonly { from: string; to: string }[],
+  boxes: ReadonlyMap<string, ErRect>,
+): string[] {
+  const counts = new Map<string, { count: number; length: number }>();
+  relationships.forEach((relationship) => {
+    const from = boxes.get(relationship.from);
+    const to = boxes.get(relationship.to);
+    if (from === undefined || to === undefined) return;
+    const bump = (id: string, side: FanSide, box: ErRect): void => {
+      const key = `${id} ${side}`;
+      const length =
+        side === "top" || side === "bottom" ? box.width : box.height;
+      const seen = counts.get(key);
+      counts.set(key, { count: (seen?.count ?? 0) + 1, length });
+    };
+    /* The self-join's hook occupies a right and a top, the same two the fan
+       gives it. */
+    if (relationship.from === relationship.to) {
+      bump(relationship.from, "right", from);
+      bump(relationship.from, "top", from);
+      return;
+    }
+    const { fromSide, toSide } = connectorSides(from, to);
+    bump(relationship.from, fromSide, from);
+    bump(relationship.to, toSide, to);
+  });
+  return [...counts.entries()]
+    .filter(([, side]) => isCrowded(side.count, side.length))
+    .map(([key]) => key);
 }
 
 /**
@@ -638,8 +812,22 @@ export function layoutEr(file: ErLabFile): ErLayout {
     }
   }
 
+  /* SLOTS FROM THE SOLVED BOXES, AND AFTER THE PIN PASS ABOVE — the order is
+     load-bearing twice over.
+     AFTER, because `solved` is snapshotted from `boxById` before the pins move
+     it, so the slots have to be taken once that snapshot exists.
+     FROM SOLVED, because a slot's whole job is to say how many OTHER
+     connectors share a side — and which side that is comes from
+     `connectorSides`, which reads the solved pair. Handing the fan the drawn
+     boxes would give it a second opinion about which side a line leaves, and
+     main's own note on `connectorSides` says what that costs: a connector
+     fanned into a group it does not belong to. So the fan and the router agree
+     by construction rather than by coincidence. A document with nothing pinned
+     passes the same map either way, which is why this changes no drawing. */
+  const slots = fanSlots(relationships, solved);
+
   const drawn: LaidErRelationship[] = [];
-  for (const relationship of relationships) {
+  for (const [at, relationship] of relationships.entries()) {
     const from = boxById.get(relationship.from);
     const to = boxById.get(relationship.to);
     /* A relationship naming an entity the document never declared cannot be
@@ -651,6 +839,12 @@ export function layoutEr(file: ErLabFile): ErLayout {
       /* A self-relationship: a hook out of the right side and back into the
          top, beside the box rather than through it — the flowchart's loop
          rule, which exists so a returning line never crosses what it left. */
+      const selfSlot = slots.get(at) ?? {
+        from: { index: 0, count: 1 },
+        to: { index: 0, count: 1 },
+      };
+      const exitY = from.y + attachAt(from, "right", selfSlot.from);
+      const returnX = from.x + attachAt(from, "top", selfSlot.to);
       const hookX = from.x + from.width + ER.stub;
       const midY = from.y - ER.stub;
       drawn.push({
@@ -661,37 +855,48 @@ export function layoutEr(file: ErLabFile): ErLayout {
           ? { label: relationship.label }
           : {}),
         points: [
-          { x: from.x + from.width, y: from.y + from.height / 2 },
-          { x: hookX, y: from.y + from.height / 2 },
+          { x: from.x + from.width, y: exitY },
+          { x: hookX, y: exitY },
           { x: hookX, y: midY },
-          { x: from.x + from.width / 2, y: midY },
-          { x: from.x + from.width / 2, y: from.y },
+          { x: returnX, y: midY },
+          { x: returnX, y: from.y },
         ],
         fromEnd: {
           x: from.x + from.width,
-          y: from.y + from.height / 2,
+          y: exitY,
           dx: 1,
           dy: 0,
           cardinality: relationship.fromCardinality,
         },
         toEnd: {
-          x: from.x + from.width / 2,
+          x: returnX,
           y: from.y,
           dx: 0,
           dy: -1,
           cardinality: relationship.toCardinality,
         },
         labelX: hookX + 8,
-        labelY: midY + (from.y + from.height / 2 - midY) / 2,
+        labelY: midY + (exitY - midY) / 2,
       });
       continue;
     }
 
+    const slot = slots.get(at) ?? {
+      from: { index: 0, count: 1 },
+      to: { index: 0, count: 1 },
+    };
+    /* DRAWN, SOLVED, THEN THE SLOTS: the coordinates come from the boxes the
+       reader can see, the side choice from the boxes the solver placed. The
+       `?? from` fallbacks cover a relationship naming an entity the snapshot
+       missed, which cannot happen for a parsed document and keeps this
+       total. */
     const { points, fromEnd, toEnd } = route(
       from,
       to,
       solved.get(relationship.from) ?? from,
       solved.get(relationship.to) ?? to,
+      slot.from,
+      slot.to,
     );
     /* WHERE THE LABEL GOES, and why the obvious answer was wrong. It used to
        sit at the midpoint of the middle segment, which keeps it off a BOX but

@@ -709,68 +709,36 @@ export function ErViewer({
     [reviseEdge],
   );
 
-  /**
-   * Where a press on the pane began, in CLIENT pixels — the only thing the
-   * backdrop click needs, and it needs it because nothing else can tell it
-   * whether the press was a click or a pan.
+  /* THE PANE'S OWN BACKDROP CLICK LIVED HERE AND DOES NOT ANY MORE.
    *
-   * THE CAMERA CANNOT ANSWER THIS. `useCanvasZoom` owns the drag-to-pan and
-   * keeps no `moved` flag and no threshold of its own: it takes pointer
-   * capture on the pane at pointerdown and releases it at pointerup,
-   * suppressing nothing. So the travel is measured here, against the
-   * threshold this file already owns, in the shape the flowchart canvas uses
-   * next door (`panSuppressesClick`). Giving the camera the flag instead
-   * would delete this ref and every canvas would inherit the answer — that is
-   * one line in `use-canvas-zoom.ts` and the better fix.
+   * This branch measured the press's travel in a ref to tell a pan from a
+   * click, and its own comment named the better fix: "giving the camera the
+   * flag instead would delete this ref and every canvas would inherit the
+   * answer — that is one line in `use-canvas-zoom.ts`". `main` then shipped
+   * exactly that (#128): the camera takes pointer capture LAZILY once a drag
+   * has travelled and offers the pan-click guard by name, and the pane itself
+   * is the backdrop. So the ref, both handlers and the threshold comparison
+   * are gone rather than kept beside a camera that now answers the same
+   * question — two opinions about whether a press was a drag is how a
+   * selection gets thrown away on one of the two paths.
    *
-   * AND A PANE-LEVEL HANDLER IS THE ONLY PLACE THIS CAN LIVE. `ErDiagram`
-   * draws a transparent backdrop rect whose `onClick` clears focus, and it
-   * never fires for a mouse press on the ground: the camera's capture
-   * RETARGETS the trailing click to the pane, which is the same retargeting
-   * the entity drag takes capture lazily to avoid. The rect still answers a
-   * press the camera stands down from, so both paths stay.
-   */
-  const panPress = useRef<{ clientX: number; clientY: number } | null>(null);
-
-  const handlePanePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      panPress.current = { clientX: event.clientX, clientY: event.clientY };
-    },
-    [],
-  );
-
-  const handleBackdropClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const press = panPress.current;
-      panPress.current = null;
-      /* A DRAG IS NOT A CLICK. Over the threshold this press panned the
-         canvas or placed a table, and either way it must not also clear the
-         focus the reader is working inside. Under it — or with no press
-         recorded at all, which is a click synthesised by something other
-         than a pointer — the ground was clicked. */
-      if (
-        press !== null &&
-        Math.abs(event.clientX - press.clientX) +
-          Math.abs(event.clientY - press.clientY) >
-          ENTITY_DRAG_THRESHOLD
-      ) {
-        return;
-      }
-      /* THE SCROLLBAR GUTTERS ARE NOT THE GROUND, the flowchart backdrop's
-         own guard: a press on the pane's scrollbar is a camera gesture and
-         clearing focus from it reads as the panel closing itself. */
-      const pane = event.currentTarget;
-      const rect = pane.getBoundingClientRect();
-      if (
-        event.clientX - rect.left > pane.clientWidth ||
-        event.clientY - rect.top > pane.clientHeight
-      ) {
-        return;
-      }
-      setRawFocus(null);
-    },
-    [],
-  );
+   * THIS COMMENT DELIBERATELY DOES NOT SPELL THE GUARD'S CALL. `check:er-motion`
+   * finds the pane's handler by `indexOf` of that exact token and then asserts
+   * an ORDER around it, so naming it in prose ABOVE the real call moved the
+   * anchor into this comment and failed the check — with the code correct.
+   * `check:view-input` has the same shape for `role="button"`, and the
+   * dictionary canvas keeps that spelling out of its file for the same reason.
+   * A guard that reads raw source cannot tell prose from code; the cost is
+   * borne here, where it is cheap.
+   *
+   * The diagnosis this branch reached independently is the same one #128
+   * records: the camera's capture RETARGETS the trailing click to the pane, so
+   * the transparent backdrop rect `ErDiagram` used to draw never fired for a
+   * mouse press on the ground. #128 deleted that rect for the same reason — a
+   * rect inside the SVG covers the DIAGRAM and not the pane the schema floats
+   * on — so the pane below is the only backdrop now. Kept written down because
+   * the fix now lives in a shared hook where the reason for it is not
+   * visible. */
 
   return (
     <div className="relative h-full w-full">
@@ -789,20 +757,39 @@ export function ErViewer({
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}
-        /* The move's pointer handlers live on the PANE, not on the box: a drag
-           that leaves the box mid-gesture must keep moving it, and the pane is
-           what takes the capture. They no-op unless a drag is in flight, so
-           the camera's own pan listeners (attached natively by
+        /* The move's pointer handlers live on the PANE, not on the box: a
+           drag that leaves the box mid-gesture must keep moving it, and the
+           pane is what takes the capture. They no-op unless a drag is in
+           flight, so the camera's own pan listeners (attached natively by
            `useCanvasZoom`) are untouched. */
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        /* The ground's own press. It records where the press began for the
-           click below and claims nothing else — the camera's pan and the
-           entity drag both still see it, because neither this nor they stop
-           propagation. */
-        onPointerDown={handlePanePointerDown}
-        onClick={handleBackdropClick}
+        /* THE PANE IS THE BACKDROP, which is how the use-case and flowchart
+           canvases already do it and is why this one felt stuck. The backdrop
+           used to be a `<rect>` inside the drawing, so it covered the DIAGRAM
+           and not the pane — and the empty ground around a fitted schema, which
+           is most of what a reader sees and the first place anyone clicks to
+           deselect, cleared nothing at all. Every interactive element inside
+           the SVG stops propagation, so this only ever sees a click that hit
+           nothing. */
+        onClick={(event) => {
+          /* A pan ends in a `click` the reader did not mean; clearing focus on
+             it would throw away the selection every time they dragged. */
+          if (camera.consumePanClick()) return;
+          /* The scrollbar gutters are part of the pane's box but not its
+             client area, and a click on a scrollbar is not a click on the
+             canvas. */
+          const pane = event.currentTarget;
+          const box = pane.getBoundingClientRect();
+          if (
+            event.clientX - box.left > pane.clientWidth ||
+            event.clientY - box.top > pane.clientHeight
+          ) {
+            return;
+          }
+          setRawFocus(null);
+        }}
       >
         {/* Sized in PIXELS from the camera's scale rather than `width="100%"`:
             a percentage width can only ever shrink to the pane, which is why

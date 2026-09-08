@@ -85,6 +85,12 @@ import Link from "next/link";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonClasses, Button } from "@/components/ui/button";
 import {
+  DIAGRAM_FOOTER_DIAL,
+  DIAGRAM_FOOTER_FRAME,
+  diagramFooterControl,
+  diagramFooterPad,
+} from "@/lib/diagram-footer";
+import {
   CANVAS_LOCK_COPY,
   CanvasLockButton,
   canvasStateLabel,
@@ -2453,8 +2459,12 @@ export function ViewPlayground({
                 <div className="mt-auto shrink-0 border-t border-border/60 bg-background">
                   <div
                     className={cn(
-                      "mx-auto flex w-full max-w-7xl items-center justify-end gap-2 px-5 sm:px-8",
-                      isImmersive ? "py-2" : "py-3",
+                      DIAGRAM_FOOTER_FRAME,
+                      /* LAYOUT IS THIS PANE'S OWN: no title to stack, so the
+                         row simply pushes its controls right. The metrics
+                         beside it are shared with the C4 shell. */
+                      "flex items-center justify-end gap-2",
+                      diagramFooterPad(isImmersive),
                     )}
                   >
                     {/* Share and Export live in the CANVAS strip, matching the
@@ -2619,7 +2629,10 @@ export function ViewPlayground({
                           else and `size-8` is the only thing this host has an
                           opinion about. */}
                       {isImmersive ? (
-                        <ThemeToggle panelSide="up" triggerClassName="size-8" />
+                        <ThemeToggle
+                          panelSide="up"
+                          triggerClassName={DIAGRAM_FOOTER_DIAL}
+                        />
                       ) : null}
                       <button
                         type="button"
@@ -2645,7 +2658,7 @@ export function ViewPlayground({
                         className={buttonClasses({
                           variant: "outline",
                           size: "sm",
-                          className: "shrink-0",
+                          className: diagramFooterControl(isImmersive),
                         })}
                       >
                         {isImmersive ? (
