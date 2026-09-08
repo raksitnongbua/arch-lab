@@ -67,6 +67,7 @@ import type { ViewDocument } from "@/features/playground/input/parse";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { describeError } from "@/lib/errors";
 import type { Theme } from "@/lib/constants";
+import type { IconStyle } from "@/lib/icon-style";
 
 /**
  * The kinds a route handler cannot draw, and why — in the reader's terms, not
@@ -103,6 +104,8 @@ export interface RenderRequest {
   /** Which diagram of a C4 model to draw; the root when absent. */
   diagramId: string | null;
   theme: Theme;
+  /** One ink or two. Only the C4 drawing carries stack icons. */
+  iconStyle: IconStyle;
 }
 
 /**
@@ -139,7 +142,7 @@ export function renderDocument(request: RenderRequest): RenderOutcome {
   try {
     return {
       status: "ok",
-      rendered: draw(document_, theme, request.diagramId),
+      rendered: draw(document_, theme, request),
     };
   } catch (error) {
     /* A diagram id the reader asked for and this model does not have is a BAD
@@ -163,7 +166,7 @@ export function renderDocument(request: RenderRequest): RenderOutcome {
 function draw(
   document_: ViewDocument,
   theme: ExportTheme,
-  diagramId: string | null,
+  request: RenderRequest,
 ): RenderedSvg {
   switch (document_.kind) {
     case "sequence":
@@ -172,7 +175,7 @@ function draw(
       throw new Error(`${document_.kind} is refused, not drawn`);
     case "c4": {
       const file = document_.synced.file;
-      const wanted = diagramId ?? file.rootDiagramId;
+      const wanted = request.diagramId ?? file.rootDiagramId;
       const diagram = file.diagrams.find((d) => d.id === wanted);
       if (diagram === undefined) {
         throw new DiagramNotFound(
@@ -182,6 +185,7 @@ function draw(
       }
       return renderDiagramSvg(diagram, file.metadata.title, theme, {
         embedIcon: embeddedIconSvgServer,
+        iconStyle: request.iconStyle,
       });
     }
     case "flowchart":

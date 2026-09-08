@@ -58,6 +58,7 @@ import {
 } from "@/features/viewer/share/signature";
 import { exportPaletteFor } from "@/features/viewer/export/palette.generated";
 import { DEFAULT_THEME_BY_SCHEME, THEMES, type Theme } from "@/lib/constants";
+import { DEFAULT_ICON_STYLE, type IconStyle } from "@/lib/icon-style";
 
 export const runtime = "nodejs";
 
@@ -84,12 +85,24 @@ function themeFrom(raw: string | null): Theme {
     : DEFAULT_THEME_BY_SCHEME.light;
 }
 
-/* NO `?i=` ICON-STYLE PARAMETER, deliberately. C4 is the only notation whose
-   drawing carries stack icons and it is the one this route cannot draw yet
-   (`render-document.ts` has the reason), so the parameter would be accepted
-   and ignored — which is worse than absent: a caller would set it, see no
-   change, and have no way to tell whether the style or the route was at
-   fault. It arrives with C4. */
+/**
+ * `?i=` — one ink or two, the canvas's own switch.
+ *
+ * IT WAS LEFT OUT WHILE C4 WAS REFUSED, because C4 is the only notation whose
+ * drawing carries stack icons: accepting the parameter then would have meant
+ * accepting it and ignoring it, which is worse than absent — a caller sets it,
+ * sees no change, and cannot tell whether the style or the route was at fault.
+ * C4 draws now, so the parameter means something and is read.
+ *
+ * An unknown value takes the default rather than refusing. The reader's own
+ * preference is not in the document and not in the link (`lib/icon-style.ts`
+ * argues why), so a render URL is the ONLY place this choice can be expressed
+ * at all — and a diagram in the default style is a better answer to a typo
+ * than a card explaining the spelling of "colour".
+ */
+function iconStyleFrom(raw: string | null): IconStyle {
+  return raw === "mono" || raw === "colour" ? raw : DEFAULT_ICON_STYLE;
+}
 
 /** An SVG response. `status` still tells the truth; the body is a picture. */
 function svgResponse(
@@ -186,6 +199,7 @@ export async function GET(request: Request): Promise<Response> {
     source: decoded.aftText,
     diagramId: decoded.diagramId,
     theme,
+    iconStyle: iconStyleFrom(url.searchParams.get("i")),
   });
 
   if (outcome.status === "error") {
