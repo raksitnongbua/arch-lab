@@ -114,7 +114,7 @@ const { CANVAS_EDIT_OFFERS, canvasEditability } = await load(
 );
 /* The REAL geometry, for the surface section at the foot of this file: what a
    control covers decides whether a press reaches it. */
-const { DICT, layoutDict, dictTitleEditorBox } = await load(
+const { DICT, layoutDict, dictTitleBox } = await load(
   "src/features/dict/lib/layout.ts",
 );
 
@@ -645,39 +645,47 @@ console.log("the canvas's two surfaces do not eat each other's presses");
 {
   /* THE BUG THIS SECTION EXISTS FOR: "cannot edit text via click". Pressing
      the title opened the field, and then the Apply row under it did nothing.
-     SVG HAS NO z-index — paint order is document order — and the title's
-     group was written FIRST, where a heading belongs in reading order and
-     exactly the wrong place here: every section is painted after it, and each
-     one lays a full-width `RevealArea` across its heading band to make the
-     band hoverable. That rect is `fill="transparent"`, which still hit-tests,
-     so it covered the bottom of the open editor and took the press.
+     SVG HAS NO z-index — paint order is document order — and the title's group
+     was written FIRST, where a heading belongs in reading order and exactly
+     the wrong place here: every section is painted after it, and each one lays
+     a full-width `RevealArea` across its heading band to make the band
+     hoverable. That rect is `fill="transparent"`, which still hit-tests, so it
+     covered the bottom of the open editor and took the press.
 
-     The overlap is not a mistake to design away — the editor is
-     `DICT_TITLE.editorHeight` tall and the band it replaces is
-     `DICT.titleHeight`, so it MUST reach into the first section. What can be
-     fixed is which surface is painted last. Both halves are asserted: the
-     overlap is measured off the real layout, and the ordering is read off the
-     canvas that has to honour it. */
+     THE OVERLAP THAT MADE IT UNAVOIDABLE IS GONE, and this is that report
+     being made rather than buried. The editor used to be a 112-unit
+     `foreignObject` over a 54-unit band, so it HAD to reach into the first
+     section. The form is not in the drawing any more — it is an HTML sibling
+     of the `<svg>`, because a form in there was multiplied by the viewBox
+     scale — so what the title's group contributes is only the CLOSED press
+     target, which is 35 units on a 54-unit band and reaches nothing. The
+     assertion that measured the overlap is therefore replaced by one that
+     measures its absence, which is the honest half.
+
+     THE ORDERING IS KEPT ANYWAY, and deliberately: it costs nothing, and the
+     hazard comes back the day the band, the target's leading or a section's
+     reveal area changes by a few units. The non-overlap assertion above it is
+     what would say so. */
   const diagram = readFileSync(
     path.join(ROOT, "src/features/dict/components/dict-diagram.tsx"),
     "utf8",
   );
   const layout = layoutDict(MESSY_FILE);
-  const editor = dictTitleEditorBox(layout);
+  const target = dictTitleBox(layout);
   const firstBand = { top: layout.sections[0].y, height: DICT.sectionHeight };
 
   check(
-    "the open editor really does reach into the first section's heading band",
-    editor !== null && editor.y + editor.height > firstBand.top,
-    `editor bottom ${editor === null ? "—" : editor.y + editor.height} vs band top ${firstBand.top} — if this ever stops being true, say so before deleting the assertion below rather than after`,
+    "the title's press target stops short of the first section's heading band — the open editor used to reach into it, and does not exist in the drawing any more",
+    target !== null && target.y + target.height <= firstBand.top + 0.5,
+    `target bottom ${target === null ? "—" : target.y + target.height} vs band top ${firstBand.top} — if a control over the title starts overlapping a section again, the ordering below stops being insurance and becomes load-bearing`,
   );
 
   const sectionsAt = diagram.indexOf("layout.sections.map(");
   const titleAt = diagram.indexOf("af-dict-title");
   check(
-    "the title's group is painted AFTER every section, so nothing later can take its press",
+    "the title's group is still painted AFTER every section, so nothing later can take its press",
     sectionsAt > 0 && titleAt > sectionsAt,
-    "the title is drawn before the sections again — a section's reveal area is painted over the editor's Apply row and swallows the click",
+    "the title is drawn before the sections again — the moment anything over the title reaches a section band, a reveal area is painted over it and swallows the click",
   );
   /* AND THE REVEAL AREA IS STILL THERE. The other way to stop it eating the
      press would be to make it inert, which would take the reorder handles
@@ -692,6 +700,26 @@ console.log("the canvas's two surfaces do not eat each other's presses");
     "and the chip is still drawn last within its own row, over the columns it overlaps",
     diagram.lastIndexOf("<ReorderHandles") > diagram.indexOf("field.cells.map"),
     "a chip painted before the cells it covers is a control the text takes the press from",
+  );
+  /* THE CHIP IS THE ONE NATIVE CONTROL LEFT IN THE DRAWING, and it is left
+     there knowingly. It scales with the camera exactly as the title's form did
+     — an 18-unit button is 72 CSS px at 400% — but moving it out would break
+     the thing that makes it usable: the reveal is a CSS descendant rule
+     (`.af-dict-row:hover .af-dict-handles` in dict-motion.css), so the chip
+     has to be a DOM descendant of the row's `<g>`. An HTML overlay would need
+     per-row hover state in JavaScript, one screen-rect measurement per row on
+     every scroll and zoom, and a second copy of the right-alignment the
+     layout solves against the table. Recorded here rather than left implicit,
+     so the next reader knows it was weighed. */
+  check(
+    "the reorder chip's reveal is still the stylesheet's descendant rule — the reason the chip stays inside the drawing while the title's form moved out",
+    /\.af-dict-row:hover \.af-dict-handles/.test(
+      readFileSync(
+        path.join(ROOT, "src/features/dict/styles/dict-motion.css"),
+        "utf8",
+      ),
+    ),
+    "if the reveal stops being a descendant rule, the chip can move out of the <svg> too and stop scaling with the camera",
   );
 }
 

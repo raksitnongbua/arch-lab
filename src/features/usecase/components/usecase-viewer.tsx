@@ -70,10 +70,15 @@ import {
 import { useModKey } from "@/lib/mod-key";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+import { useCanvasOverlayPosition } from "@/components/ui/use-canvas-overlay";
 import { cn } from "@/lib/utils";
 
 import type { LaidUseCaseEdge } from "../lib/layout";
-import { layoutUseCase } from "../lib/layout";
+import {
+  layoutUseCase,
+  UC_HEADING_HIT_PAD,
+  usecaseHeadingHitBox,
+} from "../lib/layout";
 import type { UseCaseFocus } from "./usecase-diagram";
 import {
   resolveUseCaseFocus,
@@ -102,6 +107,33 @@ const ZOOM_MAX = 4;
  * `src/lib` yet. Four copies is one too many; give it one.
  */
 const ELEMENT_DRAG_THRESHOLD = 4;
+
+/**
+ * The heading editor's size, in CSS PIXELS — the reader's own pixels, not the
+ * drawing's units.
+ *
+ * IT IS A CONSTANT AND NOT A MEASUREMENT, and that is the point. The previous
+ * box was measured off the heading in LAYOUT UNITS so that a short title got a
+ * modest form — which was the right answer to the wrong question, because
+ * anything inside the `<svg>` is then multiplied by the viewBox-to-viewport
+ * ratio. A compact document in a wide pane fits at up to 4.7x, so that form
+ * painted at 1131x740px with a 66px label. Out here nothing scales it: 300px
+ * is a form, at every zoom and on every document.
+ *
+ * THE HEIGHT IS THE ROWS ADDED UP — padding, the title label and field, the
+ * two-row description textarea, and the Apply/Cancel row. It is also what the
+ * overlay is CLAMPED by: `useCanvasOverlayPosition` keeps this box inside the
+ * pane's visible rectangle, which is the clamp the unit-space box had against
+ * the drawing's edge, said about the thing that can cut it off now. The form
+ * scrolls inside it, so an under-estimate costs a scrollbar rather than a
+ * shaved-off Apply button.
+ *
+ * MAINTAINED BY HAND against `TITLE_FORM_SIZE` in `dict-viewer.tsx`, which is
+ * the same form one field shorter. `check:usecase-layout` and `check:dict`
+ * assert only that each is CSS px and never derived from a layout — the
+ * numbers themselves are a design choice per canvas.
+ */
+const HEADING_FORM_SIZE = { width: 300, height: 232 };
 
 /**
  * The gestures this canvas can send back, when editing is on.
@@ -643,35 +675,37 @@ export function UseCaseViewer({
     [closeRetitle, onRetitle],
   );
 
-  /* THE FIELDS ARE MOUNTED FRESH ON EVERY OPEN, which is what keeps them
-     honest about the document: they read the heading's current text as their
-     initial state, and a half-typed title from a previous open is not
-     something a reader should be able to submit against a file that has
-     changed underneath it. */
+  /* A PRESS AND A FLAG, and no node: the canvas draws the press target and
+     nothing else, because HTML handed to it would end up in a `foreignObject`
+     and be multiplied by the viewBox scale — the "the edit box is enormous"
+     report. The fields are mounted below, over the canvas. */
   const retitle = useMemo(
     () =>
       onRetitle === undefined
         ? undefined
-        : {
-            onOpen: () => setRetitling(true),
-            form: retitling ? (
-              <HeadingForm
-                title={file.metadata.title}
-                description={file.metadata.description}
-                onSubmitFields={handleRetitle}
-                onCancel={closeRetitle}
-              />
-            ) : null,
-          },
-    [
-      onRetitle,
-      retitling,
-      file.metadata.title,
-      file.metadata.description,
-      handleRetitle,
-      closeRetitle,
-    ],
+        : { onOpen: () => setRetitling(true), open: retitling },
+    [onRetitle, retitling],
   );
+
+  /**
+   * WHERE THE FIELDS GO: over the heading they replace, at a size the reader's
+   * screen decides and the diagram does not.
+   *
+   * The anchor is the heading's own press target in LAYOUT UNITS — the same box
+   * the canvas draws the `foreignObject` on, from the same helper — and
+   * `useCanvasOverlayPosition` runs it through the `<svg>`'s matrix, which is
+   * `toLayoutUnits`'s drag conversion in the forward direction.
+   */
+  const headingAnchor = useMemo(
+    () => (retitling ? usecaseHeadingHitBox(layout, UC_HEADING_HIT_PAD) : null),
+    [retitling, layout],
+  );
+  const headingFormAt = useCanvasOverlayPosition({
+    paneRef,
+    svgRef,
+    anchor: headingAnchor,
+    size: HEADING_FORM_SIZE,
+  });
 
   /**
    * THE LAYOUT'S OWN SHIFT — what has to come off a dropped point before it
@@ -995,7 +1029,14 @@ export function UseCaseViewer({
                `bg-canvas` while five sibling notations wore nothing, which is
                how the ground behind a diagram came to change shade with the
                notation. */
-            "h-full overflow-auto p-3",
+            /* `relative` SO THE HEADING EDITOR HAS A BOX TO SIT IN. It is an
+               HTML sibling of the drawing rather than a `foreignObject` inside
+               it (that is what stopped it scaling with the viewBox), and it is
+               a child of THIS element rather than of the pane's positioned
+               parent so that it scrolls and clips with the canvas instead of
+               floating over the pane's edge. `useCanvasOverlayPosition`
+               returns its offsets in this element's content coordinates. */
+            "relative h-full overflow-auto p-3",
             /* THE GROUND, filling the pane rather than the drawing.
                `.af-canvas-rule` in globals.css carries the reversal and the
                reason `local` attachment is the whole panning mechanism. */
@@ -1038,6 +1079,45 @@ export function UseCaseViewer({
               elementDrag={elementDrag?.moved === true ? elementDrag : null}
             />
           </div>
+          {/* ---- the heading's fields, OVER the drawing rather than in it.
+              Its size is `HEADING_FORM_SIZE` in CSS pixels and its position is
+              the heading's own box run through the `<svg>`'s matrix, so the
+              form is the same size at 10% and at 400% — which the canvas lock
+              and the zoom pill have always been, for the same reason: they are
+              HTML siblings of the `<svg>` and not children of it.
+
+              `z-10` puts it over the drawing and under the lock and the dock,
+              which own the pane's corners. ---- */}
+          {retitling && headingFormAt !== null ? (
+            <div
+              /* THE SCROLL LIVES ON THIS BOX rather than on the form, because
+                 this is the box whose height is definite: a percentage
+                 max-height inside an auto-height parent resolves to none, so
+                 the form clipping itself would have needed a second copy of
+                 the number. */
+              /* `af-uc-heading` ON THIS BOX TOO, which is the class the pane's
+                 pointerdown stands the pan down for. Both states of the
+                 heading wear it — the drawn press target inside the `<svg>`
+                 and these fields over it — so a press-and-drag starting on the
+                 form's own padding does not pan the canvas out from under a
+                 reader who is typing. It was free while the fields lived
+                 inside the `foreignObject` that already carried the class. */
+              className="af-uc-heading absolute z-10 overflow-auto"
+              style={{
+                left: headingFormAt.left,
+                top: headingFormAt.top,
+                width: HEADING_FORM_SIZE.width,
+                maxHeight: HEADING_FORM_SIZE.height,
+              }}
+            >
+              <HeadingForm
+                title={file.metadata.title}
+                description={file.metadata.description}
+                onSubmitFields={handleRetitle}
+                onCancel={closeRetitle}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* The lock, at the pane's top-right — the corner the C4, sequence and
@@ -1491,10 +1571,20 @@ function ElementWordingForm({
 /**
  * The document's own heading, typed into WHERE IT IS DRAWN.
  *
- * IT IS MOUNTED INSIDE THE CANVAS, in a `foreignObject` over the heading's own
- * box — see `UseCaseRetitleSurface`. The renderer owns the geometry because
- * only the layout knows where the measured title sits; this owns the fields,
- * because an editor is state and that renderer is pure.
+ * IT IS MOUNTED OVER THE CANVAS AND NOT IN IT, which is the fix for the
+ * reported "the edit form is as wide as the whole diagram". It used to sit in
+ * a `foreignObject` inside the `<svg>`, where native HTML is laid out in USER
+ * units and multiplied by the viewBox-to-viewport ratio — and this canvas's
+ * "fit" magnifies a small drawing, so on a compact document in a wide pane the
+ * form painted at 2.5x to 4.7x, with a 14px label at 36-66px. It is an
+ * absolutely positioned HTML sibling of the drawing now, the way the canvas
+ * lock and the zoom pill have always been, anchored to the heading's own box
+ * through `useCanvasOverlayPosition` and sized in CSS pixels.
+ *
+ * THE RENDERER STILL OWNS THE GEOMETRY — `usecaseHeadingHitBox` is the one
+ * answer to "where is the heading", read by the canvas for its press target
+ * and by the viewer for this anchor. This owns the fields, because an editor
+ * is state and that renderer is pure.
  *
  * SUBMIT, NOT KEYSTROKE, the same call `ElementWordingForm` above makes: every
  * gesture on this canvas is a source-text patch that lands in the undo ring,
@@ -1529,11 +1619,11 @@ function HeadingForm({
 
   return (
     <form
-      /* THE FIELDS SCROLL INSIDE THEIR BOX. A `foreignObject` clips to its own
-         rectangle and the box is clamped to stay inside the drawing, so on a
-         diagram shorter than the editor the Apply row would otherwise be
-         shaved off with nothing on screen to say so. */
-      className="flex size-full flex-col gap-2 overflow-auto rounded-md border border-node-border bg-node p-2"
+      /* IT SIZES ITSELF TO ITS ROWS, and the wrapper that positions it owns
+         the width and the scroll — see `HEADING_FORM_SIZE`. It used to be
+         `size-full` inside a `foreignObject`, which is where the 4.7x paint
+         came from. */
+      className="flex w-full flex-col gap-2 rounded-md border border-node-border bg-node p-2"
       /* THE PRESSES IN HERE ARE THE FORM'S, NOT THE PANE'S — the same
          stand-down the closed heading button makes, and it was missing here:
          every click while the fields are open reached the viewer's backdrop,

@@ -1567,58 +1567,45 @@ function layoutHeading(
 }
 
 /**
- * Where the heading's EDITOR goes, in LAYOUT UNITS — the box the canvas hands
- * the viewer's fields when the drawn heading has been pressed.
+ * The heading's press target, grown a little past the glyphs so the hover
+ * outline does not sit on the letters it offers to change. In LAYOUT UNITS,
+ * and the pad is smaller than `UC.marginX`/`marginTop` so the target can never
+ * reach outside the drawing.
  *
- * IT IS MEASURED OFF THE HEADING, not off a constant, and that is the whole
- * point of it living here. A fixed size ignored `heading.width`/`height`
- * entirely, so a diagram with a short title handed the reader a form half
- * again as wide as the words it replaced — the reported "the edit box looks
- * too big". The heading's own box is already solved from the wrapped title, so
- * the editor tracks it and the swap reads as the same thing becoming typeable
- * rather than a panel landing on top of it.
+ * IT IS DRAWN GEOMETRY and it is meant to scale with the picture: it covers a
+ * measured heading, so it has to be measured in the same units the heading is.
  *
- * `min` IS A FLOOR, NOT A SIZE. Two labelled fields and the Apply row have a
- * genuine minimum below which they stop being usable, and a one-line heading
- * is smaller than that — so the caller states the room its own HTML needs and
- * this grows past it whenever the heading is bigger. The floor belongs to the
- * component, because it is a measurement of form chrome and not of the
- * drawing.
+ * HERE RATHER THAN IN THE RENDERER because it has TWO readers now. The canvas
+ * puts the `foreignObject` on it; the viewer anchors the heading's HTML editor
+ * to it, through the `<svg>`'s own matrix (`useCanvasOverlayPosition`). Two
+ * copies of this arithmetic is one copy too many — the editor's box was solved
+ * in the renderer once before, and it ignored the heading it replaced.
  *
- * THE CLAMP IS NOT CAUTION. An `<svg>` clips its viewport, so a box reaching
- * past the bottom edge of a one-actor document would have its Apply button
- * shaved off with nothing on screen to say so; the returned box is always
- * inside `bounds`, and the form scrolls inside whatever room it is given.
- * `check:usecase-layout` asserts both halves — that the box tracks the
- * heading, and that it never leaves the frame.
- *
- * Pure, and here rather than in the renderer, so the check script can measure
- * it on real documents instead of reading it out of a `.tsx` file.
+ * THERE IS DELIBERATELY NO EDITOR BOX BESIDE THIS ONE ANY MORE. There used to
+ * be — `usecaseHeadingEditorBox`, a unit-space box the retitle form was sized
+ * from inside a `foreignObject` — and a unit-space size is the bug: everything
+ * inside the `<svg>` is multiplied by the viewBox-to-viewport ratio, and this
+ * canvas's "fit" magnifies a small drawing, so the form painted at up to 4.7x
+ * with a 66px label. The form is an HTML sibling of the drawing now and its
+ * size is in CSS pixels. Do not reintroduce a unit-space box for it.
  */
-export function usecaseHeadingEditorBox(
-  layout: Pick<UseCaseLayout, "bounds" | "heading">,
-  /** The press target's overhang past the glyphs — the editor starts where the
-   *  pressable heading started, so the box does not jump on the swap. */
+export function usecaseHeadingHitBox(
+  layout: Pick<UseCaseLayout, "heading">,
   pad: UCPoint,
-  min: { width: number; height: number },
 ): UCRect {
-  const { bounds, heading } = layout;
-  const width = Math.min(
-    Math.max(min.width, heading.width + pad.x * 2),
-    bounds.width,
-  );
-  const height = Math.min(
-    Math.max(min.height, heading.height + pad.y * 2),
-    bounds.height,
-  );
-  const anchor = { x: UC.marginX - pad.x, y: UC.marginTop - pad.y };
   return {
-    x: Math.max(bounds.x, Math.min(anchor.x, bounds.x + bounds.width - width)),
-    y: Math.max(
-      bounds.y,
-      Math.min(anchor.y, bounds.y + bounds.height - height),
-    ),
-    width,
-    height,
+    x: UC.marginX - pad.x,
+    y: UC.marginTop - pad.y,
+    width: layout.heading.width + pad.x * 2,
+    height: layout.heading.height + pad.y * 2,
   };
 }
+
+/**
+ * The overhang the press target above takes past the heading's glyphs.
+ *
+ * IN THE LAYOUT, NOT THE RENDERER, for `usecaseHeadingHitBox`'s reason: the
+ * renderer draws the box and the viewer anchors an overlay to the same box, so
+ * a pad typed in one of them would be a pad the other guessed at.
+ */
+export const UC_HEADING_HIT_PAD: UCPoint = { x: 6, y: 4 };

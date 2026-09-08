@@ -75,7 +75,7 @@ import type {
   LaidUseCaseEllipse,
   UseCaseLayout,
 } from "../lib/layout";
-import { UC, usecaseHeadingEditorBox } from "../lib/layout";
+import { UC, UC_HEADING_HIT_PAD, usecaseHeadingHitBox } from "../lib/layout";
 import { usecaseBreathPhase } from "../lib/motion";
 import {
   actorFigure,
@@ -192,52 +192,28 @@ export interface UseCaseDiagramProps {
  * What the canvas needs in order to make the drawn heading the affordance for
  * rewriting it, as the VIEWER assembles it.
  *
- * THE GEOMETRY IS THE ONLY THING THIS RENDERER KNOWS, and the form is the only
- * thing it does not: an editor is state and this component is pure and
- * server-renderable (a dictionary's own renderer states the same rule), so the
- * viewer owns the fields and hands the mounted element over. What arrives here
- * is where to put it — which nothing but the layout can answer, because the
- * heading's box is solved from the measured title.
+ * IT CARRIES NO REACT NODE, and that is the fix rather than a simplification.
+ * It used to carry the viewer's mounted fields, which this renderer put in a
+ * `foreignObject` — and native HTML inside an `<svg>` is laid out in USER
+ * UNITS, so the form was multiplied by the viewBox-to-viewport ratio like
+ * every ellipse beside it. This canvas's "fit" magnifies a small drawing, so
+ * on a compact document in a wide pane the form painted at 2.5x to 4.7x: a
+ * 14px label at 36-66px and an Apply button larger than the diagram's nodes.
+ *
+ * So the form is not this component's to mount any more. The viewer positions
+ * it as an HTML sibling of the drawing, anchored to `usecaseHeadingHitBox`
+ * through the `<svg>`'s own matrix, at a size stated in CSS pixels. What
+ * crosses this boundary is a press and a flag — never a node, which is what
+ * `check:usecase-layout` asserts, because a node is all it would take to put
+ * the form back inside the drawing.
  */
 export interface UseCaseRetitleSurface {
   /** Begin editing — pressing the drawn heading. */
   onOpen: () => void;
-  /** The viewer's fields while they are open, and `null` while the heading is
-   *  only pressable. */
-  form: React.ReactNode | null;
+  /** Whether the viewer's fields are open. The drawn heading and its press
+   *  target stand down while they are, so neither shows through the form. */
+  open: boolean;
 }
-
-/**
- * The heading's press target, grown a little past the glyphs so the hover
- * outline does not sit on the letters it offers to change. In LAYOUT UNITS,
- * and smaller than `UC.marginX`/`marginTop` so the target can never reach
- * outside the drawing.
- */
-const HEADING_HIT_PAD = { x: 6, y: 4 };
-
-/**
- * The LEAST room the editor's own HTML needs, in LAYOUT UNITS — one unit is
- * one CSS pixel at 100% zoom, which is what a `foreignObject` lays its
- * contents out in.
- *
- * A FLOOR, NOT A SIZE, and it used to be the size — which is the bug a reader
- * reported as "the edit box is too big". At a fixed 300×208 the form ignored
- * the heading it replaced entirely, so a diagram with a short title got a box
- * half again as wide as its own words. `usecaseHeadingEditorBox` measures the
- * heading and only falls back to these numbers when the heading is smaller
- * than the fields can live in.
- *
- * WHY A FLOOR IS STILL NEEDED. The height is the form's rows added up — the
- * padding, the two label-plus-field groups (the description is a two-row
- * textarea) and the Apply/Cancel row — and a one-line heading is a third of
- * that. The width is what leaves a title readable while it is being typed.
- * Below either, the box scrolls rather than clipping, but a reader would be
- * typing into a slot.
- *
- * MAINTAINED BY HAND against `DICT_TITLE_EDITOR` in `dict-diagram.tsx`, which
- * is the same shape one field shorter and which names this constant back.
- */
-const HEADING_EDITOR = { width: 240, height: 184 };
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
 const DIMMABLE =
@@ -263,9 +239,10 @@ export function UseCaseDiagram({
   const edgeDimmed = (index: number): boolean =>
     focusSet !== null && !focusSet.edges.has(index);
   const elementById = new Map(layout.elements.map((e) => [e.id, e]));
-  /* The heading's two states, read once: pressable, or open with the viewer's
-     fields in it. */
-  const headingFields = retitle?.form ?? null;
+  /* Whether the viewer's fields are open, read once. The drawn heading and its
+     press target both stand down while they are — the fields live over this
+     canvas rather than in it. */
+  const headingOpen = retitle?.open === true;
 
   return (
     <svg
@@ -394,10 +371,7 @@ export function UseCaseDiagram({
             opaque, so the drawn text would only show through at their edges. */}
       <g
         aria-hidden="true"
-        className={cn(
-          "pointer-events-none",
-          headingFields !== null && "hidden",
-        )}
+        className={cn("pointer-events-none", headingOpen && "hidden")}
       >
         <text
           x={UC.marginX}
@@ -455,59 +429,59 @@ export function UseCaseDiagram({
             part of the drawing, so it wants the keyboard behaviour, the focus
             ring and the hover state a real control brings — and it keeps this
             file's shapes out of `check:view-input`'s selection sweep, because
-            a heading is an ACTION and not a thing to select. ---- */}
-      {retitle === undefined ? null : (
-        <foreignObject
-          /* THE CLASS IS ON THE BOX, not on what is inside it, so that both
-             states — the press target and the open fields — are one thing the
-             viewer's pan can stand down for. */
-          className="af-uc-heading"
-          {...(headingFields === null
-            ? {
-                x: UC.marginX - HEADING_HIT_PAD.x,
-                y: UC.marginTop - HEADING_HIT_PAD.y,
-                width: layout.heading.width + HEADING_HIT_PAD.x * 2,
-                height: layout.heading.height + HEADING_HIT_PAD.y * 2,
-              }
-            : usecaseHeadingEditorBox(layout, HEADING_HIT_PAD, HEADING_EDITOR))}
-        >
-          {headingFields ?? (
-            <button
-              type="button"
-              /* A DASHED HAIRLINE, NEVER A FILL, and it is drawn at rest
-                 rather than only on hover: the title is the affordance, so a
-                 reader has to be able to see that it is one without pointing
-                 at it first, and the outline is the device an editor uses for
-                 exactly that. A fill of any strength — even a wash — would sit
-                 over the drawn `<text>` beneath this box and dim the title it
-                 offers to change.
+            a heading is an ACTION and not a thing to select.
 
-                 THE RING IS INSET because a `foreignObject` clips to its own
-                 box: an outline paints outside the border box and would be
-                 shaved off at the corners, which is where a keyboard reader is
-                 looking (the dictionary's handle stylesheet carries the same
-                 finding). */
-              className="size-full cursor-text rounded-md border border-dashed border-node-border/50 bg-transparent hover:border-node-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-              /* The identity focus is put back on after the edit — see
-                 `usecase-viewer.tsx`, which explains why a re-parse blurs
-                 whatever the reader pressed. */
-              data-af-uc-heading=""
-              /* ONE STRING FOR THE TOOLTIP AND THE NAME, the rule every
-                 wordless control here keeps, and it names the CURRENT title:
-                 with the drawn text pruned from the accessibility tree under
-                 `role="img"` on a read-only canvas, this is the only place a
-                 screen-reader user hears what they are about to change. */
-              aria-label={`Rewrite the diagram title and description — currently “${title}”`}
-              title="Rewrite the title and description"
-              onClick={(event) => {
-                /* The press is the heading's, not the pane's: the viewer's
-                   backdrop click would otherwise clear the reader's focus in
-                   the same gesture that opened the fields. */
-                event.stopPropagation();
-                retitle.onOpen();
-              }}
-            />
-          )}
+            THE PRESS TARGET STAYS IN HERE AND THE FORM DOES NOT, which is the
+            one asymmetry in this block. The target covers a MEASURED heading,
+            so it belongs in the heading's units and is right to scale with the
+            picture. The form covers nothing — it is chrome, sized for the
+            reader's screen — and scaling it is what made it paint at up to
+            4.7x. The viewer mounts it over this canvas instead; see
+            `useCanvasOverlayPosition`. ---- */}
+      {retitle === undefined || headingOpen ? null : (
+        <foreignObject
+          /* THE CLASS IS ON THE BOX, not on the button inside it, so the
+             viewer's pan stands down for the whole target rather than for the
+             ink of it. The viewer's heading-form overlay wears the same class,
+             so both states of the heading stand the pan down. */
+          className="af-uc-heading"
+          {...usecaseHeadingHitBox(layout, UC_HEADING_HIT_PAD)}
+        >
+          <button
+            type="button"
+            /* A DASHED HAIRLINE, NEVER A FILL, and it is drawn at rest
+               rather than only on hover: the title is the affordance, so a
+               reader has to be able to see that it is one without pointing
+               at it first, and the outline is the device an editor uses for
+               exactly that. A fill of any strength — even a wash — would sit
+               over the drawn `<text>` beneath this box and dim the title it
+               offers to change.
+
+               THE RING IS INSET because a `foreignObject` clips to its own
+               box: an outline paints outside the border box and would be
+               shaved off at the corners, which is where a keyboard reader is
+               looking (the dictionary's handle stylesheet carries the same
+               finding). */
+            className="size-full cursor-text rounded-md border border-dashed border-node-border/50 bg-transparent hover:border-node-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+            /* The identity focus is put back on after the edit — see
+               `usecase-viewer.tsx`, which explains why a re-parse blurs
+               whatever the reader pressed. */
+            data-af-uc-heading=""
+            /* ONE STRING FOR THE TOOLTIP AND THE NAME, the rule every
+               wordless control here keeps, and it names the CURRENT title:
+               with the drawn text pruned from the accessibility tree under
+               `role="img"` on a read-only canvas, this is the only place a
+               screen-reader user hears what they are about to change. */
+            aria-label={`Rewrite the diagram title and description — currently “${title}”`}
+            title="Rewrite the title and description"
+            onClick={(event) => {
+              /* The press is the heading's, not the pane's: the viewer's
+                 backdrop click would otherwise clear the reader's focus in
+                 the same gesture that opened the fields. */
+              event.stopPropagation();
+              retitle.onOpen();
+            }}
+          />
         </foreignObject>
       )}
     </svg>

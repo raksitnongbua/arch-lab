@@ -55,12 +55,14 @@
  *      role pairs `USECASE_ROLE_BY_KIND` maps to (screen and export cannot
  *      diverge), each declared exactly once so no theme block can shadow
  *      one into a half-populated variant.
- *  14. THE HEADING'S EDITOR BOX, measured: the retitle form tracks the
- *      heading it replaces rather than being a constant (the reported "the
- *      edit box is too big"), the component's form-chrome minimum acts as a
- *      FLOOR under a one-line heading, and a box asking for more room than
- *      the drawing has is pulled back inside `bounds` — past the frame the
- *      `<svg>` clips its viewport and the Apply button is silently gone.
+ *  14. THE HEADING'S PRESS TARGET, measured — and the retitle form's
+ *      SCALE-INDEPENDENCE, which is what replaced an editor-box section
+ *      here. The target is drawn geometry and tracks the heading it covers.
+ *      The FORM is not: it is an HTML sibling of the drawing, sized in CSS
+ *      pixels, because everything inside a `foreignObject` is multiplied by
+ *      the viewBox-to-viewport ratio and this canvas's "fit" MAGNIFIES a
+ *      small drawing — the reported "the edit form is as wide as the whole
+ *      diagram", measured at up to 4.7x with a 66px label.
  *  15. THE FOCUS EXITS, pinned from the viewer's SOURCE because the
  *      behaviour lives in a `.tsx` no harness here can load: a wording
  *      Apply drops the focus after the host's handler runs and without a
@@ -109,9 +111,11 @@ registerHooks({
 const { parseUseCaseText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutUseCase, UC, usecaseHeadingEditorBox } = await import(
+const usecaseLayoutModule = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/layout.ts")).href
 );
+const { layoutUseCase, UC, UC_HEADING_HIT_PAD, usecaseHeadingHitBox } =
+  usecaseLayoutModule;
 const { USECASE_KIND_TOKENS, USECASE_ROLE_BY_KIND } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/shapes.ts")).href
 );
@@ -782,31 +786,41 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
-/* The heading's editor box                                                 */
+/* The heading's press target, and the form's SCALE-INDEPENDENCE            */
 /*                                                                          */
-/* A reader reported the retitle form as "too big", and it was: the box was  */
-/* a flat 300x208 that never looked at the heading it replaced, so a         */
-/* diagram with a short title got a panel half again as wide as its own      */
-/* words. `usecaseHeadingEditorBox` measures the heading now, with the        */
-/* component's form-chrome minimum as a FLOOR. Both halves are asserted      */
-/* here, and the third — the clamp that keeps Apply out of the `<svg>`       */
-/* clip — is asserted on the smallest document there is, because that is     */
-/* the one where the form is bigger than the drawing.                        */
+/* THE BUG THIS SECTION IS THE PROOF FOR. The retitle form used to be a     */
+/* native `<form>` in a `foreignObject` INSIDE this canvas's `<svg>`.       */
+/* Everything in there is laid out in USER UNITS and multiplied by the      */
+/* viewBox-to-viewport ratio — and this canvas's "fit" deliberately         */
+/* MAGNIFIES a small drawing, so the form was painted at the camera's       */
+/* scale. Measured on real documents in a 1400x800 pane: a two-use-case     */
+/* diagram fits at 2.59x and a one-actor sketch at 4.71x, which turned a    */
+/* 240x184-unit box into 621x476 and 1131x740 CSS px and a 14px label into  */
+/* 36px and 66px. The reader's screenshot showed the form as wide as the    */
+/* whole boundary with an Apply button larger than the diagram's nodes.     */
 /*                                                                          */
-/* THE PAD AND THE FLOOR ARE ARGUMENTS, so nothing here is scraped out of    */
-/* the `.tsx` that owns them; what is proven is that the function is         */
-/* MEASURED rather than constant, which is what the reported bug was.        */
+/* THE PROPERTY THAT CATCHES IT is scale-independence: the form's on-screen */
+/* size must not change when `bounds` does. No script here can measure real */
+/* layout — these modules are loaded through Node's type stripping, which   */
+/* cannot read a `.tsx` at all — so the property is pinned in the two       */
+/* places it can actually be broken: there is NO unit-space box left in the */
+/* layout for a form to be sized from, and NO React node crosses the        */
+/* renderer's retitle surface, which is the only way HTML gets inside an    */
+/* `<svg>`. Break either and the form is back in the drawing.               */
+/*                                                                          */
+/* WHAT IS STILL MEASURED HERE is the PRESS TARGET, which did not move: it  */
+/* covers a measured heading, so it belongs in the heading's units and is   */
+/* right to scale with the picture. THE PAD IS AN ARGUMENT the layout owns  */
+/* and this reads back, so the box and the check cannot drift.              */
 /* ----------------------------------------------------------------------- */
 
-console.log("the heading's editor box (measured, floored, clamped)");
+console.log("the heading's press target (measured, inside the frame)");
 
 {
-  const PAD = { x: 6, y: 4 };
-  const FLOOR = { width: 240, height: 184 };
-  const editorBox = (l) => usecaseHeadingEditorBox(l, PAD, FLOOR);
+  const hitBox = (l) => usecaseHeadingHitBox(l, UC_HEADING_HIT_PAD);
 
-  /* Two documents that differ ONLY in their title's length. A constant-sized
-     box gives them the same width; a measured one does not, and the gap is
+  /* Two documents that differ ONLY in their title's length: a constant-sized
+     target gives them the same width, a measured one does not, and the gap is
      the gap between the two headings. */
   const titled = (title) =>
     layoutUseCase(
@@ -822,50 +836,64 @@ console.log("the heading's editor box (measured, floored, clamped)");
     "Editorial review workflow, in brief, with the second half spelled out",
   );
   check(
-    "the editor box is MEASURED off the heading, not sized from a constant — two documents differing only in title length get boxes whose widths differ by exactly what their headings' widths differ by, which is the reported 'the edit box is too big' held by measurement",
+    "the press target is MEASURED off the heading, not sized from a constant — two documents differing only in title length get targets whose widths differ by exactly what their headings' widths differ by",
     Math.abs(
-      editorBox(longTitle).width -
-        editorBox(shortTitle).width -
+      hitBox(longTitle).width -
+        hitBox(shortTitle).width -
         (longTitle.heading.width - shortTitle.heading.width),
-    ) < 1e-9 && editorBox(longTitle).width > editorBox(shortTitle).width,
-    `${box(editorBox(shortTitle))} vs ${box(editorBox(longTitle))}`,
+    ) < 1e-9 && hitBox(longTitle).width > hitBox(shortTitle).width,
+    `${box(hitBox(shortTitle))} vs ${box(hitBox(longTitle))}`,
   );
   check(
-    "both of those headings are wider than the floor — otherwise the assertion above would be comparing two floors and proving nothing about the measurement",
-    shortTitle.heading.width + PAD.x * 2 > FLOOR.width,
+    "the press target covers the heading it offers to change, pad included — a target ending before the words does not read as 'the title is the button'",
+    hitBox(shortTitle).width >= shortTitle.heading.width &&
+      hitBox(shortTitle).height >= shortTitle.heading.height,
+    box(hitBox(shortTitle)),
   );
-  check(
-    "the editor covers the heading it replaces, pad included — a form narrower than the words it is editing reads as a panel dropped beside the title rather than the title becoming typeable",
-    editorBox(shortTitle).width >= shortTitle.heading.width,
-  );
-  check(
-    "the floor still holds under a one-line heading — 'Sketch' measures a fraction of the room two labelled fields and the Apply row need, so the minimum is a floor and the box is never shrunk to the words",
-    editorBox(bareLayout).width === FLOOR.width,
-    `${box(editorBox(bareLayout))} for a heading ${bareLayout.heading.width} wide`,
-  );
-  /* THE CLIP. `check:usecase-layout` cannot see a shaved Apply button, but it
-     can see the box leave the frame the `<svg>` viewport is cut to — which is
-     the same thing one render later. Asserted against a floor LARGER than the
-     whole diagram, because that is the case that produced the shipped
-     symptom. */
+  /* THE PAD IS SMALLER THAN THE MARGINS, which is what keeps the target inside
+     the frame the `<svg>` clips its viewport to without any clamp at all — the
+     old editor box needed one because it was form-sized rather than
+     heading-sized. Asserted on every fixture, including the smallest document
+     there is. */
   for (const [label, l] of [
     ["bare", bareLayout],
     ["food delivery", layout],
     ["thai", thaiLayout],
   ]) {
-    const huge = usecaseHeadingEditorBox(l, PAD, {
-      width: 4000,
-      height: 4000,
-    });
+    const hit = hitBox(l);
     check(
-      `${label}: an editor asking for more room than the drawing has is pulled back inside bounds on both axes — past the frame the <svg> clips its viewport and the Apply button is gone with nothing on screen to say so`,
-      huge.x >= l.bounds.x &&
-        huge.y >= l.bounds.y &&
-        huge.x + huge.width <= l.bounds.x + l.bounds.width + 1e-9 &&
-        huge.y + huge.height <= l.bounds.y + l.bounds.height + 1e-9,
-      `${box(huge)} in bounds ${box(l.bounds)}`,
+      `${label}: the press target stays inside bounds on both axes — past the frame the <svg> clips its viewport and the affordance is partly unpressable`,
+      hit.x >= l.bounds.x &&
+        hit.y >= l.bounds.y &&
+        hit.x + hit.width <= l.bounds.x + l.bounds.width + 1e-9 &&
+        hit.y + hit.height <= l.bounds.y + l.bounds.height + 1e-9,
+      `${box(hit)} in bounds ${box(l.bounds)}`,
     );
   }
+}
+
+console.log("the retitle form's size does not depend on the diagram's");
+
+{
+  /* THE NAMED SCALE-INDEPENDENCE ASSERTION, module half. `usecaseHeadingEditorBox`
+     returned the form's box in LAYOUT UNITS, which is what let the camera
+     multiply it. Its deletion is asserted rather than assumed, because
+     reintroducing it is precisely what putting the form back inside the
+     `foreignObject` would require — and a helper with no reader is the mistake
+     `docs/adr/0003-usecase-and-er-positions.md` records twice on this branch. */
+  check(
+    "the layout exports NO unit-space editor box for the retitle form to be sized from — a form measured in layout units is a form the viewBox scale multiplies, which is the reported 'the edit form is as wide as the whole diagram'",
+    usecaseLayoutModule.usecaseHeadingEditorBox === undefined,
+    "usecaseHeadingEditorBox is back; a box in layout units cannot describe a control whose size must not change with the camera",
+  );
+  check(
+    "and the press target's pad is the LAYOUT's constant, read by both the canvas that draws the target and the viewer that anchors the form to it — two copies is how the editor box came to be solved in a renderer",
+    typeof UC_HEADING_HIT_PAD?.x === "number" &&
+      typeof UC_HEADING_HIT_PAD?.y === "number" &&
+      UC_HEADING_HIT_PAD.x < UC.marginX &&
+      UC_HEADING_HIT_PAD.y < UC.marginTop,
+    JSON.stringify(UC_HEADING_HIT_PAD),
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1359,10 +1387,41 @@ const VAR_TO_KEY = Object.fromEntries(
        the source because the behaviour lives in a `.tsx` component that no
        harness here can load — and each regex names the STATEMENT that would
        have to go missing, not the shape of the code around it. ---- */
+    /* THE NAMED SCALE-INDEPENDENCE ASSERTION, renderer half — the one that
+       goes red if the form is put back inside the `foreignObject`. A
+       `foreignObject` can only ever hold what this component is HANDED, and
+       the only thing that could be handed is a React node, so the surface
+       carrying none is the whole guard. The box it draws is the heading's own
+       press target, which is drawn geometry and right to scale; the FORM is
+       the viewer's, over the drawing, in CSS pixels. */
     check(
-      "the diagram hands the WHOLE LAYOUT to the shared editor-box helper rather than sizing the retitle form itself — a box computed in the renderer is how the form came to ignore the heading it replaces, which is the reported 'too big'",
-      /usecaseHeadingEditorBox\(\s*layout,/.test(diagramSrc) &&
-        !/HEADING_EDITOR\.(?:width|height)/.test(diagramSrc),
+      "the retitle FORM is never mounted inside the <svg>: the canvas's retitle surface carries no React node, and the one foreignObject it draws is the heading's own press target — HTML in there is laid out in user units and multiplied by the viewBox scale, which is the reported 'the edit form is as wide as the whole diagram'",
+      !/React\.ReactNode/.test(diagramSrc) &&
+        !/retitle\.form|headingFields/.test(diagramSrc) &&
+        /usecaseHeadingHitBox\(layout, UC_HEADING_HIT_PAD\)/.test(diagramSrc),
+      "a node crossing UseCaseRetitleSurface is a form back inside the drawing",
+    );
+    check(
+      "the diagram takes that press target from the shared layout helper rather than solving it — the viewer anchors the form to the same box, and two copies of the arithmetic is how the old editor box came to be placed by a clamp",
+      /usecaseHeadingHitBox\(/.test(diagramSrc) &&
+        !/HEADING_EDITOR|HEADING_HIT_PAD = /.test(diagramSrc),
+    );
+    check(
+      "and the viewer positions the form from the heading's SCREEN rect through the shared canvas overlay, at a size stated in CSS pixels with no layout term in it — `getScreenCTM` is the drag's own conversion run forwards, and it already knows the viewBox origin, the letterboxing and any transform above the pane",
+      /useCanvasOverlayPosition\(\{/.test(viewerSrc) &&
+        /usecaseHeadingHitBox\(layout, UC_HEADING_HIT_PAD\)/.test(viewerSrc) &&
+        /const HEADING_FORM_SIZE = \{ width: \d+, height: \d+ \}/.test(
+          viewerSrc,
+        ),
+      "the form is sized from something other than a CSS-pixel constant, or placed by hand-rolled arithmetic on zoom and scroll",
+    );
+    /* AND NO `foreignObject` REACHES AN EXPORT. That is what makes a native
+       control on this canvas safe at all: the share image, the PNG and the SVG
+       download render from the MODEL through `export/render-svg.ts`, which is
+       handed no interactive surface and must never grow one. */
+    check(
+      "the exporter serialises no foreignObject — a native control in a downloaded SVG renders as nothing in most consumers, and as a form in the rest",
+      !/foreignObject/.test(src("src/features/usecase/export/render-svg.ts")),
     );
     check(
       "applying a wording edit DROPS THE FOCUS, and drops it after the host's handler has run — the dock left standing over an element the reader has just finished rewriting is the reported bug, and clearing first would take the form away mid-submit",

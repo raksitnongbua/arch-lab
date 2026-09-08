@@ -38,9 +38,10 @@ import {
   ZOOM_PILL_CLASSES,
 } from "@/components/ui/zoom-pill";
 import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
+import { useCanvasOverlayPosition } from "@/components/ui/use-canvas-overlay";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
-import { layoutDict } from "../lib/layout";
+import { dictTitleBox, layoutDict } from "../lib/layout";
 import { DictDiagram, dictHandleKey } from "./dict-diagram";
 import type {
   DictReorderDirection,
@@ -65,6 +66,29 @@ import type {
  * A SECTION IS ADDRESSED BY ITS LABEL and a FIELD by its name under that
  * label, which is the addressing the gesture module and its spans use.
  */
+/**
+ * The title editor's size, in CSS PIXELS — the reader's own pixels, not the
+ * table's units.
+ *
+ * IT IS A CONSTANT AND NOT A MEASUREMENT, and that is the point. The previous
+ * box was `DICT_TITLE.editorMinWidth`/`editorHeight` in LAYOUT UNITS, inside a
+ * `foreignObject`, so the camera multiplied it: 240x112 units read as 960x448
+ * CSS px at 400% zoom, with a 56px label. Out here nothing scales it — 280px
+ * is a form, at every zoom and on every document.
+ *
+ * THE HEIGHT IS THE ROWS ADDED UP — padding, the label, the field, and the
+ * Apply/Cancel row — and it is also what the overlay is CLAMPED by:
+ * `useCanvasOverlayPosition` keeps this box inside the pane's visible
+ * rectangle, which is the clamp the unit-space box had against the drawing's
+ * edge, said about the thing that can cut it off now. The form scrolls inside
+ * it, so an under-estimate costs a scrollbar rather than a shaved-off Apply
+ * button.
+ *
+ * MAINTAINED BY HAND against `HEADING_FORM_SIZE` in `usecase-viewer.tsx`,
+ * which is the same form one field longer.
+ */
+const TITLE_FORM_SIZE = { width: 280, height: 148 };
+
 export interface DictEditHandlers {
   onReorderSection: (label: string, direction: DictReorderDirection) => void;
   onReorderField: (
@@ -274,28 +298,38 @@ export function DictViewer({
     setRetitling(false);
   }, []);
 
-  /* MOUNTED FRESH ON EVERY OPEN, so the field always reads the title the table
-     is drawing rather than a half-typed one left over from a document that has
-     changed underneath it. */
+  /* A PRESS AND A FLAG, and no node: HTML handed to the canvas would end up in
+     a `foreignObject` and be multiplied by the viewBox scale, which is what
+     grew the form with the reader's zoom. The field is mounted below, over the
+     table. */
   const retitle = useMemo(
     () =>
       onRetitle === undefined
         ? undefined
-        : {
-            onOpen: () => setRetitling(true),
-            form: retitling ? (
-              <TitleForm
-                title={file.metadata?.title ?? ""}
-                onSubmitTitle={(title) => {
-                  closeRetitle();
-                  onRetitle({ title });
-                }}
-                onCancel={closeRetitle}
-              />
-            ) : null,
-          },
-    [onRetitle, retitling, file.metadata?.title, closeRetitle],
+        : { onOpen: () => setRetitling(true), open: retitling },
+    [onRetitle, retitling],
   );
+
+  /**
+   * WHERE THE FIELD GOES: over the title it replaces, at a size the reader's
+   * screen decides and the table does not.
+   *
+   * The anchor is the DRAWN title's own box in layout units — the same box the
+   * canvas puts its press target on, from the same helper — and
+   * `useCanvasOverlayPosition` runs it through the `<svg>`'s matrix, which
+   * already knows the camera and any transform above the pane.
+   */
+  const svgRef = useRef<SVGSVGElement>(null);
+  const titleAnchor = useMemo(
+    () => (retitling ? dictTitleBox(size) : null),
+    [retitling, size],
+  );
+  const titleFormAt = useCanvasOverlayPosition({
+    paneRef,
+    svgRef,
+    anchor: titleAnchor,
+    size: TITLE_FORM_SIZE,
+  });
 
   useEffect(() => {
     if (!pendingTitleFocus.current) return;
@@ -340,7 +374,13 @@ export function DictViewer({
         /* THE GROUND, filling the pane rather than the drawing — the reversal
            is recorded at `.af-canvas-rule` in globals.css. */
         className={cn(
-          "flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4",
+          /* `relative` SO THE TITLE EDITOR HAS A BOX TO SIT IN. It is an HTML
+             sibling of the drawing rather than a `foreignObject` inside it
+             (that is what stopped it scaling with the viewBox), and a child of
+             THIS element rather than of the positioned parent above so that it
+             scrolls and clips with the table. `useCanvasOverlayPosition`
+             returns its offsets in this element's content coordinates. */
+          "relative flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4",
           CANVAS_RULE_CLASS,
         )}
         style={groundFieldCss(camera.scale)}
@@ -358,8 +398,39 @@ export function DictViewer({
             className="block"
             reorder={reorder}
             retitle={retitle}
+            svgRef={svgRef}
           />
         </div>
+        {/* ---- the title's field, OVER the table rather than in it. Its size
+            is `TITLE_FORM_SIZE` in CSS pixels and its position is the drawn
+            title's own box run through the `<svg>`'s matrix, so the form is
+            the same size at 10% and at 400% — which the zoom pill beside it
+            has always been, for the same reason: it is an HTML sibling of the
+            `<svg>` and not a child of it. ---- */}
+        {retitling && titleFormAt !== null ? (
+          <div
+            /* The scroll lives on THIS box, the one whose height is definite:
+               a percentage max-height inside an auto-height parent resolves to
+               none, so the form clipping itself would have needed a second
+               copy of the number. */
+            className="absolute z-10 overflow-auto"
+            style={{
+              left: titleFormAt.left,
+              top: titleFormAt.top,
+              width: TITLE_FORM_SIZE.width,
+              maxHeight: TITLE_FORM_SIZE.height,
+            }}
+          >
+            <TitleForm
+              title={file.metadata?.title ?? ""}
+              onSubmitTitle={(title) => {
+                closeRetitle();
+                onRetitle?.({ title });
+              }}
+              onCancel={closeRetitle}
+            />
+          </div>
+        ) : null}
       </div>
       {/* The house zoom pill — the same control, classes and gesture hints
           every other canvas mounts, so 400% and the pinch behave identically
@@ -434,10 +505,18 @@ const LABEL_CLASS = "text-xs font-medium text-muted-foreground";
 /**
  * The document's title, typed into WHERE IT IS DRAWN.
  *
- * IT IS MOUNTED INSIDE THE CANVAS, in a `foreignObject` over the title band —
- * see `DictRetitleSurface`. The renderer owns the geometry, because only the
- * layout knows where the title sits; this owns the field, because an editor is
- * state and that renderer is pure.
+ * IT IS MOUNTED OVER THE CANVAS AND NOT IN IT. It used to sit in a
+ * `foreignObject` inside the `<svg>`, where native HTML is laid out in USER
+ * units and multiplied by the viewBox-to-viewport ratio — so the form grew
+ * with the reader's zoom, reaching 960x448 CSS px at 400%. It is an absolutely
+ * positioned HTML sibling of the drawing now, the way the zoom pill has always
+ * been, anchored to the drawn title's box through `useCanvasOverlayPosition`
+ * and sized in CSS pixels.
+ *
+ * THE RENDERER STILL OWNS THE GEOMETRY — `dictTitleBox` is the one answer to
+ * "where is the title", read by the canvas for its press target and by the
+ * viewer for this anchor. This owns the field, because an editor is state and
+ * that renderer is pure.
  *
  * SUBMIT, NOT KEYSTROKE. Every gesture on this canvas is a source-text patch
  * that lands in the undo ring, so committing per character would fill the ring
@@ -464,11 +543,11 @@ function TitleForm({
 
   return (
     <form
-      /* THE FIELD SCROLLS INSIDE ITS BOX. A `foreignObject` clips to its own
-         rectangle and that box is clamped to stay inside the drawing, so on a
-         one-section dictionary the Apply row would otherwise be shaved off
-         with nothing on screen to say so. */
-      className="flex size-full flex-col gap-2 overflow-auto rounded-md border border-node-border bg-node p-2"
+      /* IT SIZES ITSELF TO ITS ROWS, and the wrapper that positions it owns
+         the width and the scroll — see `TITLE_FORM_SIZE`. It used to be
+         `size-full` inside a `foreignObject`, which is where the 4x paint at
+         400% came from. */
+      className="flex w-full flex-col gap-2 rounded-md border border-node-border bg-node p-2"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmitTitle(next.trim());
