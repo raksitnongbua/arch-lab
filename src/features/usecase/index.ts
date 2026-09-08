@@ -27,6 +27,7 @@
  */
 
 export { UseCaseViewer } from "./components/usecase-viewer";
+export type { UseCaseEditHandlers } from "./components/usecase-viewer";
 export { UseCaseShareButton } from "./share/share-button";
 export { UseCaseExportButton } from "./export/export-button";
 export {

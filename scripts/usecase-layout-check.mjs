@@ -1016,6 +1016,74 @@ title "Sketch"
 }
 
 /* ----------------------------------------------------------------------- */
+/* The reported shift is the one that was applied                           */
+/* ----------------------------------------------------------------------- */
+
+console.log(
+  "\nthe reported shift inverts (a drag can write back what it drew)",
+);
+
+/* WHY THIS EXISTS. The canvas turns a DROPPED point into a `position` by
+   subtracting `layout.shift`, and it takes that number on trust: it used to
+   recover the shift by PROBING — pin one element at the origin, re-solve, read
+   where it landed — which was self-checking, because a probe that read the
+   wrong number would have been reading the layout's own answer. Reading a
+   reported field is cheaper and is not self-checking, so the property the
+   probe got for free has to be asserted here instead.
+
+   MEASURED AS A ROUND TRIP, not as a restatement of `dx`/`dy`: take a document
+   that states no position, subtract the reported shift from where an element
+   is DRAWN, feed that back as its `position`, and the element must lay out on
+   the same drawn point. That is exactly the arithmetic the drag performs, so a
+   reported shift that is not the applied one fails here rather than on
+   somebody's screen. Fed through the MODEL rather than through `pin (x,y)`
+   text, because the round trip is exact arithmetic and the grammar's token is
+   written in whole units.
+
+   IT IS SOUND because the shift is measured off SOLVED geometry alone (the
+   extents pass), so pinning the element under test cannot move the quantity
+   being inverted — the promise the block above this one already asserts from
+   the other side. */
+{
+  const solvedShift = solvedLayout.shift;
+
+  /* NOT VACUOUS FIRST. A document whose shift happened to be zero would pass
+     the round trip whatever the field said, so the case is only worth
+     inverting once this document is known to be shifted at all. */
+  check(
+    "this document really is shifted, so inverting it is not a no-op",
+    solvedShift.dx !== 0 && solvedShift.dy !== 0,
+    `shift ${JSON.stringify(solvedShift)}`,
+  );
+
+  /* An actor and a boundary member both, because they are placed by different
+     passes and only one of them would notice a shift applied per zone. */
+  for (const id of ["pay", "refund", "invoice", "auditor", "customer"]) {
+    const drawn = solvedLayout.elements.find((e) => e.id === id);
+    const model = parseUseCaseText(pinnedDoc());
+    const stated = {
+      x: drawn.x - solvedShift.dx,
+      y: drawn.y - solvedShift.dy,
+    };
+    const replayed = layoutUseCase({
+      ...model,
+      elements: model.elements.map((element) =>
+        element.id === id ? { ...element, position: stated } : element,
+      ),
+    });
+    const back = replayed.elements.find((e) => e.id === id);
+    /* Compared to a millionth of a unit. The inversion is exact arithmetic;
+       the tolerance is IEEE representation of `(a - b) + b`, not slack in the
+       contract — a shift off by even one unit is thousands of times this. */
+    check(
+      `${id}: drawn point → minus the reported shift → back to the same drawn point`,
+      Math.abs(back.x - drawn.x) < 1e-6 && Math.abs(back.y - drawn.y) < 1e-6,
+      `drew ${box(drawn)}, stated ${JSON.stringify(stated)}, laid back out at ${box(back)}`,
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* TS ↔ CSS pins — motion                                                   */
 /* ----------------------------------------------------------------------- */
 

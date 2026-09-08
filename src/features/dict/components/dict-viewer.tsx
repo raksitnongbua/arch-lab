@@ -10,10 +10,18 @@
  * meaning, the provenance, the legal values, an example. There is nothing left
  * for a panel to reveal, so a panel would be a second copy of the row.
  *
- * A client component only for the live region; `DictDiagram` is pure and
- * server-renderable, which is what lets the crawlable pages ship the whole
- * table in their HTML. That matters more for this kind than any other — a
- * reference document a search engine cannot read is a reference nobody finds.
+ * THAT STILL HOLDS NOW THAT THE CANVAS IS EDITABLE, and the reorder handles are
+ * not a focus model creeping back in: a handle is an ACTION on the row it sits
+ * in, so pressing one changes the document rather than selecting anything, and
+ * there is nothing to clear afterwards. `DictEditHandlers` says what the
+ * actions are and `dict-diagram.tsx` how they are drawn.
+ *
+ * A client component for the live region, for the pane's own width, and — when
+ * editing is on — for giving focus back to the handle a reorder just moved.
+ * `DictDiagram` is still pure and server-renderable, which is what lets the
+ * crawlable pages ship the whole table in their HTML. That matters more for
+ * this kind than any other — a reference document a search engine cannot read
+ * is a reference nobody finds.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -33,11 +41,64 @@ import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
 import { layoutDict } from "../lib/layout";
-import { DictDiagram } from "./dict-diagram";
+import { DictDiagram, dictHandleKey } from "./dict-diagram";
+import type {
+  DictReorderDirection,
+  DictReorderSurface,
+  DictReorderTarget,
+} from "./dict-diagram";
+
+/**
+ * The gestures this canvas can send back, when editing is on.
+ *
+ * PRESENCE IS THE OFFER, as on the flowchart canvas: the whole bundle is
+ * absent while the canvas is locked or read-only, and the viewer then draws no
+ * editing chrome at all rather than a table of dead controls.
+ *
+ * EVERY GESTURE IS A REORDER, and there will be no move. A dictionary is a
+ * table whose column grid is solved across the whole document at once, so it
+ * carries no coordinate to write a drag into — a block dropped at a point
+ * would be re-solved back onto the grid by the next parse. What a reader can
+ * change is the READING ORDER, which is already the text: a section's place is
+ * its position in the file, a field's is its position inside its section.
+ *
+ * A SECTION IS ADDRESSED BY ITS LABEL and a FIELD by its name under that
+ * label, which is the addressing the gesture module and its spans use.
+ */
+export interface DictEditHandlers {
+  onReorderSection: (label: string, direction: DictReorderDirection) => void;
+  onReorderField: (
+    sectionLabel: string,
+    fieldName: string,
+    direction: DictReorderDirection,
+  ) => void;
+  /**
+   * Why this reorder would be declined, or `null`. Asked as each control is
+   * DRAWN rather than after a press, so the ends of a run read as walls: the
+   * first section cannot move earlier, and a control that completes and
+   * silently changes nothing reads as broken.
+   *
+   * The sentence belongs to the gesture module — the canvas never composes one
+   * of its own, so a reason read off a handle matches the reason read
+   * anywhere else.
+   *
+   * IT TAKES THE FILE, which the viewer already has, so the host can hand the
+   * module's own function over UNBOUND. A pre-bound closure would be a second
+   * place the "which file is this about" question is answered, free to answer
+   * it with a stale model one render behind the table on screen.
+   */
+  reorderRefusal: (
+    file: DictLabFile,
+    target: DictReorderTarget,
+    direction: DictReorderDirection,
+  ) => string | null;
+}
 
 export interface DictViewerProps {
   file: DictLabFile;
   onAnnounce?: (message: string) => void;
+  /** Editing gestures, or absent — see `DictEditHandlers`. */
+  edit?: DictEditHandlers;
   /**
    * The canvas lock, rendered at this pane's own top-right — the corner every
    * other canvas puts its own in, so a reader moving between notations finds
@@ -55,6 +116,7 @@ export interface DictViewerProps {
 export function DictViewer({
   file,
   onAnnounce,
+  edit,
   lockSlot,
 }: DictViewerProps): React.JSX.Element {
   const paneRef = useRef<HTMLDivElement>(null);
@@ -99,6 +161,94 @@ export function DictViewer({
     onAnnounce,
   });
 
+  /**
+   * THE HANDLE A REORDER MUST GIVE FOCUS BACK TO.
+   *
+   * A reorder re-renders the table with the row somewhere else, and the handle
+   * the reader pressed is inside that row — so the browser is being asked to
+   * keep focus on a node the reconciler has just moved in the document, which
+   * blurs it. A reader walking a field up the section with Enter would get one
+   * step and then find focus back at the top of the page, which makes the
+   * whole gesture pointer-only in practice. React's keys are not enough on
+   * their own: they keep the ELEMENT, and a moved element still loses focus.
+   *
+   * So the press records which control it was, by the identity that SURVIVES
+   * the move — the target's own label and name, not a DOM node or an index —
+   * and the commit that follows puts focus back there. Both directions of the
+   * pair are recorded, so a reader who pressed "later" keeps pressing "later".
+   */
+  const pendingFocus = useRef<string | null>(null);
+  const focusFrame = useRef(0);
+
+  /* The expiry frame a last press left behind, dropped on unmount. */
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(focusFrame.current);
+    },
+    [],
+  );
+
+  const reorder = useMemo<DictReorderSurface | undefined>(() => {
+    if (edit === undefined) return undefined;
+    /* The file is bound HERE, in one place, so the control's paint and the
+       press's verdict cannot ask about two different models. */
+    const refusal = (
+      target: DictReorderTarget,
+      direction: DictReorderDirection,
+    ): string | null => edit.reorderRefusal(file, target, direction);
+    return {
+      refusal,
+      onPress: (target, direction) => {
+        const declined = refusal(target, direction);
+        /* THE ONE THING THIS CANVAS ANNOUNCES. The host announces what moved,
+           and a second sentence for the same event would race it — two live
+           regions updated together swallow one of the two. A press on a wall
+           is the half the host never sees, because no edit reaches it. */
+        if (declined !== null) {
+          onAnnounce?.(declined);
+          return;
+        }
+        pendingFocus.current = dictHandleKey(target, direction);
+        /* AND THE CLAIM EXPIRES AT THE NEXT FRAME. The commit that answers it
+           lands inside this same press — React flushes a discrete event's
+           update before yielding — so anything still standing a frame later
+           belongs to a press that changed nothing: the HOST can decline one it
+           cannot patch safely, when the pane holds text whose line numbers
+           describe a different document. A claim left standing would then
+           steal focus at whatever unrelated commit came next. */
+        cancelAnimationFrame(focusFrame.current);
+        focusFrame.current = requestAnimationFrame(() => {
+          pendingFocus.current = null;
+        });
+        if (target.kind === "section") {
+          edit.onReorderSection(target.sectionLabel, direction);
+        } else {
+          edit.onReorderField(target.sectionLabel, target.fieldName, direction);
+        }
+      },
+    };
+  }, [edit, file, onAnnounce]);
+
+  /* Deliberately on EVERY commit rather than on `[file]`: the reorder arrives
+     as a new file, but so does an edit typed in the pane, and only a press
+     that set a claim above is answered here. Matched by reading the attribute
+     back rather than through a selector, because a section label is arbitrary
+     text and escaping it for one is a bug waiting to be written. */
+  useEffect(() => {
+    const key = pendingFocus.current;
+    if (key === null) return;
+    pendingFocus.current = null;
+    const handles =
+      paneRef.current?.querySelectorAll<HTMLElement>("[data-af-dict-handle]") ??
+      [];
+    for (const handle of handles) {
+      if (handle.dataset.afDictHandle === key) {
+        handle.focus();
+        return;
+      }
+    }
+  });
+
   return (
     <div className="relative h-full w-full">
       {/* The lock, in the same corner as every other canvas's — see
@@ -130,6 +280,7 @@ export function DictViewer({
             file={file}
             availableWidth={paneWidth - 32}
             className="block"
+            reorder={reorder}
           />
         </div>
       </div>

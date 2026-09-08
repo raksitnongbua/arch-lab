@@ -54,6 +54,7 @@ import {
 import { parseErInput } from "@/features/er/input/parse";
 
 import { canvasEditability } from "./canvas-edit";
+import { isReleasable } from "./placement";
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
 import type { ViewDocument } from "./parse";
 
@@ -205,9 +206,10 @@ export function resetErPositionsEdit(
   if (!canvasEditability(doc, "move").editable || doc.kind !== "er") {
     return null;
   }
-  const releasable = doc.file.entities.filter(
-    (entity) => entity.pinned !== true && entity.position !== undefined,
-  );
+  /* THE RULE LIVES IN `placement.ts`, not here and not in the sibling
+     module: three callers asked it and three spelled it. Its own note carries
+     why it is token presence rather than a comparison. */
+  const releasable = doc.file.entities.filter(isReleasable);
   if (releasable.length === 0) return null;
 
   const released = new Set(releasable.map((entity) => entity.id));

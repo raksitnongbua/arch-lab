@@ -340,6 +340,31 @@ export interface UseCaseLayout {
   /** Use cases in no boundary, placed below the boundaries. */
   unbounded: readonly string[];
   /**
+   * THE TRANSLATION THIS LAYOUT APPLIED to every solved coordinate, so a
+   * caller holding a DRAWN point can recover the point the text should state.
+   *
+   * WHY IT IS REPORTED RATHER THAN INFERRED. This notation solves around its
+   * own origin and then slides the whole cast into the margins and down under
+   * the heading, so a drawn point and a stated `(x,y)` differ by a
+   * heading-height. A drag that wrote the drawn point straight through would
+   * place the shape that far from the cursor and walk it further on every
+   * drag — silently, with every check green. The canvas first recovered this
+   * by PROBING the layout — pin one element at the origin, re-solve, read
+   * where it landed — which was sound, but paid for a second full solve per
+   * document and inferred a number this function already had.
+   *
+   * IT IS SAFE TO INVERT, and that is a property of the extents pass rather
+   * than a coincidence: the shift is measured off SOLVED geometry alone, never
+   * off where a pin sits — the promise ADR 0003 makes and
+   * `check:usecase-layout` asserts. So subtracting it from a dropped point
+   * gives a coordinate that lays back out under the cursor, and the answer
+   * does not drift as pins accumulate.
+   *
+   * The ER layout needs no such field: `layoutEr` writes a stated coordinate
+   * straight onto the box, so a drawn point there IS the stated one.
+   */
+  shift: { dx: number; dy: number };
+  /**
    * THE RECTANGLE EVERY DRAWN THING ACTUALLY OCCUPIES — what a viewBox must
    * be, as against `width`/`height`, which measure the canvas from the
    * origin.
@@ -1459,6 +1484,8 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
   const boundsX = overflowX < 0 ? overflowX - UC.marginX : 0;
   const boundsY = overflowY < 0 ? overflowY - UC.marginTop : 0;
   return {
+    /* Reported so a drag can invert it — see the field's own note. */
+    shift: { dx, dy },
     width,
     height,
     heading,

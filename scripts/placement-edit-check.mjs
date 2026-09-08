@@ -100,8 +100,7 @@ registerHooks({
   },
 });
 
-const load = async (rel) =>
-  import(pathToFileURL(path.join(ROOT, rel)).href);
+const load = async (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 
 const er = await load("src/features/playground/input/er-edit.ts");
 const uc = await load("src/features/playground/input/usecase-edit.ts");
@@ -286,7 +285,8 @@ for (const n of NOTATIONS) {
           !/\bpin\b/.test(unpinned.text) &&
           unpinned.text.includes("(320,96)"),
         "absent is the normal case here; `pin=false` would accrete a token " +
-          "that changes nothing: " + JSON.stringify(unpinned?.text),
+          "that changes nothing: " +
+          JSON.stringify(unpinned?.text),
       );
 
       /* 8. THE SWEEP SKIPS IT; THE DIRECT RELEASE DOES NOT. */

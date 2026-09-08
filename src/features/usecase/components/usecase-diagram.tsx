@@ -152,6 +152,30 @@ export interface UseCaseDiagramProps {
   zoom: number | "fit";
   onFocusElement: (id: string) => void;
   onFocusEdge: (index: number) => void;
+  /**
+   * The live `<svg>`, handed back so the host can turn client pixels into
+   * layout units through the element's own matrix.
+   *
+   * A REF RATHER THAN THE HOST RE-DERIVING THE CAMERA: the frame below is
+   * `layout.bounds`, whose `x`/`y` go negative the moment something is pinned
+   * left of or above the origin, and `preserveAspectRatio` letterboxes on top
+   * of that. `getScreenCTM` already knows both.
+   */
+  svgRef?: React.Ref<SVGSVGElement>;
+  /**
+   * Start moving an element by dragging its figure or its ellipse. PRESENCE IS
+   * THE OFFER, as on the flowchart canvas: a locked, read-only or Mermaid-pane
+   * canvas passes nothing and the press falls through to the focus click it has
+   * always been.
+   *
+   * ONE HANDLER FOR BOTH SHAPES, because an actor and a use case are one
+   * `UseCaseElement` with a `kind` and a drag on either is the same edit —
+   * `usecase-edit.ts` makes the same point about its own gestures.
+   */
+  onElementDragStart?: (id: string, event: React.PointerEvent) => void;
+  /** The in-flight move, in LAYOUT UNITS: where the dragged shape's top-left
+   *  would land. Null when nothing is being dragged. */
+  elementDrag?: { id: string; x: number; y: number } | null;
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -167,6 +191,9 @@ export function UseCaseDiagram({
   zoom,
   onFocusElement,
   onFocusEdge,
+  svgRef,
+  onElementDragStart,
+  elementDrag = null,
 }: UseCaseDiagramProps): React.JSX.Element {
   const focusSet = resolveUseCaseFocus(layout, focus);
   const elementDimmed = (id: string): boolean =>
@@ -177,6 +204,7 @@ export function UseCaseDiagram({
 
   return (
     <svg
+      ref={svgRef}
       /* THE LAYOUT'S OWN FRAME, which is `0 0 width height` for every
          document that pins nothing and wider than it whenever a pinned
          element sits outside the solved bounds. Reading `0 0` here cropped
@@ -246,6 +274,10 @@ export function UseCaseDiagram({
           toLabel={elementById.get(edge.to)?.label ?? edge.to}
           focused={focus?.kind === "edge" && focus.index === edge.index}
           dimmed={edgeDimmed(edge.index)}
+          stale={
+            elementDrag !== null &&
+            (edge.from === elementDrag.id || edge.to === elementDrag.id)
+          }
           onFocus={() => onFocusEdge(edge.index)}
           onKeyDown={keyActivate(() => onFocusEdge(edge.index))}
         />
@@ -262,6 +294,8 @@ export function UseCaseDiagram({
             dimmed={elementDimmed(element.id)}
             onFocus={() => onFocusElement(element.id)}
             onKeyDown={keyActivate(() => onFocusElement(element.id))}
+            onDragStart={onElementDragStart}
+            drag={elementDrag?.id === element.id ? elementDrag : null}
           />
         ) : (
           <UseCaseNode
@@ -272,6 +306,8 @@ export function UseCaseDiagram({
             dimmed={elementDimmed(element.id)}
             onFocus={() => onFocusElement(element.id)}
             onKeyDown={keyActivate(() => onFocusElement(element.id))}
+            onDragStart={onElementDragStart}
+            drag={elementDrag?.id === element.id ? elementDrag : null}
           />
         ),
       )}
@@ -350,11 +386,18 @@ function HitRect({
   ariaLabel,
   onFocus,
   onKeyDown,
+  onDragStart,
 }: {
   element: LaidUseCaseElement;
   ariaLabel: string;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Begin a move. The SAME rect is the focus target and the move handle —
+   *  not a separate overlay, because two stacked hit areas over one shape is
+   *  how a click starts landing on whichever happens to be on top after the
+   *  next edit, and the host already tells a click from a drag by distance
+   *  travelled. */
+  onDragStart?: (event: React.PointerEvent) => void;
 }): React.JSX.Element {
   // The bounding box is the target, not the outline: an ellipse's corners
   // and the air between a figure's legs are exactly where a pointer aims.
@@ -372,6 +415,7 @@ function HitRect({
         role="button"
         tabIndex={0}
         aria-label={ariaLabel}
+        onPointerDown={onDragStart}
         onClick={(event) => {
           event.stopPropagation();
           onFocus();
@@ -418,6 +462,8 @@ function Actor({
   dimmed,
   onFocus,
   onKeyDown,
+  onDragStart,
+  drag = null,
 }: {
   element: LaidUseCaseActor;
   tagColors?: Readonly<Record<string, string>>;
@@ -425,6 +471,10 @@ function Actor({
   dimmed: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Where this shape's top-left is being dragged to, or null when it is not
+   *  the shape in flight. */
+  drag?: { x: number; y: number } | null;
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
 }): React.JSX.Element {
   const paint = elementPaint(element, tagColors);
   const strokeColor = focused ? "var(--primary)" : paint.stroke;
@@ -438,6 +488,26 @@ function Actor({
     <g
       className={cn(DIMMABLE, "af-uc-actor", dimmed && DIM)}
       data-element-id={element.id}
+      /* THE TRANSLATE RIDES THE GROUP ITSELF, which the ER canvas cannot do:
+         the entrance here animates a CHILD (`.af-uc-body`), so nothing
+         outranks a presentation attribute written up here, while
+         `af-er-rise` animates the ER entity's own group with `forwards` fill
+         and parks its transform for the life of the page.
+
+         THE REAL SHAPE MOVES, at reduced opacity, rather than a ghost outline
+         beside it — the flowchart canvas's answer, and for its reason: a
+         reader dragging a shape wants to see the shape, not translate between
+         two of them to judge where it lands. The lines cannot follow until the
+         next solve, so the ones touching it dim for the length of the gesture
+         (see `Edge`'s `stale`). An inline `style` opacity rather than the
+         `DIM` class, because it has to beat that class while a dimmed shape is
+         the one being dragged. */
+      transform={
+        drag === null
+          ? undefined
+          : `translate(${drag.x - element.x} ${drag.y - element.y})`
+      }
+      style={drag === null ? undefined : { opacity: 0.6 }}
     >
       <g className="af-uc-body">
         {/* Head filled with the kind's fill so the figure carries the same
@@ -513,6 +583,11 @@ function Actor({
         ariaLabel={ariaLabel}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
+        onDragStart={
+          onDragStart === undefined
+            ? undefined
+            : (event) => onDragStart(element.id, event)
+        }
       />
     </g>
   );
@@ -529,6 +604,8 @@ function UseCaseNode({
   dimmed,
   onFocus,
   onKeyDown,
+  onDragStart,
+  drag = null,
 }: {
   element: LaidUseCaseEllipse;
   tagColors?: Readonly<Record<string, string>>;
@@ -536,6 +613,10 @@ function UseCaseNode({
   dimmed: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Where this shape's top-left is being dragged to, or null when it is not
+   *  the shape in flight. */
+  drag?: { x: number; y: number } | null;
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
 }): React.JSX.Element {
   const paint = elementPaint(element, tagColors);
   // The surface wash (the C4 canvas's polish layer): a per-instance
@@ -557,12 +638,23 @@ function UseCaseNode({
 
   return (
     <g
+      /* The drag's translate and wash — `Actor` above carries the argument for
+         putting both on this group rather than on the animated child. */
+      transform={
+        drag === null
+          ? undefined
+          : `translate(${drag.x - element.x} ${drag.y - element.y})`
+      }
       className={cn(DIMMABLE, "af-uc-node", dimmed && DIM)}
       data-element-id={element.id}
       style={
         {
           "--node-fill": paint.fill,
           "--node-stroke": paint.stroke,
+          /* The drag's wash rides the group's existing style rather than the
+             `DIM` class, because it has to beat that class while the shape
+             being dragged is also a dimmed one. */
+          ...(drag === null ? {} : { opacity: 0.6 }),
         } as React.CSSProperties
       }
     >
@@ -635,6 +727,11 @@ function UseCaseNode({
         ariaLabel={ariaLabel}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
+        onDragStart={
+          onDragStart === undefined
+            ? undefined
+            : (event) => onDragStart(element.id, event)
+        }
       />
     </g>
   );
@@ -650,6 +747,7 @@ function Edge({
   toLabel,
   focused,
   dimmed,
+  stale = false,
   onFocus,
   onKeyDown,
 }: {
@@ -658,6 +756,11 @@ function Edge({
   toLabel: string;
   focused: boolean;
   dimmed: boolean;
+  /** True while one of the two shapes this line joins is being dragged, so
+   *  the route it draws no longer describes where that shape is. A stale line
+   *  at full strength is the drawing asserting something untrue; a faded one
+   *  reads as "this will be redrawn". */
+  stale?: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element | null {
@@ -682,6 +785,7 @@ function Edge({
              must not reshuffle a resting diagram, and the exporter must stay
              deterministic. */
           "--uc-breath-phase": `${usecaseBreathPhase(edge.index)}ms`,
+          ...(stale ? { opacity: 0.3 } : {}),
         } as React.CSSProperties
       }
     >

@@ -23,12 +23,24 @@
  * dictionary, which for this kind matters more than for any other — a
  * dictionary is a reference document, and a reference that needs JavaScript is
  * one a search engine cannot quote.
+ *
+ * THE ONE INTERACTIVE THING IT DRAWS is the reorder chip, and only when the
+ * viewer hands it a `reorder` surface — a static render, an export and the
+ * `/demo` preview pass nothing and get the table they always got.
  */
 
 import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
+import { cn } from "@/lib/utils";
 import type { DictLabFile } from "@/types";
 
-import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
+import {
+  BADGE,
+  COLUMN_LABEL,
+  DICT,
+  DICT_HANDLE,
+  dictHandleChip,
+  layoutDict,
+} from "../lib/layout";
 import type { DictColumn, LaidDictField } from "../lib/layout";
 
 /**
@@ -68,26 +80,290 @@ const FLAG_PAINT: Readonly<
    measured from the same numbers this draws with, which is the only thing that
    keeps a badge run inside the column reserved for it. */
 
+/* -------------------------------------------------------------------------- */
+/* The reorder surface                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Which way a block trades places with its neighbour. Named for the READING
+ * ORDER, because that is what the text records — the same two words the
+ * gesture module writes with. */
+export type DictReorderDirection = "earlier" | "later";
+
+/** What a reorder addresses: a section by its label, a field by its name
+ * nested under its section's, because a field name is unique inside its
+ * section and not across the file. */
+export type DictReorderTarget =
+  | { kind: "section"; sectionLabel: string }
+  | { kind: "field"; sectionLabel: string; fieldName: string };
+
+/**
+ * What the canvas needs in order to draw a reorder control, as the VIEWER
+ * assembles it.
+ *
+ * DECLARED HERE RATHER THAN IMPORTED from the gesture module that honours it,
+ * so the dependency runs one way: the playground knows about the dictionary
+ * feature and not the reverse. Both sides are structural, so the host's
+ * `dictReorderRefusal` binding satisfies `refusal` without either file naming
+ * the other.
+ *
+ * `onPress` IS CALLED FOR AN UNAVAILABLE CONTROL TOO. This renderer decides
+ * how a refused control LOOKS; what a press on one does — say the reason out
+ * loud — is policy, and policy lives with the live region in the viewer.
+ */
+export interface DictReorderSurface {
+  /** Why this control cannot act, or `null` when it can. The sentence is the
+   * gesture module's own, so a reason read off a handle matches one read
+   * anywhere else. */
+  refusal: (
+    target: DictReorderTarget,
+    direction: DictReorderDirection,
+  ) => string | null;
+  onPress: (target: DictReorderTarget, direction: DictReorderDirection) => void;
+}
+
+/**
+ * A handle's identity in the DOM, so focus can be put back on the control the
+ * reader pressed after the row it moves has been re-rendered somewhere else.
+ *
+ * JSON RATHER THAN A JOINED STRING: a section label may contain any character
+ * a reader can type, separator included, and two different targets colliding
+ * on one key would move focus to the wrong row.
+ */
+export function dictHandleKey(
+  target: DictReorderTarget,
+  direction: DictReorderDirection,
+): string {
+  return JSON.stringify(
+    target.kind === "section"
+      ? [target.kind, target.sectionLabel, direction]
+      : [target.kind, target.sectionLabel, target.fieldName, direction],
+  );
+}
+
+/** The chevrons, drawn on `DICT_HANDLE.grid`. Inline paths rather than a
+ * lucide import: this glyph scales with the table's own units rather than
+ * arriving at a fixed pixel size, and two chevrons is less code than the
+ * import that would bring them. */
+const HANDLE_GLYPH: Readonly<Record<DictReorderDirection, string>> = {
+  earlier: "M4 10.25 L8 6.25 L12 10.25",
+  later: "M4 5.75 L8 9.75 L12 5.75",
+};
+
+/**
+ * What pressing does, as the accessible name — never a state word.
+ *
+ * THE NAME IS THE ONLY CHANNEL a screen-reader or voice-control user has,
+ * which is the argument `canvas-lock-button.tsx` makes for its own wordless
+ * padlock: with no printed label beside it, an icon-only control that is
+ * named for what it IS rather than what it DOES leaves the reader guessing
+ * that pressing is even allowed. It names the thing being moved as well as the
+ * direction, because a dictionary offers as many of these as it has rows.
+ */
+function handleAction(
+  target: DictReorderTarget,
+  direction: DictReorderDirection,
+): string {
+  return target.kind === "section"
+    ? `Move section “${target.sectionLabel}” ${direction} in the dictionary`
+    : `Move field “${target.fieldName}” ${direction} in “${target.sectionLabel}”`;
+}
+
+/**
+ * One band's or row's pair of controls.
+ *
+ * NATIVE `<button>`s IN A `foreignObject`, and this is the one place the
+ * dictionary canvas departs from its neighbours — read this before "fixing" it
+ * to the button-role shapes the flowchart, sequence and ER canvases use. Those
+ * canvases give that role to the DRAWING: a node, an arrow, an entity box IS
+ * the control, so it cannot be anything but a shape, and `@/lib/key-activate`
+ * exists to give those shapes the Enter and Space the role promises. This chip
+ * is not part of the drawing. It is a two-button toolbar floated over a table,
+ * and a real button brings the keyboard behaviour, the focus ring the theme
+ * already paints, the hover states and the `aria-disabled` semantics that would
+ * otherwise all be re-implemented on a `<rect>`.
+ *
+ * That also keeps the canvas out of `check:view-input`'s selection sweep
+ * honestly rather than by exemption: that sweep is every diagram component
+ * that makes a SHAPE a button, and it asks each one for a focus selection and
+ * a way to deselect. This dictionary has neither and must not grow them — the
+ * viewer's header argues why a dictionary has no focus mode at all.
+ *
+ * IT NEVER REACHES AN EXPORT, which is what makes the departure safe: the
+ * share image, the PNG and the SVG download all render from the model through
+ * `export/render-svg.ts`, and a static or exported drawing passes no `reorder`
+ * surface at all — so no `foreignObject` is ever serialised.
+ *
+ * NO POINTER ARBITRATION, and no `moved` flag or client-pixel threshold as the
+ * node canvases carry: the pane's drag-to-pan already stands down for a press
+ * that lands inside a `button`. There is also no drag to tell from a click —
+ * a dictionary is a TABLE whose column grid is solved from the whole document
+ * at once, so a block dropped at a point would be re-solved back onto the grid
+ * by the next parse. Handles are what a table gets instead of a drag.
+ *
+ * AN UNAVAILABLE CONTROL IS `aria-disabled`, NEVER `disabled`. A disabled
+ * button is not focusable, so the press that reaches the end of a run would
+ * drop the reader's focus out of the table — exactly the moment a reader
+ * walking a section to the top with Enter needs it least. It keeps its place
+ * and its name, and carries the refusal.
+ */
+function ReorderHandles({
+  target,
+  rightEdge,
+  centerY,
+  surface,
+}: {
+  target: DictReorderTarget;
+  rightEdge: number;
+  centerY: number;
+  surface: DictReorderSurface;
+}): React.JSX.Element {
+  const chip = dictHandleChip(rightEdge, centerY);
+  return (
+    <foreignObject
+      className="af-dict-handles"
+      x={chip.x}
+      y={chip.y}
+      width={chip.width}
+      height={chip.height}
+    >
+      {/* THE CHIP'S BACKING IS OPAQUE, because it is drawn OVER the table
+          rather than in space reserved for it (see `dictHandleChip`): under a
+          row it covers the tail of the source column, under a band the
+          technology label, and only while that row or band is the one being
+          pointed at. `--node` ruled with `--node-border` rather than a tint —
+          the default theme separates by OUTLINE, so a wash would read as a
+          smudge, and this is the pair every canvas here already measures.
+
+          THE GEOMETRY IS PASSED IN, not restated in the stylesheet: CSS cannot
+          import `DICT_HANDLE`, and a padding typed in both places is how the
+          badge run came to need more room than its column had. */}
+      <div
+        className="af-dict-chip"
+        style={{
+          gap: DICT_HANDLE.gap,
+          padding: DICT_HANDLE.pad,
+          borderRadius: DICT_HANDLE.radius,
+        }}
+      >
+        {(["earlier", "later"] as const).map((direction) => {
+          const refusal = surface.refusal(target, direction);
+          const action = handleAction(target, direction);
+          /* ONE STRING FOR BOTH the tooltip and the accessible name, so hover
+             and assistive tech cannot drift apart — the rule
+             `canvas-lock-button.tsx` pins for the other wordless control here.
+             The refusal rides on the END of the action rather than replacing
+             it: a reader who cannot act still needs to know what the control
+             is for. */
+          const name = refusal === null ? action : `${action}. ${refusal}`;
+          return (
+            <button
+              key={direction}
+              type="button"
+              className={cn(
+                "af-dict-handle",
+                refusal !== null && "af-dict-handle-off",
+              )}
+              data-af-dict-handle={dictHandleKey(target, direction)}
+              style={{
+                width: DICT_HANDLE.button,
+                height: DICT_HANDLE.button,
+                borderRadius: DICT_HANDLE.radius - DICT_HANDLE.pad,
+              }}
+              aria-disabled={refusal === null ? undefined : true}
+              aria-label={name}
+              title={name}
+              onClick={(event) => {
+                /* The press is the chip's, not the pane's — see the ER
+                   canvas's own note on a click a backdrop would otherwise
+                   eat. */
+                event.stopPropagation();
+                surface.onPress(target, direction);
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox={`0 0 ${DICT_HANDLE.grid} ${DICT_HANDLE.grid}`}
+                width="100%"
+                height="100%"
+                fill="none"
+                /* The button owns the ink, so one CSS rule answers for the
+                   resting, hovered and unavailable glyph. */
+                stroke="currentColor"
+                strokeWidth={1.9}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d={HANDLE_GLYPH[direction]} />
+              </svg>
+            </button>
+          );
+        })}
+      </div>
+    </foreignObject>
+  );
+}
+
+/** The reveal's hit area — the whole band or row, so hovering the white space
+ * between two columns counts as pointing at it. An SVG group is hovered only
+ * through a painted child, and a row is mostly gaps. */
+function RevealArea({
+  x,
+  y,
+  width,
+  height,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): React.JSX.Element {
+  return (
+    <rect
+      aria-hidden="true"
+      /* Not a control, and deliberately not given a role: a press here pans
+         the canvas exactly as it did before this surface existed. */
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill="transparent"
+    />
+  );
+}
+
 function Row({
   field,
   index,
   columnX,
   columnWidth,
   striped,
+  sectionLabel,
+  reorder,
 }: {
   field: LaidDictField;
   index: number;
   columnX: Record<DictColumn, number>;
   columnWidth: Record<DictColumn, number>;
   striped: boolean;
+  sectionLabel: string;
+  reorder?: DictReorderSurface;
 }): React.JSX.Element {
   const description = field.cells.find((cell) => cell.column === "description");
   const baseline = field.y + DICT.lineHeight * 1.15;
+  const right = columnX.source + columnWidth.source;
   return (
     <g
       className="af-dict-row"
       style={{ "--dict-row": index } as React.CSSProperties}
     >
+      {reorder === undefined ? null : (
+        <RevealArea
+          x={columnX.name - DICT.padX}
+          y={field.y}
+          width={right - columnX.name + DICT.padX * 2}
+          height={field.height}
+        />
+      )}
       {/* A HAIRLINE BETWEEN ROWS, not a zebra fill. A wide row with a wrapped
           cell in the middle is exactly where an eye loses its line, so rows
           need separating — but the default theme separates by OUTLINE rather
@@ -99,7 +375,7 @@ function Row({
         <line
           x1={columnX.name - DICT.padX * 0.4}
           y1={field.y}
-          x2={columnX.source + columnWidth.source + DICT.padX * 0.4}
+          x2={right + DICT.padX * 0.4}
           y2={field.y}
           stroke="var(--node-border)"
           strokeWidth={1}
@@ -215,6 +491,17 @@ function Row({
             {line}
           </text>
         ))}
+
+      {/* LAST, so the chip is painted over the columns it overlaps rather than
+          under them. */}
+      {reorder === undefined ? null : (
+        <ReorderHandles
+          target={{ kind: "field", sectionLabel, fieldName: field.name }}
+          rightEdge={right}
+          centerY={field.y + field.height / 2}
+          surface={reorder}
+        />
+      )}
     </g>
   );
 }
@@ -225,12 +512,21 @@ export interface DictDiagramProps {
   /** How much width the table may use. Omitted for a static render, which
    * takes the fixed page width. */
   availableWidth?: number;
+  /**
+   * The reorder controls, or absent for a read-only drawing.
+   *
+   * PRESENCE IS THE OFFER, as on the flowchart and ER canvases: a locked or
+   * read-only canvas passes nothing and this renders no editing chrome at all,
+   * rather than a table of controls that cannot change anything.
+   */
+  reorder?: DictReorderSurface;
 }
 
 export function DictDiagram({
   file,
   className,
   availableWidth,
+  reorder,
 }: DictDiagramProps): React.JSX.Element {
   const layout = layoutDict(file, { availableWidth });
   const right = layout.columnX.source + layout.columnWidth.source;
@@ -247,8 +543,13 @@ export function DictDiagram({
          scale, so the cap would fight it: zooming in would widen the wrapper
          and the SVG would refuse to follow. Fit is the default, which
          preserves the behaviour the cap was protecting. */
-      role="img"
-      aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections`}
+      /* `img` WHILE THERE IS NOTHING TO PRESS, `group` ONCE THERE IS. A
+         picture has no buttons in it, and assistive technology prunes the
+         subtree of a `role="img"` — so leaving it here would have left every
+         handle's accessible name unreadable while the handles themselves
+         stayed in the tab order, which is the worst of both. */
+      role={reorder === undefined ? "img" : "group"}
+      aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections${reorder === undefined ? "" : ". Every section and field carries move-earlier and move-later buttons — Tab reaches them."}`}
     >
       {layout.title !== null ? (
         <text
@@ -270,28 +571,50 @@ export function DictDiagram({
           className="af-dict-section"
           style={{ "--dict-wave": section.index } as React.CSSProperties}
         >
-          <text
-            x={layout.columnX.name}
-            y={section.y + DICT.sectionHeight / 2 - 4}
-            dominantBaseline="central"
-            fontSize={DICT.labelSize}
-            fontWeight={650}
-            fill="var(--foreground)"
-          >
-            {section.label}
-          </text>
-          {section.technology !== undefined ? (
+          {/* THE HEADING BAND AS ONE GROUP, so pointing anywhere along it
+              reveals the section's own controls — the label, the technology
+              and the chip are read together and there is nothing else in the
+              band to point at. */}
+          <g className="af-dict-band">
+            {reorder === undefined ? null : (
+              <RevealArea
+                x={layout.columnX.name - DICT.padX}
+                y={section.y}
+                width={right - layout.columnX.name + DICT.padX * 2}
+                height={DICT.sectionHeight}
+              />
+            )}
             <text
-              x={right}
+              x={layout.columnX.name}
               y={section.y + DICT.sectionHeight / 2 - 4}
-              textAnchor="end"
               dominantBaseline="central"
-              fontSize={DICT.cellSize - 1}
-              fill="var(--muted-foreground)"
+              fontSize={DICT.labelSize}
+              fontWeight={650}
+              fill="var(--foreground)"
             >
-              {section.technology}
+              {section.label}
             </text>
-          ) : null}
+            {section.technology !== undefined ? (
+              <text
+                x={right}
+                y={section.y + DICT.sectionHeight / 2 - 4}
+                textAnchor="end"
+                dominantBaseline="central"
+                fontSize={DICT.cellSize - 1}
+                fill="var(--muted-foreground)"
+              >
+                {section.technology}
+              </text>
+            ) : null}
+            {reorder === undefined ? null : (
+              <ReorderHandles
+                target={{ kind: "section", sectionLabel: section.label }}
+                rightEdge={right}
+                centerY={section.y + DICT.sectionHeight / 2 - 4}
+                surface={reorder}
+              />
+            )}
+          </g>
 
           {/* THE TABLE'S OWN SURFACE, drawn before the headings so everything
               sits on it. `--node` on `--canvas` is the pair every other canvas
@@ -365,6 +688,11 @@ export function DictDiagram({
               /* Every row but the first gets a rule ABOVE it, so the run is
                  separated without a line hanging under the last one. */
               striped={index > 0}
+              /* The row's own section, because a field is addressed by its
+                 name UNDER a label — the name alone is unique inside its
+                 section and not across the file. */
+              sectionLabel={section.label}
+              reorder={reorder}
             />
           ))}
         </g>

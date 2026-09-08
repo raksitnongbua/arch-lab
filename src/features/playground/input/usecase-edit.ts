@@ -38,6 +38,7 @@ import {
 import { parseUseCaseInput } from "@/features/usecase/input/parse";
 
 import { canvasEditability } from "./canvas-edit";
+import { isReleasable } from "./placement";
 import {
   applyPatches,
   indentOf,
@@ -154,9 +155,10 @@ export function resetUseCasePositionsEdit(
   if (!canvasEditability(doc, "move").editable || doc.kind !== "usecase") {
     return null;
   }
-  const releasable = doc.file.elements.filter(
-    (element) => element.pinned !== true && element.position !== undefined,
-  );
+  /* THE RULE LIVES IN `placement.ts`, not here and not in the sibling
+     module: three callers asked it and three spelled it. Its own note carries
+     why it is token presence rather than a comparison. */
+  const releasable = doc.file.elements.filter(isReleasable);
   if (releasable.length === 0) return null;
 
   const released = new Set(releasable.map((element) => element.id));

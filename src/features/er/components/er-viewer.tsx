@@ -68,12 +68,15 @@ export interface ErEditHandlers {
    * Place `entityId`'s box top-left at `position`, in the LAYOUT's own units —
    * which is what `ErEntity.position` holds unchanged.
    *
-   * NO OFFSET TO SUBTRACT, and that is a real difference from the flowchart's
-   * `onMoveNode`: `layoutEr` writes a stated `(x,y)` straight onto the box
-   * (`box.x = at.x`), so the space the canvas draws in and the space the text
-   * records are the same one. The flowchart solves its rows around axis 0 and
-   * has to give back `layout.offset`; writing the drawn coordinate through
-   * there walked the step off the page one drag at a time.
+   * NO OFFSET TO SUBTRACT, and this canvas is the only one of the three where
+   * that is true — so it is measured, not assumed. `layoutEr` writes a stated
+   * `(x,y)` straight onto the box (`box.x = at.x`) and never slides the
+   * drawing afterwards, so the space the canvas draws in and the space the
+   * text records are the same one. The flowchart solves its rows around axis 0
+   * and has to give back `layout.offset`; the use-case layout normalises the
+   * whole cast into its margins and under its heading, and `UseCaseViewer`
+   * measures that shift to invert it. Writing the drawn coordinate through
+   * either of those walked the shape off the page one drag at a time.
    */
   onMoveEntity: (entityId: string, position: { x: number; y: number }) => void;
   /** Hand one entity back to the solver — its `(x,y)` and its `pin` both go,
@@ -223,16 +226,16 @@ export function ErViewer({
      knows the content's size and the drag knows where each box currently is.
      Cheap and pure — and cheaper than threading the measurement back out of a
      component that has no reason to expose it. */
-  const layout = useMemo(() => layoutEr(file), [file]);
+  const size = useMemo(() => layoutEr(file), [file]);
   const laidById = useMemo(
-    () => new Map(layout.entities.map((entity) => [entity.id, entity])),
-    [layout],
+    () => new Map(size.entities.map((entity) => [entity.id, entity])),
+    [size],
   );
   const paneRef = useRef<HTMLDivElement>(null);
   const camera = useCanvasZoom({
     paneRef,
-    contentWidth: layout.bounds.width,
-    contentHeight: layout.bounds.height,
+    contentWidth: size.bounds.width,
+    contentHeight: size.bounds.height,
     onAnnounce,
   });
 
@@ -253,7 +256,7 @@ export function ErViewer({
    *
    * `getScreenCTM` rather than arithmetic on the camera's scale and the pane's
    * scroll offsets: it already accounts for the viewBox — whose origin is
-   * `layout.bounds.x`/`y` and goes NEGATIVE the moment something is pinned
+   * `size.bounds.x`/`y` and goes NEGATIVE the moment something is pinned
    * left of or above the origin — for the `preserveAspectRatio` letterboxing
    * a fitted canvas introduces, and for any page transform above the pane.
    * Three things a hand-rolled conversion has to get right separately, one of
@@ -408,8 +411,8 @@ export function ErViewer({
         <div
           className="shrink-0"
           style={{
-            width: layout.bounds.width * camera.scale,
-            height: layout.bounds.height * camera.scale,
+            width: size.bounds.width * camera.scale,
+            height: size.bounds.height * camera.scale,
           }}
         >
           <ErDiagram
@@ -624,6 +627,62 @@ export function ErViewer({
               </ul>
             )}
           </div>
+
+          {/* ---- placement: the two gestures a pointer has that a keyboard
+              does not, plus the two that need a control either way.
+
+              THE DRAG IS NAMED RATHER THAN LEFT TO BE DISCOVERED, the
+              flowchart dock's answer for its own pin gesture. Placing a table
+              is a pointer gesture and there is no keyboard nudge on any canvas
+              here — but RELEASING one and PINNING it are gestures of their
+              own, and a gesture with no control is a feature only a mouse can
+              reach, so both are buttons a Tab lands on.
+
+              THE CONTROLS APPEAR ONLY WHERE THEY CAN DO SOMETHING: releasing
+              a table that states no `(x,y)` and pinning one that has no
+              position to keep are both edits the gesture module refuses, and a
+              control that cannot change anything is worse than its absence. */}
+          {editing ? (
+            <div className="mt-3 border-t border-border/60 pt-3">
+              <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Placement
+              </p>
+              {focused.position === undefined ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  Laid out from what joins it. Drag the table to place it
+                  yourself.
+                </p>
+              ) : (
+                <div className="mt-1.5 flex flex-col gap-2">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Placed at {Math.round(focused.position.x)},{" "}
+                    {Math.round(focused.position.y)}. Drag the table to move it.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => edit?.onReleaseEntity(focused.id)}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      Hand back to the layout
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        edit?.onPinEntity(focused.id, focused.pinned !== true)
+                      }
+                      aria-pressed={focused.pinned === true}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-secondary"
+                    >
+                      {focused.pinned === true
+                        ? "Pinned against a sweep"
+                        : "Pin against a sweep"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
         </aside>
       ) : null}
     </div>

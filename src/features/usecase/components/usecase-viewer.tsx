@@ -81,9 +81,72 @@ import { DockRow } from "@/components/ui/dock-row";
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
 
+/**
+ * How far a press must travel before it stops being a click on a shape and
+ * becomes a move.
+ *
+ * IN CSS PIXELS, MEASURED ON CLIENT COORDINATES. A threshold in the layout's
+ * user units is a threshold that shrinks with the zoom: at the default "fit"
+ * scale a diagram wider than its pane draws at well under 1:1, so two pixels
+ * of hand jitter clear several user units and every click becomes a drag. A
+ * pointer's tremor is a physical quantity, so its threshold has to be one too.
+ *
+ * MAINTAINED BY HAND against its twins — `NODE_DRAG_THRESHOLD` in
+ * `flowchart-viewer.tsx`, `ENTITY_DRAG_THRESHOLD` in `er-viewer.tsx` and
+ * `CANVAS_DRAG_THRESHOLD` in `sequence/lib/reorder.ts` — because a feature may
+ * not deep-import another feature's internals and this has no home in
+ * `src/lib` yet. Four copies is one too many; give it one.
+ */
+const ELEMENT_DRAG_THRESHOLD = 4;
+
+/**
+ * The gestures this canvas can send back, when editing is on.
+ *
+ * PRESENCE IS THE OFFER, the contract every editable canvas here keeps: the
+ * whole bundle is `undefined` while the canvas is locked, read-only or in a
+ * Mermaid pane, and the viewer then renders no editing chrome at all rather
+ * than disabled controls. `editable` is the second half of the same answer for
+ * a host that holds the handlers but cannot let them run yet.
+ *
+ * ONE GESTURE SERVES TWO SHAPES. An actor and a use case are one
+ * `UseCaseElement` with a `kind`, so a drag on a stick figure and a drag on an
+ * ellipse are the same edit — nothing here branches on kind, which is the
+ * model being right rather than an omission (`usecase-edit.ts` says the same).
+ *
+ * NOTHING HERE IMPORTS THE PLAYGROUND. The host passes these in, the same
+ * direction `FlowchartEditHandlers` points: this feature knows what a gesture
+ * means geometrically and nothing about the text it becomes.
+ */
+export interface UseCaseEditHandlers {
+  /**
+   * Place `elementId`'s shape top-left at `position`, in the space the TEXT
+   * records — which is what `UseCaseElement.position` holds unchanged, and
+   * which is NOT the space the canvas draws in. The viewer takes the layout's
+   * own shift off a dropped point first; `layoutShift` inside it carries why.
+   *
+   * TOP-LEFT, NOT THE CENTRE, even for an ellipse: `layoutUseCase` derives
+   * `cx`/`cy` from a stated corner, and a pin read as a centre draws the
+   * ellipse half a box up and left of where the author asked for it.
+   */
+  onMoveElement: (
+    elementId: string,
+    position: { x: number; y: number },
+  ) => void;
+  /** Hand one element back to the solver — its `(x,y)` and its `pin` both go,
+   *  because a pin with no position is a document the parser refuses. */
+  onReleaseElement: (elementId: string) => void;
+  /** Set or clear one element's pin, which exempts it from a whole-diagram
+   *  release. Pinning needs a position to keep. */
+  onPinElement: (elementId: string, pinned: boolean) => void;
+  /** False while the host holds the handlers but must not run them. */
+  editable: boolean;
+}
+
 export function UseCaseViewer({
   file,
   onAnnounce,
+  edit,
+  lockSlot,
 }: {
   file: UseCaseLabFile;
   /**
@@ -93,6 +156,22 @@ export function UseCaseViewer({
    * sequence viewer documents the contract).
    */
   onAnnounce: (message: string) => void;
+  /** Editing gestures, or absent — see `UseCaseEditHandlers`. */
+  edit?: UseCaseEditHandlers;
+  /**
+   * The canvas lock, mounted at the pane's own top-right corner exactly as the
+   * C4, sequence and flowchart canvases mount theirs.
+   *
+   * A SLOT RATHER THAN A FLAG, and it lives on the canvas rather than in the
+   * host's strip for the reason `67b35ae` bought: a lock that was correct in
+   * `canvasEditability` and rendered only inside another notation's branch left
+   * a whole canvas silently uneditable with no control anywhere to unlock it,
+   * for a release, with every assertion green.
+   *
+   * DELIBERATELY NOT GATED ON `edit`: locking WITHDRAWS the handlers, so a lock
+   * that only rendered alongside them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   // ONE layout call per model — the single source of geometric truth.
   const layout = useMemo(() => layoutUseCase(file), [file]);
@@ -398,6 +477,117 @@ export function UseCaseViewer({
   const panSuppressesClick = useRef(false);
   const [panning, setPanning] = useState(false);
 
+  /* ---- the move gesture --------------------------------------------------
+   * IT COSTS NO NEW POINTER ARBITRATION, which is what made it addable to a
+   * canvas that already drag-pans: `handlePointerDown` below already stands
+   * down for any press inside `.af-uc-hit`, and the hit rect over every shape
+   * carries that class — so the pan never sees the press that starts a move,
+   * and a drag that both panned and placed is unreachable rather than merely
+   * unlikely. The flowchart canvas stands down for `.af-flow-hit` the same
+   * way. */
+
+  const editing = edit !== undefined && edit.editable;
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /**
+   * THE LAYOUT'S OWN SHIFT — what has to come off a dropped point before it
+   * can be written back as a position.
+   *
+   * This notation solves around its own origin and then slides the whole cast
+   * into the margins and down under the heading, so a DRAWN point and the
+   * `(x,y)` the text should state differ by a heading-height. Writing the
+   * drawn point straight through would place the shape that far from the
+   * cursor and walk it further on every drag — silently, with every check
+   * green. The ER canvas needs no equivalent: `layoutEr` writes a stated
+   * coordinate straight onto the box, which is why `ErEditHandlers` says
+   * there is no offset to subtract and this one does.
+   *
+   * THIS WAS A PROBE AND IS NOT ANY MORE. It used to pin one element at the
+   * origin, re-solve the whole document, and read the shift off where that
+   * element landed. That was sound — the shift is a function of solved
+   * geometry alone, so the probe could not perturb what it measured — but it
+   * paid for a second full solve per document to recover a number
+   * `layoutUseCase` already had. `UseCaseLayout.shift` reports it now; the
+   * field's own note carries the argument, and `check:usecase-layout` asserts
+   * that the reported shift is the one actually applied, which is what makes
+   * reading it here as safe as measuring it was.
+   */
+  const layoutShift = layout.shift;
+
+  /**
+   * Client coordinates → LAYOUT units, through the SVG's own matrix.
+   *
+   * `getScreenCTM` rather than arithmetic on `zoom` and the pane's scroll
+   * offsets: it already accounts for the viewBox — whose origin is
+   * `layout.bounds.x`/`y` and goes NEGATIVE the moment something is pinned
+   * left of or above the origin — for the `preserveAspectRatio` letterboxing
+   * a fitted canvas introduces, and for any page transform above the pane.
+   * Three things a hand-rolled conversion has to get right separately, one of
+   * which changes with the pane's aspect ratio.
+   */
+  const toLayoutUnits = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const svg = svgRef.current;
+      const matrix = svg?.getScreenCTM();
+      if (svg == null || matrix == null) return null;
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+      const local = point.matrixTransform(matrix.inverse());
+      return { x: local.x, y: local.y };
+    },
+    [],
+  );
+
+  /**
+   * The in-flight move: which element, and where its top-left would land.
+   * `grab` is the offset from that corner to the pointer, so the shape does
+   * not jump to centre itself under the cursor on the first move.
+   *
+   * `moved` is what separates a click from a drag. The hit rect is both the
+   * focus target and the move handle, so a press that travels less than
+   * `ELEMENT_DRAG_THRESHOLD` stays a click and focuses the element, and one
+   * that travels further places it.
+   */
+  const [elementDrag, setElementDrag] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    grab: { dx: number; dy: number };
+    /** Where the press started, in CLIENT pixels — the threshold's own unit. */
+    from: { clientX: number; clientY: number };
+    moved: boolean;
+  } | null>(null);
+
+  const handleElementDragStart = useCallback(
+    (id: string, event: React.PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      /* A MODIFIER-CLICK IS NOT A MOVE. The flowchart canvas shipped without
+         this and any hand jitter past the threshold turned a modifier-click
+         into a drag; the same three keys are the whole of the gesture's split
+         wherever a canvas has one, so they are read identically here. */
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+      const at = toLayoutUnits(event.clientX, event.clientY);
+      const laid = elementById.get(id);
+      if (at === null || laid === undefined) return;
+      setElementDrag({
+        id,
+        x: laid.x,
+        y: laid.y,
+        grab: { dx: at.x - laid.x, dy: at.y - laid.y },
+        from: { clientX: event.clientX, clientY: event.clientY },
+        moved: false,
+      });
+      /* NO POINTER CAPTURE HERE, and the omission is the whole point: capture
+         on pointerdown retargets the following `click` to the capturing
+         element, so the shape's own `onClick` never runs and clicking an
+         element stops focusing it. Capture is taken LAZILY in the move
+         handler, on the first move that crosses the threshold — by which
+         point there is a real drag to keep hold of and no click to protect. */
+    },
+    [elementById, toLayoutUnits],
+  );
+
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
@@ -420,8 +610,33 @@ export function UseCaseViewer({
     },
     [],
   );
+  /* ONE MOVE HANDLER, deciding between the two gestures rather than two
+     handlers racing for one press — the flowchart canvas's arrangement. A move
+     is in flight or a pan is; never both, because the press that starts one
+     was refused by the other. */
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (elementDrag !== null) {
+        const at = toLayoutUnits(event.clientX, event.clientY);
+        if (at === null) return;
+        const crossed =
+          elementDrag.moved ||
+          Math.abs(event.clientX - elementDrag.from.clientX) +
+            Math.abs(event.clientY - elementDrag.from.clientY) >
+            ELEMENT_DRAG_THRESHOLD;
+        // See `handleElementDragStart`: capture only once this is really a
+        // drag, so a click keeps its own target.
+        if (crossed && !elementDrag.moved) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        setElementDrag({
+          ...elementDrag,
+          x: at.x - elementDrag.grab.dx,
+          y: at.y - elementDrag.grab.dy,
+          moved: crossed,
+        });
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       const dx = event.clientX - state.x;
@@ -431,10 +646,35 @@ export function UseCaseViewer({
       pane.scrollLeft = state.left - dx;
       pane.scrollTop = state.top - dy;
     },
-    [],
+    [elementDrag, toLayoutUnits],
   );
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (elementDrag !== null) {
+        setElementDrag(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        /* Under the threshold this was a click, and it is left alone: the
+           shape's own `onClick` runs after this handler and focuses the
+           element, which is what a press that went nowhere has always done. A
+           zero-distance move would also write a coordinate the reader never
+           asked for and opt the shape out of the solver for good. */
+        if (!elementDrag.moved) return;
+        /* The capture above already retargeted the trailing click to the pane,
+           so suppress it there too — otherwise the drag ends by clearing the
+           focus the reader was working with. */
+        panSuppressesClick.current = true;
+        /* MINUS THE LAYOUT'S OWN SHIFT — see `layoutShift`. Writing the drawn
+           coordinate straight through would place the shape a heading's height
+           and a margin away from the cursor, and do it again on every
+           subsequent drag, so the shape walks off the page. */
+        edit?.onMoveElement(elementDrag.id, {
+          x: elementDrag.x - layoutShift.dx,
+          y: elementDrag.y - layoutShift.dy,
+        });
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       panState.current = null;
@@ -444,7 +684,7 @@ export function UseCaseViewer({
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
     },
-    [],
+    [edit, elementDrag, layoutShift],
   );
 
   /* The pane is the backdrop — clicking empty canvas clears focus (every
@@ -569,9 +809,35 @@ export function UseCaseViewer({
               zoom={zoom}
               onFocusElement={handleFocusElement}
               onFocusEdge={handleFocusEdge}
+              svgRef={svgRef}
+              onElementDragStart={editing ? handleElementDragStart : undefined}
+              /* Only a drag that has really travelled reaches the canvas, so a
+                 press that stays a click never nudges the shape it focuses. */
+              elementDrag={elementDrag?.moved === true ? elementDrag : null}
             />
           </div>
         </div>
+
+        {/* The lock, at the pane's top-right — the corner the C4, sequence and
+            flowchart canvases all put theirs in, so a reader moving between
+            the notations finds it in one place.
+
+            IT SLIDES LEFT OF AN OPEN DOCK, the sequence canvas's fix for the
+            same collision: the dock owns this corner while it is open, and two
+            controls in one corner is how one of them ends up unreachable —
+            which is exactly the failure the lock's own history is about. Below
+            `md` the dock is a bottom sheet, so the corner is never contested
+            there. */}
+        {lockSlot !== undefined ? (
+          <div
+            className={cn(
+              "absolute top-3 z-20",
+              dockOpen ? "right-3 md:right-[18.75rem]" : "right-3",
+            )}
+          >
+            {lockSlot}
+          </div>
+        ) : null}
 
         {/* ---- zoom pill (bottom-right, the house pattern) ---- */}
         <div
@@ -698,6 +964,78 @@ export function UseCaseViewer({
                       value={focusedElement.tags.map((t) => `#${t}`).join(" ")}
                       mono
                     />
+                  ) : null}
+                  {/* ---- placement: the two gestures a pointer has that a
+                      keyboard does not, plus the two that need a control
+                      either way.
+
+                      THE DRAG IS NAMED RATHER THAN LEFT TO BE DISCOVERED, the
+                      flowchart dock's answer for its own pin gesture. Placing
+                      a shape is a pointer gesture and there is no keyboard
+                      nudge on any canvas here — but RELEASING one and PINNING
+                      it are gestures of their own, and a gesture with no
+                      control is a feature only a mouse can reach, so both are
+                      buttons a Tab lands on.
+
+                      THE CONTROLS APPEAR ONLY WHERE THEY CAN DO SOMETHING:
+                      releasing a shape that states no `(x,y)` and pinning one
+                      with no position to keep are both edits the gesture
+                      module refuses, and a control that cannot change
+                      anything is worse than its absence. */}
+                  {editing ? (
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Placement
+                      </dt>
+                      {(() => {
+                        const stated = file.elements.find(
+                          (element) => element.id === focusedElement.id,
+                        );
+                        if (stated?.position === undefined) {
+                          return (
+                            <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              Laid out from its boundary and its lines. Drag it
+                              to place it yourself.
+                            </dd>
+                          );
+                        }
+                        return (
+                          <dd className="mt-1 flex flex-col gap-2">
+                            <span className="text-xs leading-relaxed text-muted-foreground">
+                              Placed at {Math.round(stated.position.x)},{" "}
+                              {Math.round(stated.position.y)}. Drag it to move
+                              it.
+                            </span>
+                            <span className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  edit?.onReleaseElement(stated.id)
+                                }
+                                className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                              >
+                                Hand back to the layout
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  edit?.onPinElement(
+                                    stated.id,
+                                    stated.pinned !== true,
+                                  )
+                                }
+                                aria-pressed={stated.pinned === true}
+                                className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-secondary"
+                              >
+                                {stated.pinned === true
+                                  ? "Pinned against a sweep"
+                                  : "Pin against a sweep"}
+                              </button>
+                            </span>
+                          </dd>
+                        );
+                      })()}
+                    </div>
                   ) : null}
                   {focusedElementEdges.length > 0 ? (
                     <div>

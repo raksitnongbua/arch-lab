@@ -133,6 +133,74 @@ export function badgeRunWidth(flags: readonly string[]): number {
   );
 }
 
+/**
+ * The reorder chip: a pair of move-earlier / move-later controls, revealed on
+ * the section band or the field row the reader is pointing at.
+ *
+ * HERE RATHER THAN IN THE CANVAS for the reason `BADGE` is: a control the
+ * canvas draws over its own table has to be measured against that table, and
+ * two copies of the arithmetic is how the badge run came to hang outside the
+ * column reserved for it. The layout stays pure — this is arithmetic on two
+ * numbers the caller already has, not a measurement of anything.
+ *
+ * IT IS NOT PART OF THE TABLE'S OWN GEOMETRY, and `layoutDict` deliberately
+ * does not place one: a chip that reserved space would move every column the
+ * moment a document became editable, so the same dictionary would export at
+ * one width and edit at another. It is chrome drawn OVER the table, which is
+ * why it carries an opaque backing.
+ */
+export const DICT_HANDLE = {
+  /** Side of one square control — the 16-unit glyph grid plus a little air. */
+  button: 18,
+  /** Between the pair. */
+  gap: 2,
+  /** Between the pair and the chip's own edge. */
+  pad: 3,
+  radius: 8,
+  /** The grid the chevrons are drawn on, so the glyph paths read as integers
+   * and one scale factor maps them onto `button`. */
+  grid: 16,
+} as const;
+
+export interface DictHandleChip {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Left edge of each control, named for the READING ORDER the direction is
+   * named for rather than for the screen. */
+  earlierX: number;
+  laterX: number;
+  /** Top edge of both. */
+  buttonY: number;
+}
+
+/**
+ * The chip's box, its right edge at `rightEdge` and centred on `centerY`.
+ *
+ * RIGHT-ALIGNED because the left of every band and row is the thing being
+ * moved — a section's label, a field's name — and a control that covered the
+ * name while the reader hovered it would hide exactly what they are aiming at.
+ */
+export function dictHandleChip(
+  rightEdge: number,
+  centerY: number,
+): DictHandleChip {
+  const width = DICT_HANDLE.pad * 2 + DICT_HANDLE.button * 2 + DICT_HANDLE.gap;
+  const height = DICT_HANDLE.pad * 2 + DICT_HANDLE.button;
+  const x = rightEdge - width;
+  const y = centerY - height / 2;
+  return {
+    x,
+    y,
+    width,
+    height,
+    earlierX: x + DICT_HANDLE.pad,
+    laterX: x + DICT_HANDLE.pad + DICT_HANDLE.button + DICT_HANDLE.gap,
+    buttonY: y + DICT_HANDLE.pad,
+  };
+}
+
 /** The five columns, in reading order. `flex` columns share what is left after
  * the measured ones; today only the description flexes. */
 const COLUMNS = ["name", "type", "flags", "description", "source"] as const;

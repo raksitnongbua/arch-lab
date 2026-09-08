@@ -89,6 +89,8 @@ import {
   CanvasLockButton,
   canvasStateLabel,
 } from "./canvas-lock-button";
+import { ReleasePlacementsButton } from "./release-placements-button";
+import { placementCount } from "../input/placement";
 import { LayoutDirectionMenu } from "./layout-direction-menu";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
@@ -1183,6 +1185,9 @@ export function ViewPlayground({
    */
   const dictEditable =
     CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
+  /* ONE TALLY PER RENDER, not one per control that names it. Counted from the
+     source's own answer — see `placementCount`. */
+  const placements = useMemo(() => placementCount(doc), [doc]);
 
   const {
     canvasEdit,
@@ -2214,13 +2219,105 @@ export function ViewPlayground({
                     }
                   />
                 ) : doc.kind === "usecase" ? (
-                  <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
+                  <UseCaseViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                    /* The same bundle the ER canvas beside it takes, against
+                       this notation's own nouns — one `UseCaseElement` covers
+                       both an actor and a use case, so a drag on a stick
+                       figure and a drag on an ellipse are one gesture. */
+                    edit={
+                      usecaseEdit !== undefined
+                        ? {
+                            onMoveElement: usecaseEdit.onMove,
+                            onPinElement: usecaseEdit.onPin,
+                            onReleaseElement: usecaseEdit.onRelease,
+                            editable: usecaseEditable,
+                          }
+                        : undefined
+                    }
+                    /* THE LOCK AND THE SWEEP, in the fifth branch that can act
+                       on them — see the ER branch below for why each editable
+                       canvas mounts its own rather than sharing one beside
+                       them. */
+                    lockSlot={
+                      showCanvasLock ? (
+                        <div className="flex items-center gap-2">
+                          {!canvasLocked && usecaseEditable ? (
+                            <ReleasePlacementsButton
+                              releasable={placements.releasable}
+                              pinned={placements.pinned}
+                              noun="element"
+                              onRelease={() => usecaseEdit?.onReleaseAll()}
+                            />
+                          ) : null}
+                          <CanvasLockButton
+                            locked={canvasLocked}
+                            onToggle={setCanvasLocked}
+                            onAnnounce={setAnnouncement}
+                            copy={CANVAS_LOCK_COPY.usecase}
+                          />
+                        </div>
+                      ) : undefined
+                    }
+                  />
                 ) : doc.kind === "er" ? (
-                  <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
+                  <ErViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                    /* The placement gestures. `editable` carries the same
+                       three-part answer the other canvases get — the
+                       document's offer, the pane's language, and the reader's
+                       lock — so the viewer has one flag to read rather than
+                       three facts to re-derive. */
+                    edit={
+                      erEdit !== undefined
+                        ? {
+                            onMoveEntity: erEdit.onMove,
+                            onPinEntity: erEdit.onPin,
+                            onReleaseEntity: erEdit.onRelease,
+                            editable: erEditable,
+                          }
+                        : undefined
+                    }
+                    /* THE LOCK AND THE SWEEP, in the branch an ER document
+                       actually renders in. `67b35ae` is the bug these two
+                       lines exist to not repeat: a lock correct in
+                       `canvasEditability` and rendered in one branch only left
+                       a whole canvas silently uneditable with no control
+                       anywhere to unlock it. */
+                    lockSlot={
+                      showCanvasLock ? (
+                        <div className="flex items-center gap-2">
+                          {!canvasLocked && erEditable ? (
+                            <ReleasePlacementsButton
+                              releasable={placements.releasable}
+                              pinned={placements.pinned}
+                              noun="entity"
+                              onRelease={() => erEdit?.onReleaseAll()}
+                            />
+                          ) : null}
+                          <CanvasLockButton
+                            locked={canvasLocked}
+                            onToggle={setCanvasLocked}
+                            onAnnounce={setAnnouncement}
+                            copy={CANVAS_LOCK_COPY.er}
+                          />
+                        </div>
+                      ) : undefined
+                    }
+                  />
                 ) : doc.kind === "dict" ? (
                   <DictViewer
                     file={doc.file}
                     onAnnounce={setAnnouncement}
+                    /* NO PLACEMENT BUNDLE HERE, and the difference is the
+                       point: this canvas writes an ORDER, so there is no
+                       point to place and nothing to pin. `reorderRefusal` is
+                       passed UNBOUND — the viewer binds the file it is
+                       rendering, so the handle's paint and the press's verdict
+                       cannot ask about two different models. */
+                    edit={dictEdit}
                     /* THE LOCK, in the fourth branch that can act on it. This
                        canvas answers `revise` — a section or a field drags to
                        a new place in the reading order — so it is lockable and
