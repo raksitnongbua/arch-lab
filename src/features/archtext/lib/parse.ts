@@ -439,6 +439,48 @@ export interface LineSpan {
  * out anyway. Splicing lines by span keeps every byte the edit did not touch.
  */
 /**
+ * Where a document's own `title` and `description` sit in the source — what a
+ * canvas needs to rewrite the heading it draws.
+ *
+ * SHARED BY EVERY NOTATION THAT OFFERS `retitle`, because the header grammar
+ * is shared: `title` and `description` are the same two lines in all nine
+ * grammars, so one shape describes them all and `dry.md`'s question — what
+ * would the copies have to do differently? — has the answer "nothing".
+ *
+ * NOT `HeaderSpans` below, which is C4's and records what C4's gestures
+ * address (`tagcolor` lines, the `direction` line). That one does NOT record
+ * the title's line at all, which is why this exists rather than growing a
+ * fourth field there: no gesture had ever needed the title's position, so
+ * nothing recorded it, and C4's own canvas still cannot retitle a model —
+ * `/editor`'s breadcrumb does that through the model rather than through a
+ * line patch.
+ *
+ * `description` IS OPTIONAL AND `title` IS NOT, which is the grammar's own
+ * asymmetry: every parser refuses a file with no title, and a file with no
+ * description is ordinary. So writing a description where there was none is an
+ * INSERT rather than a replacement — landed after the title, which is both the
+ * canonical slot and provably inside the header.
+ * `canvas-editing.md`'s hazard applies to the pair: a removal is not the
+ * inverse of an insert, so a gesture that clears a description has to state
+ * its own verdict about the line it leaves behind.
+ */
+export interface DocumentHeaderSpans {
+  /** 1-based line of the `title` line. Always present: a file with no title
+   *  does not parse. */
+  title: number;
+  /** 1-based line of the `description` line, when the file has one. */
+  description?: number;
+  /* NO `end` FIELD, AND THAT IS DELIBERATE. One was written here — "the last
+     header content line, insert after this" — for the retitle gesture to
+     append a missing description to. The gesture inserts at the CANONICAL
+     slot instead (immediately after the title, where the serializer would put
+     it), so nothing read `end`, and a span field with no reader is the shape
+     `C4Node.pinned` wore for two releases while documenting a feature that
+     did not exist. C4's own `HeaderSpans.end` stays, because C4's gestures
+     read it. */
+}
+
+/**
  * Where the HEADER can be patched. Unlike nodes and edges the header is not
  * one block with one span — its lines carry unrelated keywords in author
  * order — so this records only what a header patch needs: where each

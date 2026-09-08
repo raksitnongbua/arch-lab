@@ -49,6 +49,7 @@ import {
 } from "@/types";
 
 import {
+  canvasEditability,
   connectedNewNodeEdit,
   connectedNodesEdit,
   createdNodeEdit,
@@ -107,9 +108,13 @@ import {
   pinnedErEntityEdit,
   resetErEntityPositionEdit,
   resetErPositionsEdit,
+  revisedErEntityEdit,
+  type ErEntityRevision,
 } from "../input/er-edit";
 import {
   movedUseCaseElementEdit,
+  revisedUseCaseElementEdit,
+  type UseCaseElementRevision,
   pinnedUseCaseElementEdit,
   resetUseCaseElementPositionEdit,
   resetUseCasePositionsEdit,
@@ -155,6 +160,58 @@ export interface PlacementEditHandlers {
   onRelease: (id: string) => void;
   /** Hand the whole diagram back, skipping pinned elements. */
   onReleaseAll: () => void;
+}
+
+/**
+ * The ER canvas's placement gestures PLUS the one wording gesture its detail
+ * panel offers.
+ *
+ * A SEPARATE INTERFACE RATHER THAN AN OPTIONAL MEMBER ON
+ * `PlacementEditHandlers`, for the reason that interface's own note gives
+ * about the dictionary: an optional half that means "this canvas is the other
+ * kind" makes one type answer two questions. `revise` and `move` are separate
+ * cells in `CANVAS_EDIT_OFFERS`, answered separately per notation and per pane
+ * language, and the use-case canvas next door shares the placement half
+ * without sharing this one.
+ */
+export interface ErEditHandlerSet extends PlacementEditHandlers {
+  /**
+   * Rewrite one entity's own wording. Which fields that admits — and which it
+   * refuses, `id` and the columns among them — is `ErEntityRevision`'s
+   * verdict, stated at the gesture.
+   *
+   * ABSENT WHEN THE GRID DOES NOT OFFER `revise` for this document and this
+   * pane, which the placement members have no need to spell because they are
+   * the offer `erEditable` already carries. Absence is what keeps the panel
+   * from drawing fields whose Apply the gesture would decline.
+   */
+  onRevise?: (entityId: string, revision: ErEntityRevision) => void;
+}
+
+/**
+ * What the use-case canvas needs from the host — the placement four plus the
+ * wording gesture.
+ *
+ * ITS OWN INTERFACE, SYMMETRIC WITH `ErEditHandlerSet`, rather than an
+ * optional `onRevise` on `PlacementEditHandlers`. Both canvases answer `move`
+ * and `revise` as SEPARATE cells, per notation and per pane, so a shared
+ * optional member would be a field whose absence means two different things
+ * depending on which canvas read it. The revision TYPES differ too — a
+ * use-case element has a `kind` its revision refuses, an ER entity has
+ * columns — so the two could not share the signature even if the shape
+ * matched.
+ */
+export interface UseCaseEditHandlerSet extends PlacementEditHandlers {
+  /**
+   * Rewrite one element's own wording. Which fields that admits — and why
+   * `id` and `kind` are refused — is `UseCaseElementRevision`'s verdict,
+   * stated at the gesture.
+   *
+   * Absent when the grid does not offer `revise` for this document and this
+   * pane; absence is what keeps the dock from drawing fields whose Apply the
+   * gesture would decline.
+   */
+  onRevise?: (elementId: string, revision: UseCaseElementRevision) => void;
 }
 
 /**
@@ -220,8 +277,8 @@ export function useCanvasEditing({
   canvasEdit: CanvasEditHandlers | undefined;
   sequenceEdit: SequenceEditHandlers | undefined;
   flowchartEdit: FlowchartEditHandlers | undefined;
-  erEdit: PlacementEditHandlers | undefined;
-  usecaseEdit: PlacementEditHandlers | undefined;
+  erEdit: ErEditHandlerSet | undefined;
+  usecaseEdit: UseCaseEditHandlerSet | undefined;
   dictEdit: DictEditHandlers | undefined;
   /**
    * Apply or clear a layout direction, at the diagram's scope or the file's.
@@ -1360,6 +1417,20 @@ export function useCanvasEditing({
     );
   }, [doc, text, applyCanvasEdit, setAnnouncement]);
 
+  const handleReviseErEntity = useCallback(
+    (entityId: string, revision: ErEntityRevision) => {
+      const next = revisedErEntityEdit(doc, text, entityId, revision);
+      // null covers "the form was submitted unchanged" as well as "cannot be
+      // edited", so a no-op press costs no text change and no undo entry.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `${entityId} updated to “${revision.label}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleMoveUseCaseElement = useCallback(
     (elementId: string, position: { x: number; y: number }) => {
       const next = movedUseCaseElementEdit(doc, text, elementId, position);
@@ -1396,6 +1467,26 @@ export function useCanvasEditing({
       );
     },
     [doc, text, applyCanvasEdit],
+  );
+
+  const handleReviseUseCaseElement = useCallback(
+    (elementId: string, revision: UseCaseElementRevision) => {
+      const next = revisedUseCaseElementEdit(doc, text, elementId, revision);
+      /* SAID WHEN IT DOES NOTHING, unlike a drag: a reader who cleared the
+         label and pressed Apply watched a field they typed into snap back, and
+         silence there reads as a broken form. The gesture refuses an empty
+         label because every grammar does. */
+      if (next === null) {
+        if (revision.label.trim() === "") {
+          setAnnouncement(
+            "An element needs a label — the wording was left as it was.",
+          );
+        }
+        return;
+      }
+      applyCanvasEdit(next, `Reworded ${elementId} — the source text follows.`);
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
   );
 
   const handleReleaseUseCasePositions = useCallback(() => {
@@ -1450,7 +1541,7 @@ export function useCanvasEditing({
     [doc, text, applyCanvasEdit],
   );
 
-  const erEdit = useMemo<PlacementEditHandlers | undefined>(
+  const erEdit = useMemo<ErEditHandlerSet | undefined>(
     () =>
       erEditable
         ? {
@@ -1458,24 +1549,44 @@ export function useCanvasEditing({
             onPin: handlePinErEntity,
             onRelease: handleReleaseErEntity,
             onReleaseAll: handleReleaseErPositions,
+            /* ASKED OF THE GRID, not inherited from `erEditable`. That flag
+               carries the `move` cell's answer plus the reader's lock, and
+               `revise` is a cell of its own — a panel that offered fields the
+               gesture would decline is the "control that cannot change
+               anything" this canvas's placement buttons already refuse to be.
+               The gesture asks again for itself; this is what stops the form
+               from rendering at all. */
+            onRevise: canvasEditability(doc, "revise").editable
+              ? handleReviseErEntity
+              : undefined,
           }
         : undefined,
     [
+      doc,
       erEditable,
       handleMoveErEntity,
       handlePinErEntity,
       handleReleaseErEntity,
       handleReleaseErPositions,
+      handleReviseErEntity,
     ],
   );
 
-  const usecaseEdit = useMemo<PlacementEditHandlers | undefined>(
+  const usecaseEdit = useMemo<UseCaseEditHandlerSet | undefined>(
     () =>
       usecaseEditable
         ? {
             onMove: handleMoveUseCaseElement,
             onPin: handlePinUseCaseElement,
             onRelease: handleReleaseUseCaseElement,
+            /* ASKED PER ABILITY, not inherited from `usecaseEditable` above:
+               that flag is the `move` offer, and this canvas can be given one
+               without the other. Set only when the grid offers `revise` for
+               this document AND this pane, so it self-heals if either
+               changes. */
+            onRevise: canvasEditability(doc, "revise").editable
+              ? handleReviseUseCaseElement
+              : undefined,
             onReleaseAll: handleReleaseUseCasePositions,
           }
         : undefined,
@@ -1485,6 +1596,8 @@ export function useCanvasEditing({
       handlePinUseCaseElement,
       handleReleaseUseCaseElement,
       handleReleaseUseCasePositions,
+      doc,
+      handleReviseUseCaseElement,
     ],
   );
 

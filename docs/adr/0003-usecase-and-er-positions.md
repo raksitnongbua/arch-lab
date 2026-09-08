@@ -106,6 +106,44 @@ would be the same lie twice.
   `readPointToken`; the flowchart's inline copy was moved onto it rather than a
   third and fourth copy being written.
 
+## What followed, and what it cost nothing
+
+Two more refusals moved in the same change, and neither needed a format
+decision — recorded here because a reader finding the coordinate work alone
+would think the canvases gained only a drag.
+
+- **Both canvases can reword an element.** The `revise` cells were `"surface"`
+  refusals — "this canvas has no editor on it" — and both moved the way a
+  `"surface"` refusal is supposed to: the surface was built in the panel each
+  canvas already opened on selection. The fields were always in the grammar;
+  there was simply nowhere to type them. Each admits `label`, `technology`,
+  `tags` and `description`, and each refuses the two that are graph edits
+  wearing a field edit's clothes — `id`, which every relationship line names,
+  and `kind` / the columns.
+- **A document's own heading can be retyped**, which needed a FIFTH ability.
+  `retitle` earned its row on this union's own criterion: it gates on
+  something none of the other four asks about. Every grammar holds `title` and
+  `description` — they are the shared header — so a `"grammar"` refusal is
+  never right here, and no per-element span, position or relationship set is
+  involved. What a cell gates on instead is whether its canvas DRAWS the
+  heading. The ER canvas draws none (its title reaches the drawing only as the
+  accessible name), which is a refusal none of the other four abilities could
+  express.
+
+### A bug this work found next door
+
+Writing the rule that a wording edit must CARRY an element's position — a
+block patch respells the whole declaration line, so a rebuilt element without
+it runs the release gesture from the wording control — turned up the same bug
+already shipped in `revisedFlowNodeEdit`: retyping a flowchart step's caption
+deleted its `(x,y)` and the step jumped back to where the solver wanted it.
+
+It was invisible to every assertion because **no check script loads
+`flowchart-edit.ts`.** `check:canvas-edit` pins the purity of its three
+siblings and never imports it, so none of that module's nine gestures has a
+direct assertion. The one failure is fixed and guarded; the coverage gap is
+real, larger than this fix, and left named rather than quietly closed.
+
 ## Two things deliberately left out
 
 - **Mermaid.** Neither Mermaid use-case nor Mermaid ER has syntax for a

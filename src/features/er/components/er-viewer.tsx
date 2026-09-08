@@ -19,6 +19,14 @@
  * panel then names the joins in words, with the cardinality spelled out, so
  * the crow's feet are readable by someone who has not memorised them.
  *
+ * AND THE PANEL IS ALSO WHERE AN ENTITY IS RETYPED. `canvas-editing.md`:
+ * "Look for the surface the canvas already has before building one." This
+ * canvas refused `revise` on `"surface"` grounds — the grammar could hold the
+ * edit and nothing on the canvas would take it — and that refusal moves here,
+ * into the panel a click already opens, rather than into a second dock beside
+ * it. Which fields it may rewrite is `ErEntityRevision`'s verdict, not this
+ * file's.
+ *
  * FOCUS IS VALIDATED AT READ TIME, the rule `usecase-viewer.tsx` states: the
  * pane re-parses on every keystroke, so a focused entity can vanish under the
  * reader's cursor. A focus pointing at nothing reads as no focus rather than
@@ -30,6 +38,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ErCardinality, ErLabFile } from "@/types";
 
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+
+// Type-only, and a deep import for it: the playground's edit module is where
+// this shape is defined and enforced — which fields it admits and which it
+// refuses is that module's verdict — and re-declaring it here would be a
+// second definition free to drift from the gesture that honours it. The
+// flowchart viewer imports `FlowNodeRevision` the same way.
+import type { ErEntityRevision } from "@/features/playground/input/er-edit";
 
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
@@ -85,6 +100,22 @@ export interface ErEditHandlers {
   /** Set or clear one entity's pin, which exempts it from a whole-diagram
    *  release. Pinning needs a position to keep. */
   onPinEntity: (entityId: string, pinned: boolean) => void;
+  /**
+   * Rewrite one entity's own wording — its label, its `[technology]`, its
+   * `#tag`s and its `desc`. What this may NOT rewrite, and why, is
+   * `ErEntityRevision`'s verdict.
+   *
+   * OPTIONAL, WHERE THE THREE PLACEMENT GESTURES ARE NOT, and the asymmetry
+   * is the grid's rather than this file's: placing and revising are separate
+   * cells in `CANVAS_EDIT_OFFERS`, answered separately per notation AND per
+   * pane language, so a host can legitimately be allowed to place an entity
+   * and not to retype one. `editable` is one flag and cannot say that. An
+   * absent handler is how this bundle already spells "not offered", so the
+   * panel renders no wording fields at all rather than a form that submits
+   * into nothing — which is the same read-only-versus-disabled answer the
+   * whole-bundle contract above gives.
+   */
+  onReviseEntity?: (entityId: string, revision: ErEntityRevision) => void;
   /** False while the host holds the handlers but must not run them. */
   editable: boolean;
 }
@@ -137,6 +168,173 @@ const CARDINALITY_PROSE: Record<ErCardinality, string> = {
   "one-or-more": "one or more",
   "zero-or-more": "zero or more",
 };
+
+/**
+ * The panel's field styling, in one place — three inputs and a textarea share
+ * it, and a fourth copy is how one of them ends up a pixel out from the rest.
+ *
+ * `bg-canvas/60` IS THE SHARED ANSWER rather than a colour chosen here: it is
+ * the fill the C4 details panel and the flowchart dock both use for a control
+ * floating over a diagram, and `check:canvas-chrome` fails a viewer that
+ * reaches for a full-strength `bg-background` or `bg-canvas` — a notation
+ * grounding itself is how the ground behind a diagram came to change shade
+ * when the reader changed notation.
+ *
+ * `text-xs` AND NOT THE FLOWCHART DOCK'S `text-sm`, which is why this is a
+ * copy of that token rather than a shared constant: this panel is a 18rem card
+ * floating over the canvas whose every other line is `text-xs`, and one
+ * `text-sm` column inside it would read as a different card. The token that
+ * has to agree is the fill, and it does.
+ */
+const FIELD_CLASS =
+  "mt-0.5 w-full rounded-md border border-border bg-canvas/60 px-2 py-1 " +
+  "text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
+  "focus-visible:outline-none";
+
+/**
+ * One labelled control. The `<label>` WRAPS its control rather than pointing
+ * at it with `htmlFor`, the answer the C4 panel's `EditField` and the sequence
+ * dock's `DockField` both give: an id would have to be unique per selected
+ * entity — a name to keep in step for nothing — and a hard-coded one is a
+ * duplicate the day two panels are open at once.
+ *
+ * AND IT IS THE CONTROL'S ONLY ACCESSIBLE NAME. An `aria-label` beside it
+ * OVERRIDES the visible caption rather than adding to it, so "Entity
+ * description" on a box captioned "Details" leaves anyone driving the panel by
+ * voice asking for a name that appears nowhere on screen. One name, said once,
+ * inside a panel the entity's own heading already scopes.
+ */
+function EntityField({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-medium text-muted-foreground">
+        {term}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/** An emptied box REMOVES the field: `undefined` is what the gesture reads as
+ *  "drop it", where a blank string would write `[]` or `desc ""`. */
+const orAbsent = (value: string): string | undefined =>
+  value.trim() === "" ? undefined : value.trim();
+
+/**
+ * A focused entity's own wording, editable in the panel the canvas already
+ * opens for it — the `"surface"` refusal moving the way `canvas-editing.md`
+ * says it should, into the surface that was already there rather than into a
+ * second inspector beside it.
+ *
+ * `key`ed ON THE ENTITY ID by its caller, so focusing another table REMOUNTS
+ * this with that table's values. A shared instance would keep the fields the
+ * reader had half-typed and submit them against a different entity, which is
+ * the bug the flowchart dock's and the C4 panel's forms both carry a `key`
+ * for.
+ *
+ * THE NAME IS SUBMITTED AS TYPED and the refusal is left to the one
+ * authority: `revisedErEntityEdit` drops an edit whose label is blank,
+ * because the parser refuses that document, so a second rule here would be a
+ * second answer free to disagree. `required` is the browser saying so before
+ * the press, not instead of it.
+ *
+ * THE COLUMNS ARE NOT HERE, and the panel says so rather than leaving their
+ * absence to be read as an oversight — `ErEntityRevision` carries why.
+ */
+function EntityWordingForm({
+  entity,
+  onRevise,
+}: {
+  entity: {
+    id: string;
+    label: string;
+    technology?: string;
+    tags?: readonly string[];
+    description?: string;
+  };
+  onRevise: (entityId: string, revision: ErEntityRevision) => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(entity.label);
+  const [technology, setTechnology] = useState(entity.technology ?? "");
+  /* Tags round-trip through ONE space-separated string rather than a chip
+     editor, the flowchart dock's answer: the grammar writes them as `#a #b` on
+     the entity's own line, so a text field is the shape that matches what the
+     author would have typed. The leading `#` is decoration — accepted if
+     typed, never required. */
+  const [tags, setTags] = useState((entity.tags ?? []).join(" "));
+  const [description, setDescription] = useState(entity.description ?? "");
+
+  return (
+    <form
+      className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onRevise(entity.id, {
+          label,
+          technology: orAbsent(technology),
+          tags: tags
+            .split(/[\s,]+/)
+            .map((tag) => tag.replace(/^#/, ""))
+            .filter((tag) => tag !== ""),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        Wording
+      </p>
+      <EntityField term="Label">
+        <input
+          className={FIELD_CLASS}
+          value={label}
+          required
+          onChange={(event) => setLabel(event.target.value)}
+        />
+      </EntityField>
+      <EntityField term="Technology">
+        <input
+          className={FIELD_CLASS}
+          value={technology}
+          placeholder="PostgreSQL"
+          onChange={(event) => setTechnology(event.target.value)}
+        />
+      </EntityField>
+      <EntityField term="Tags">
+        <input
+          className={FIELD_CLASS}
+          value={tags}
+          placeholder="billing core"
+          onChange={(event) => setTags(event.target.value)}
+        />
+      </EntityField>
+      <EntityField term="Details">
+        <textarea
+          className={FIELD_CLASS}
+          rows={3}
+          value={description}
+          placeholder="What this table is for"
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </EntityField>
+      <button
+        type="submit"
+        className="mt-0.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        The id and the columns are edited in the source text — relationship
+        lines refer to the id, and every column is a line of its own.
+      </p>
+    </form>
+  );
+}
 
 export function ErViewer({
   file,
@@ -249,6 +447,11 @@ export function ErViewer({
    * way. */
 
   const editing = edit !== undefined && edit.editable;
+  /* The wording gesture, or nothing — read through `editing` so a bundle the
+     host is holding back cannot open a form, exactly as the placement
+     controls read it. `ErEditHandlers.onReviseEntity` carries why this one
+     may be absent while the other three are not. */
+  const revise = editing ? edit?.onReviseEntity : undefined;
   const svgRef = useRef<SVGSVGElement>(null);
 
   /**
@@ -564,11 +767,23 @@ export function ErViewer({
             </button>
           </div>
 
-          {focused.description !== undefined ? (
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              {focused.description}
-            </p>
-          ) : null}
+          {/* THE FORM REPLACES THE PROSE rather than sitting under it. The
+              `desc` is the one thing this panel exists to show, so a
+              read-only copy above an editable copy of the same sentence would
+              leave the reader guessing which one the diagram believes. */}
+          {revise === undefined ? (
+            focused.description !== undefined ? (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                {focused.description}
+              </p>
+            ) : null
+          ) : (
+            <EntityWordingForm
+              key={focused.id}
+              entity={focused}
+              onRevise={revise}
+            />
+          )}
 
           {/* Only the columns that carry a description. The rest are already
               on the box, and repeating them here would be a second copy of

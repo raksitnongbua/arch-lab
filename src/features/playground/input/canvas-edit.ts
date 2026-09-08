@@ -156,6 +156,17 @@ export type CanvasEditability =
  *     adds messages and lifelines, but those land at an INDEX and write no
  *     coordinate, so they belong to `revise` with the other eight sequence
  *     gestures — see the sequence `create` cell, whose refusal points at them.
+ *   - `"retitle"` — rewrite the DOCUMENT'S OWN `title` and `description`, the
+ *     heading a canvas draws above the drawing. This is the fifth ability, and
+ *     it earned its row on the criterion this union states below: it gates on
+ *     something none of the other four asks about. Every grammar HOLDS the
+ *     two lines — they are the shared header, so a `"grammar"` refusal is
+ *     never the right answer here — and no per-element span, position or
+ *     relationship set is involved. What it gates on instead is whether the
+ *     canvas DRAWS the heading at all, and whether there is anywhere on it to
+ *     type. The ER canvas draws no heading (it names the title only in the
+ *     diagram's accessible name), which is a refusal none of the other four
+ *     abilities could express.
  *   - `"connect"` — write a RELATIONSHIP between two elements: a new line in
  *     the text that names a PAIR and carries no coordinate. Its own row
  *     rather than a stretch of an existing one, by both of the tests this
@@ -188,7 +199,8 @@ export type CanvasEditability =
  * Adding one makes `CANVAS_EDIT_OFFERS` incomplete, which is a type error
  * before it is a check failure.
  */
-export type CanvasEditAbility = "move" | "revise" | "create" | "connect";
+export type CanvasEditAbility =
+  "move" | "revise" | "create" | "connect" | "retitle";
 
 /**
  * The notations a `ViewDocument` can be — the key of the capability table.
@@ -305,6 +317,22 @@ const NO_POSITION_IN_THE_TEXT =
  *  destination is a dead end. */
 const NO_EDITOR_ON_THIS_CANVAS =
   "This canvas has no editor on it, so edit this notation in the source pane.";
+
+/** The `"surface"` refusal for `retitle` on a canvas that DRAWS the heading
+ *  and has nothing on it to type into. A smaller statement than it looks: the
+ *  two lines are in every grammar, so this is a dock nobody has built rather
+ *  than a format that cannot hold the edit. */
+const NO_EDITOR_ON_THE_HEADING =
+  "This canvas draws the heading but has no editor on it, so retitle this " +
+  "document in the source pane.";
+
+/** The `"surface"` refusal for `retitle` on a canvas that draws NO heading —
+ *  the ER canvas, which names the document's title only in the drawing's
+ *  accessible name. There is nothing on screen to point at, so this is a
+ *  different refusal from the one above and says so. */
+const NO_HEADING_DRAWN =
+  "This canvas draws no heading — the document's title reaches it only as the " +
+  "diagram's accessible name, so retitle it in the source pane.";
 
 /** The `"grammar"` refusal for `create` on every notation that solves its own
  *  layout: a created element is PLACED, and these have nowhere to write the
@@ -625,12 +653,53 @@ export const CANVAS_EDIT_OFFERS: Record<
           "pane to .alab to edit on the canvas.",
       },
     },
+    /* BOTH CELLS SAID `"surface"` — "this canvas has no editor on it" — AND
+       BOTH MOVED THE WAY A `"surface"` REFUSAL IS SUPPOSED TO: somebody built
+       the surface, in the panel each canvas already opened on selection. The
+       C4 revise cell moved the same way, and the flowchart's did it twice.
+       Neither needed a format change: the fields were always in the grammar,
+       there was simply nowhere to type them. */
     usecase: {
-      offers: false,
-      ground: "surface",
-      because: NO_EDITOR_ON_THIS_CANVAS,
+      offers: true,
+      noun: "use-case diagrams",
+      shortNoun: "use case",
+      onCanvas:
+        "a selected use case or actor's wording, technology and tags are edited in the details dock",
+      unlessPane: {
+        format: "mermaid",
+        /* MEASURED against `serializeMermaidUseCase`, not assumed — its own
+           `MERMAID_USECASE_EXPORT_CAVEAT` names these three among what the
+           convention cannot draw, and `elementToken` writes nothing but the
+           label. Writing a `[technology]` edit through a pane that cannot
+           spell it would show the change once and lose it on the next parse,
+           which is worse than refusing. */
+        because:
+          "Mermaid has no slot for a use-case element's desc detail, " +
+          "[technology] or #tags, so those edits would be lost. Switch the " +
+          "pane to .alab to edit on the canvas.",
+      },
     },
-    er: { offers: false, ground: "surface", because: NO_EDITOR_ON_THIS_CANVAS },
+    er: {
+      offers: true,
+      noun: "ER diagrams",
+      shortNoun: "ER",
+      onCanvas:
+        "a selected ER entity's wording, technology and tags are edited in the detail panel",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: `serializeMermaidEr`
+           writes an entity as its id, an optional `["Label"]` alias and its
+           column lines, and has no emission path for anything else.
+           `MERMAID_ER_EXPORT_CAVEAT` names the [technology], the #tags and
+           the entity's own description as what erDiagram has nowhere to put,
+           and says why — its only comment slot is on a COLUMN, so a column's
+           description survives a round trip and an entity's does not. */
+        because:
+          "Mermaid erDiagram has no slot for an entity's description, its " +
+          "[technology] or its #tags, so those edits would be lost. Switch " +
+          "the pane to .alab to edit on the canvas.",
+      },
+    },
     /* THIS CELL SAID `"surface"` — "this canvas has no editor on it" — AND
        THAT REFUSAL MOVED THE WAY A `"surface"` REFUSAL IS SUPPOSED TO:
        somebody built the surface. The handles are on the section band and the
@@ -973,6 +1042,90 @@ export const CANVAS_EDIT_OFFERS: Record<
         "connection to draw.",
     },
   },
+  /* THE FIFTH ROW. Every cell is written out, including the six that give the
+     same answer, so a tenth notation is a compile error with ten blanks
+     rather than a silent inheritance — and so the two DIFFERENT refusals here
+     cannot be flattened into one by a reader tidying up.
+
+     NO CELL HERE IS EVER A `"grammar"` REFUSAL, and that is a property of the
+     header rather than an accident: `title` and `description` are the shared
+     header in all nine grammars, so the text can always hold this edit. Every
+     refusal in this row is therefore `"surface"` — a dock nobody has built —
+     which is the honest ground and the one a reader can act on. */
+  retitle: {
+    /* ITS OWN GESTURE, ELSEWHERE. A C4 model is renamed from the breadcrumb in
+       `/editor`, through the model rather than through a line patch — so this
+       refusal names that instead of the derived tail. A dead end on the one
+       notation that CAN be retitled another way sends the reader away from a
+       feature that is right there, the same call the sequence `move` cell
+       makes. */
+    c4: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+      instead: "Open it in the editor and rename it from the breadcrumb.",
+    },
+    sequence: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    flowchart: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    usecase: {
+      offers: true,
+      noun: "use-case diagrams",
+      shortNoun: "use case",
+      onCanvas:
+        "a use case diagram's title and description are retyped in the heading the canvas already draws above the boundary",
+    },
+    /* THE ONE CANVAS WITH NO HEADING TO POINT AT, so its refusal is not the
+       one its neighbours give. `layoutEr` measures no heading block and
+       `er-diagram.tsx` draws none — the document's title reaches that canvas
+       only inside the `aria-label`. Calling this "no editor on the heading"
+       would send a reader looking for a heading that is not there. */
+    er: {
+      offers: false,
+      ground: "surface",
+      because: NO_HEADING_DRAWN,
+    },
+    /* THE TITLE ONLY, AND THE CLAUSE SAYS SO. This canvas draws no document
+       description — `layoutDict` measures a title band and nothing else, and
+       the word "description" in that layout means a FIELD's description, the
+       table's widest column. An earlier draft of this clause promised "title
+       and description" for symmetry with the use-case cell beside it, which
+       would have been the stale claim this whole grid exists to prevent: a
+       sentence describing a surface the reader cannot find.
+
+       The gesture itself takes both fields — the header grammar is shared — so
+       nothing about this cell narrows `retitledEdit`. It is the CANVAS that
+       has one field to offer, and the clause is about the canvas. */
+    dict: {
+      offers: true,
+      noun: "data dictionaries",
+      shortNoun: "dictionary",
+      onCanvas:
+        "a dictionary's title is retyped in the heading above the table",
+    },
+    gantt: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    timeline: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    lifecycle: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+  },
 };
 
 export function canvasEditability(
@@ -1001,6 +1154,7 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
   revise: "edited on the canvas",
   create: "given a new element on the canvas",
   connect: "connected on the canvas",
+  retitle: "retitled on the canvas",
 };
 
 /**

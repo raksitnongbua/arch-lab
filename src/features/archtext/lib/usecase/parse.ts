@@ -68,7 +68,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { LineSpan, Loc, Pend } from "../parse";
+import type { DocumentHeaderSpans, LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { readTintAttribute } from "../sequence/parse";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
@@ -149,6 +149,14 @@ interface Header {
   created?: string;
   updated?: string;
   reviewed?: string;
+  /** 1-based line of the `title` line, for `DocumentHeaderSpans`. Recorded
+   *  during the header parse rather than found afterwards: a gesture that had
+   *  to LOCATE it would be re-implementing the header parse in a module that
+   *  already has the parse's answer — the second-parser move `codebase.md`
+   *  bans, and the argument C4's `HeaderSpans.direction` already makes. */
+  titleLine?: number;
+  /** 1-based line of the `description` line, when the file has one. */
+  descriptionLine?: number;
   metaRaw: Map<string, Pend>;
   metaUnknowns: Pend[];
   schemaRaw?: Pend;
@@ -213,6 +221,11 @@ function edgeTokenList(): string {
  * re-deriving membership.
  */
 export interface UseCaseSpans {
+  /**
+   * The document's own `title` and `description` lines — what the heading this
+   * canvas draws is rewritten through. See `DocumentHeaderSpans`.
+   */
+  header: DocumentHeaderSpans;
   elements: ReadonlyMap<string, LineSpan>;
 }
 
@@ -441,6 +454,13 @@ export function parseUseCaseTextWithSpans(source: string): {
   return {
     file,
     spans: {
+      header: {
+        /* `title` is non-optional in `DocumentHeaderSpans` because no parser
+           accepts a file without one; the fallback keeps this total rather
+           than asserting a fact the type already carries. */
+        title: header.titleLine ?? 1,
+        description: header.descriptionLine,
+      },
       elements: new Map(
         elements.map((element) => [
           element.id,
@@ -476,10 +496,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       break;
     case "title":
       onceString(cursor, header.title, keyword);
+      header.titleLine = loc.line;
       header.title = cursor.readQuoted("the file title");
       break;
     case "description":
       onceString(cursor, header.description, keyword);
+      header.descriptionLine = loc.line;
       header.description = cursor.readQuoted("the file description");
       break;
     case "owner":

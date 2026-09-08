@@ -44,6 +44,7 @@
     "check:quickfix": "node scripts/quickfix-check.mjs",
     "check:canvas-edit": "node scripts/canvas-edit-check.mjs",
     "check:placement-edit": "node scripts/placement-edit-check.mjs",
+    "check:retitle": "node scripts/retitle-check.mjs",
     "check:layout-reset": "node scripts/layout-reset-check.mjs",
     "check:sequence": "node scripts/sequence-check.mjs",
     "check:flowchart": "node scripts/flowchart-check.mjs",

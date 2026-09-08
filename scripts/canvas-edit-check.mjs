@@ -1500,14 +1500,34 @@ console.log("\nThe capability grid answers every notation for every ability");
      the grid a returning implementer will read is the grid the app obeys. */
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
+  /* THE ABILITY NAMES ARE READ OFF THE TYPE, not counted against a literal.
+     This said `abilities.length === 4` and listed the four by name, so adding
+     the fifth (`retitle`) failed here — which is the right place to notice a
+     new ability, but the WRONG failure: it says "the grid grew" rather than
+     "the grid and the type disagree", and the fix a reader reaches for is to
+     bump the number, which asserts nothing the next time.
+     The union in `canvas-edit.ts` is the declaration, so the assertion is
+     that the OBJECT's keys are exactly the union's members — parsed out of the
+     source, because a type cannot be read at runtime. A member added to one
+     and not the other is what this catches, and it needs no edit when a sixth
+     ability arrives. */
+  const abilitySource = read("src/features/playground/input/canvas-edit.ts");
+  const unionMatch = /export type CanvasEditAbility =\s*([^;]*);/.exec(
+    abilitySource,
+  );
+  const declared =
+    unionMatch === null
+      ? []
+      : [...unionMatch[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]);
   check(
-    "the grid names the four abilities and nothing else",
-    abilities.length === 4 &&
-      abilities.includes("move") &&
-      abilities.includes("revise") &&
-      abilities.includes("create") &&
-      abilities.includes("connect"),
-    `abilities: ${abilities.join(", ")}`,
+    "the CanvasEditAbility union was found, so the comparison is not vacuous",
+    declared.length >= 2,
+    `parsed: ${JSON.stringify(declared)}`,
+  );
+  check(
+    "the grid's rows are exactly the abilities the type declares",
+    [...abilities].sort().join(",") === [...declared].sort().join(","),
+    `grid: ${[...abilities].sort().join(", ")} / type: ${[...declared].sort().join(", ")}`,
   );
 
   for (const ability of abilities) {

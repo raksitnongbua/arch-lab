@@ -50,6 +50,97 @@ import type { ViewDocument } from "./parse";
 type UseCaseDocument = Extract<ViewDocument, { kind: "usecase" }>;
 
 /* -------------------------------------------------------------------------- */
+/* Revise                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The fields a selected element's dock may rewrite.
+ *
+ * TWO FIELDS OF `UseCaseElement` ARE ABSENT, and that absence is the whole
+ * content of this type — the shape `FlowNodeRevision` uses to keep `shape` out
+ * of the flowchart's dock, for the same class of reason.
+ *
+ * `id` IS ABSENT because it is not this element's own wording: every
+ * association, dependency and generalization line in the document names an
+ * element by id, so retyping one is a GRAPH edit wearing a field edit's
+ * clothes. A dock that offered it beside the label would let a reader detach
+ * every line touching a symbol while believing they were correcting a slug —
+ * and the patch is one block, so the edges would keep naming the old id and
+ * the document would stop parsing. A rename that carried its edges is a
+ * gesture of its own, with its own verdict about what it rewrites.
+ *
+ * `kind` IS ABSENT for the reason the flowchart refuses `shape`, doubled.
+ * Turning an actor into a use case changes what its edges MEAN — an
+ * association from an actor is a person using the system, and between two use
+ * cases it is not the same statement — and it also moves the symbol from a
+ * flanking column into the boundary, because `layoutUseCase` places actors
+ * outside the system's edge and use cases inside it. So one dropdown would
+ * rewrite both the diagram's meaning and half its geometry, a screen away from
+ * the field the reader was typing in. It is shown read-only in the dock, so
+ * the panel still says what the symbol is.
+ *
+ * REMOVAL IS NOT HERE EITHER, though `canvas-editing.md` puts it under
+ * `revise`. Removing an element has to answer for the association and
+ * dependency lines that name it: dropping them silently deletes statements the
+ * author wrote a screen away from the press, and leaving them writes a
+ * document the parser refuses ("does not resolve"). That verdict is a change
+ * of its own rather than a branch of this one.
+ */
+export interface UseCaseElementRevision {
+  label: string;
+  technology?: string;
+  tags?: string[];
+  description?: string;
+}
+
+/**
+ * `doc` with one element's own wording rewritten, or `null` when the edit
+ * cannot apply.
+ *
+ * DESTRUCTURE AND OVERWRITE rather than spread the current element: an
+ * explicit `undefined` in the revision is what REMOVES a field, so a dock
+ * whose technology box has been cleared drops the `[…]` from the line instead
+ * of leaving the old value behind. Spreading and overlaying would make a
+ * cleared field indistinguishable from an untouched one.
+ *
+ * THE PLACEMENT KEYS ARE CARRIED EXPLICITLY, which is the one thing this
+ * gesture must not get wrong: `position` and `pin` are not wording, and an
+ * element rebuilt without them would be handed back to the solver by a reader
+ * who retyped a caption — the release gesture running itself, unasked, from
+ * the wrong control.
+ */
+export function revisedUseCaseElementEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  elementId: string,
+  revision: UseCaseElementRevision,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "usecase") {
+    return null;
+  }
+  const current = doc.file.elements.find((element) => element.id === elementId);
+  if (current === undefined) return null;
+
+  const { label, technology, tags, description } = revision;
+  /* An empty label is a document the parser refuses ("the element label must
+     not be empty"), so a reader who cleared the box and pressed once would be
+     left with an error over a diagram they could no longer edit. */
+  if (label === "") return null;
+
+  return patchOne(doc, sourceText, elementId, (element) => ({
+    // Carried, never revised — see `UseCaseElementRevision`.
+    id: element.id,
+    kind: element.kind,
+    label,
+    ...(technology === undefined ? {} : { technology }),
+    ...(tags === undefined || tags.length === 0 ? {} : { tags }),
+    ...(description === undefined ? {} : { description }),
+    ...(element.position === undefined ? {} : { position: element.position }),
+    ...(element.pinned === undefined ? {} : { pinned: element.pinned }),
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
 /* Move                                                                       */
 /* -------------------------------------------------------------------------- */
 

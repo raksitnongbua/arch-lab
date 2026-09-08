@@ -2232,6 +2232,8 @@ export function ViewPlayground({
                             onMoveElement: usecaseEdit.onMove,
                             onPinElement: usecaseEdit.onPin,
                             onReleaseElement: usecaseEdit.onRelease,
+                            // Same per-pane offer as the ER panel beside it.
+                            onReviseElement: usecaseEdit.onRevise,
                             editable: usecaseEditable,
                           }
                         : undefined
@@ -2276,6 +2278,11 @@ export function ViewPlayground({
                             onMoveEntity: erEdit.onMove,
                             onPinEntity: erEdit.onPin,
                             onReleaseEntity: erEdit.onRelease,
+                            /* Undefined when the grid refuses `revise` for
+                               this pane — a Mermaid pane cannot spell three
+                               of the four fields, so the panel draws none
+                               rather than one whose Apply is declined. */
+                            onReviseEntity: erEdit.onRevise,
                             editable: erEditable,
                           }
                         : undefined

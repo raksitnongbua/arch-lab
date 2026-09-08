@@ -176,6 +176,71 @@ export interface UseCaseDiagramProps {
   /** The in-flight move, in LAYOUT UNITS: where the dragged shape's top-left
    *  would land. Null when nothing is being dragged. */
   elementDrag?: { id: string; x: number; y: number } | null;
+  /**
+   * The heading, made typeable — or absent, which is every static render, the
+   * `/demo` preview and every export.
+   *
+   * PRESENCE IS THE OFFER, as for `onElementDragStart` above: without it the
+   * heading is drawn exactly as it always was and no `foreignObject` is ever
+   * built, which is what keeps the exporters honest — they render from the
+   * model through `export/render-svg.ts` and hand this nothing.
+   */
+  retitle?: UseCaseRetitleSurface;
+}
+
+/**
+ * What the canvas needs in order to make the drawn heading the affordance for
+ * rewriting it, as the VIEWER assembles it.
+ *
+ * THE GEOMETRY IS THE ONLY THING THIS RENDERER KNOWS, and the form is the only
+ * thing it does not: an editor is state and this component is pure and
+ * server-renderable (a dictionary's own renderer states the same rule), so the
+ * viewer owns the fields and hands the mounted element over. What arrives here
+ * is where to put it — which nothing but the layout can answer, because the
+ * heading's box is solved from the measured title.
+ */
+export interface UseCaseRetitleSurface {
+  /** Begin editing — pressing the drawn heading. */
+  onOpen: () => void;
+  /** The viewer's fields while they are open, and `null` while the heading is
+   *  only pressable. */
+  form: React.ReactNode | null;
+}
+
+/**
+ * The heading's press target, grown a little past the glyphs so the hover
+ * outline does not sit on the letters it offers to change. In LAYOUT UNITS,
+ * and smaller than `UC.marginX`/`marginTop` so the target can never reach
+ * outside the drawing.
+ */
+const HEADING_HIT_PAD = { x: 6, y: 4 };
+
+/**
+ * The room the editor asks for, in LAYOUT UNITS — a title field, a
+ * description box and the Apply row.
+ *
+ * IT IS CLAMPED INTO THE FRAME rather than trusted, and that is not caution:
+ * an `<svg>` clips its viewport, and a `foreignObject` reaching past the
+ * bottom edge of a one-actor document would have its Apply button shaved off
+ * with nothing on screen to say so. `headingEditorBox` is where the clamp
+ * happens, and the form scrolls inside whatever room it is given.
+ */
+const HEADING_EDITOR = { width: 300, height: 208 };
+
+/** The editor's box: `HEADING_EDITOR` at the heading, pulled back inside the
+ *  drawn frame — see the constant for the clip this avoids. */
+function headingEditorBox(
+  bounds: UseCaseLayout["bounds"],
+  anchor: { x: number; y: number },
+): { x: number; y: number; width: number; height: number } {
+  const width = Math.min(HEADING_EDITOR.width, bounds.width);
+  const height = Math.min(HEADING_EDITOR.height, bounds.height);
+  return {
+    x: Math.max(bounds.x, Math.min(anchor.x, bounds.x + bounds.width - width)),
+    y: Math.max(bounds.y, Math.min(anchor.y, bounds.y + bounds.height - height)),
+    width,
+    height,
+  };
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -194,6 +259,7 @@ export function UseCaseDiagram({
   svgRef,
   onElementDragStart,
   elementDrag = null,
+  retitle,
 }: UseCaseDiagramProps): React.JSX.Element {
   const focusSet = resolveUseCaseFocus(layout, focus);
   const elementDimmed = (id: string): boolean =>
@@ -218,8 +284,16 @@ export function UseCaseDiagram({
             height: Math.round(layout.bounds.height * zoom),
           })}
       preserveAspectRatio="xMidYMid meet"
-      role="img"
-      aria-label={`Use-case diagram: ${title}. ${layout.elements.length} elements, ${layout.edges.length} relationships. Elements and lines are buttons — Tab reaches them.`}
+      /* `img` WHILE THE HEADING IS ONLY DRAWN, `group` ONCE IT CAN BE TYPED
+         INTO — the dictionary canvas's own switch, for its reason: assistive
+         technology PRUNES the subtree of a `role="img"`, so the title field
+         and its Apply button would sit in the tab order with no readable name
+         at all. The elements and lines have always been buttons under this
+         role, which is the same defect one layer down; it is not this
+         gesture's to fix, and `role="group"` here fixes it for free wherever
+         editing is on. */
+      role={retitle === undefined ? "img" : "group"}
+      aria-label={`Use-case diagram: ${title}. ${layout.elements.length} elements, ${layout.edges.length} relationships. Elements and lines are buttons — Tab reaches them.${retitle === undefined ? "" : " The heading is a button — press it to rewrite the title and description."}`}
       className="af-uc-svg block"
     >
       {/* The role textures, once for the whole canvas — the shared-def rule in
@@ -313,8 +387,19 @@ export function UseCaseDiagram({
       )}
 
       {/* ---- the heading: inside the drawing, so it travels with exports.
-            aria-hidden — the <svg>'s aria-label already opens with it. ---- */}
-      <g aria-hidden="true" className="pointer-events-none">
+            aria-hidden — the <svg>'s aria-label already opens with it.
+
+            IT STANDS DOWN WHILE THE FIELDS ARE OPEN rather than sitting under
+            them: two renditions of one title, the drawn one going stale as the
+            reader types, is worse than a box in its place — and the fields are
+            opaque, so the drawn text would only show through at their edges. */}
+      <g
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none",
+          retitle?.form != null && "hidden",
+        )}
+      >
         <text
           x={UC.marginX}
           y={UC.marginTop + UC.titleFontSize}

@@ -48,6 +48,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { UseCaseLabFile } from "@/types";
+// A deep import into the playground's input layer, as `flowchart-viewer.tsx`
+// makes for its own revision type: the shape of a wording edit is the gesture
+// module's to define, and this feature only fills it in.
+import type { UseCaseElementRevision } from "@/features/playground/input/usecase-edit";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -138,6 +142,24 @@ export interface UseCaseEditHandlers {
   /** Set or clear one element's pin, which exempts it from a whole-diagram
    *  release. Pinning needs a position to keep. */
   onPinElement: (elementId: string, pinned: boolean) => void;
+  /**
+   * Rewrite one element's own wording — its label, its `[technology]`, its
+   * `#tag`s and its `desc` detail. `id` and `kind` are not among them, and
+   * `UseCaseElementRevision` carries why.
+   *
+   * OPTIONAL WHERE THE THREE ABOVE ARE NOT, because presence is the offer at
+   * the level of ONE GESTURE here: placement and wording are separate cells of
+   * `CANVAS_EDIT_OFFERS` (ADR 0003 gave this canvas the first without the
+   * second), so `editable` beside them cannot answer for both — it is the
+   * host's verdict on placement. A host that hands this handler over is a host
+   * whose wording cell offers the ability, and the dock draws the fields only
+   * then. Reading the grid from in here would be this feature importing the
+   * playground, which is the direction this bundle exists to avoid.
+   */
+  onReviseElement?: (
+    elementId: string,
+    revision: UseCaseElementRevision,
+  ) => void;
   /** False while the host holds the handlers but must not run them. */
   editable: boolean;
 }
@@ -487,6 +509,11 @@ export function UseCaseViewer({
    * way. */
 
   const editing = edit !== undefined && edit.editable;
+  /* THE WORDING GESTURE IS ITS OWN OFFER, held rather than tested as a
+     boolean so the handler passed to the form is the one TypeScript has
+     already seen is there. See `UseCaseEditHandlers.onReviseElement` for why
+     it is not `editing` that answers for this. */
+  const onReviseElement = edit?.onReviseElement;
   const svgRef = useRef<SVGSVGElement>(null);
 
   /**
@@ -940,31 +967,71 @@ export function UseCaseViewer({
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
               {focusedElement !== null ? (
                 <dl className="flex flex-col gap-2.5">
-                  <DockRow term="Label" value={focusedElement.label} />
+                  {/* ---- wording: the same four facts, typed into rather
+                      than read off, WHERE THEY ALREADY WERE. The dock this
+                      canvas already opened to show an element's `desc` is the
+                      surface, so nothing new appears beside the diagram and
+                      the placement controls below keep their place — a second
+                      panel would be two authoring surfaces for one model,
+                      which is the refusal the C4 canvas's own dock replaced.
+
+                      KEYED BY THE ELEMENT, so moving focus to another symbol
+                      remounts the form with that symbol's values. A shared
+                      instance would keep the fields a reader had half-typed
+                      and submit them against a different element. */}
+                  {onReviseElement !== undefined ? (
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Wording
+                      </dt>
+                      <dd className="mt-1">
+                        <ElementWordingForm
+                          key={focusedElement.id}
+                          element={{
+                            id: focusedElement.id,
+                            label: focusedElement.label,
+                            technology: focusedElement.technology,
+                            tags: focusedElement.tags,
+                            description: focusedElement.description,
+                          }}
+                          onRevise={onReviseElement}
+                        />
+                      </dd>
+                    </div>
+                  ) : (
+                    <>
+                      <DockRow term="Label" value={focusedElement.label} />
+                      {/* THE REASON THE DOCK EXISTS for an element with a
+                          `desc`: the symbol shows the title, this shows what
+                          it is short for. */}
+                      {focusedElement.description !== undefined ? (
+                        <DockRow
+                          term="Details"
+                          value={focusedElement.description}
+                        />
+                      ) : null}
+                      {focusedElement.technology !== undefined ? (
+                        <DockRow
+                          term="Technology"
+                          value={focusedElement.technology}
+                          mono
+                        />
+                      ) : null}
+                      {focusedElement.tags !== undefined ? (
+                        <DockRow
+                          term="Tags"
+                          value={focusedElement.tags
+                            .map((t) => `#${t}`)
+                            .join(" ")}
+                          mono
+                        />
+                      ) : null}
+                    </>
+                  )}
+                  {/* OUTSIDE THE BRANCH, in both: `kind` is the one field of
+                      an element the dock states and the form refuses, so it
+                      is read-only whether or not the wording is editable. */}
                   <DockRow term="Kind" value={focusedElement.kind} mono />
-                  {/* THE REASON THE DOCK EXISTS for an element with a
-                      `desc`: the symbol shows the title, this shows what it
-                      is short for. */}
-                  {focusedElement.description !== undefined ? (
-                    <DockRow
-                      term="Details"
-                      value={focusedElement.description}
-                    />
-                  ) : null}
-                  {focusedElement.technology !== undefined ? (
-                    <DockRow
-                      term="Technology"
-                      value={focusedElement.technology}
-                      mono
-                    />
-                  ) : null}
-                  {focusedElement.tags !== undefined ? (
-                    <DockRow
-                      term="Tags"
-                      value={focusedElement.tags.map((t) => `#${t}`).join(" ")}
-                      mono
-                    />
-                  ) : null}
                   {/* ---- placement: the two gestures a pointer has that a
                       keyboard does not, plus the two that need a control
                       either way.
@@ -1085,5 +1152,143 @@ export function UseCaseViewer({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The editable dock                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dock's field styling, in one place — three inputs and a textarea share
+ * it, and a fifth copy is how one of them ends up a pixel out from the others.
+ *
+ * `bg-canvas/60` IS THE SHARED ANSWER rather than a colour picked here: it is
+ * the fill the flowchart dock and the C4 details panel use for the same job, a
+ * control floating over a diagram. `check:canvas-chrome` lets that shade
+ * through and fails a viewer reaching for a full-strength `bg-canvas` or
+ * `bg-background`, because a notation grounding itself is how the ground
+ * behind a diagram came to change shade when the reader changed notation.
+ *
+ * MAINTAINED BY HAND against `FIELD_CLASS` in `flowchart-viewer.tsx`, which
+ * a feature may not deep-import from. The token is the part that has to agree,
+ * and `check:canvas-chrome` is what watches it.
+ */
+const FIELD_CLASS =
+  "w-full rounded-md border border-border bg-canvas/60 px-2 py-1 text-sm text-foreground " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const LABEL_CLASS = "text-xs font-medium text-muted-foreground";
+
+/**
+ * A focused element's own wording, editable in place.
+ *
+ * SUBMIT, NOT KEYSTROKE. Every gesture on this canvas is a source-text patch
+ * and each one lands in the undo ring, so committing per character would fill
+ * that ring with a letter apiece and rewrite the pane under a reader who is
+ * still mid-word. The flowchart dock and the C4 details panel make the same
+ * call.
+ *
+ * ONE FORM FOR BOTH SHAPES. An actor and a use case are one `UseCaseElement`
+ * with a `kind`, so the fields a stick figure offers are the fields an ellipse
+ * offers — nothing here branches on kind, which is the model being right
+ * rather than an omission.
+ */
+function ElementWordingForm({
+  element,
+  onRevise,
+}: {
+  element: {
+    id: string;
+    label: string;
+    technology?: string;
+    tags?: readonly string[];
+    description?: string;
+  };
+  onRevise: (elementId: string, revision: UseCaseElementRevision) => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(element.label);
+  const [technology, setTechnology] = useState(element.technology ?? "");
+  /* Tags round-trip through ONE space-separated string rather than a chip
+     editor, as the flowchart dock's do: the grammar writes them as `#a #b` on
+     the element's own line, and a text field is the shape that matches what
+     the author would have typed. The leading `#` is decoration here —
+     accepted if typed, never required. */
+  const [tags, setTags] = useState((element.tags ?? []).join(" "));
+  const [description, setDescription] = useState(element.description ?? "");
+
+  const submit = (event: React.FormEvent): void => {
+    event.preventDefault();
+    const parsedTags = tags
+      .split(/[\s,]+/)
+      .map((tag) => tag.replace(/^#/, ""))
+      .filter((tag) => tag !== "");
+    onRevise(element.id, {
+      label: label.trim(),
+      // An emptied box REMOVES the field — `undefined` is what the gesture
+      // reads as "drop it", and a blank string would write `[""]` instead.
+      technology: technology.trim() === "" ? undefined : technology.trim(),
+      tags: parsedTags.length === 0 ? undefined : parsedTags,
+      description: description.trim() === "" ? undefined : description.trim(),
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-label">
+          Label
+        </label>
+        <input
+          id="af-uc-label"
+          className={FIELD_CLASS}
+          value={label}
+          required
+          onChange={(event) => setLabel(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-tech">
+          Technology
+        </label>
+        <input
+          id="af-uc-tech"
+          className={FIELD_CLASS}
+          value={technology}
+          placeholder="Stripe"
+          onChange={(event) => setTechnology(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-tags">
+          Tags
+        </label>
+        <input
+          id="af-uc-tags"
+          className={FIELD_CLASS}
+          value={tags}
+          placeholder="checkout billing"
+          onChange={(event) => setTags(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-uc-desc">
+          Details
+        </label>
+        <textarea
+          id="af-uc-desc"
+          className={FIELD_CLASS}
+          rows={3}
+          value={description}
+          placeholder="What this use case is short for"
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </div>
+      <button
+        type="submit"
+        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+    </form>
   );
 }

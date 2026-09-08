@@ -60,6 +60,54 @@
  *  10. A MERMAID PANE IS REFUSED, and a pane that disagrees with the canvas is
  *      refused, because splicing by line numbers that describe a different
  *      document corrupts the reader's file rather than preserving it.
+ *
+ * AND ONE SECTION THAT IS NOT ABOUT PLACEMENT: the use-case canvas answers
+ * `revise` as well, from the details dock it already opened to show an
+ * element's `desc`. It lives here rather than in a script of its own because
+ * it shares this file's fixture — the element whose indentation a wording
+ * patch can get wrong is the same element inside the same boundary — and what
+ * it proves is the same class of thing: an edit that becomes text, and text
+ * that still means what it did. Its assertions are:
+ *
+ *  11. THE GESTURE ASKS THE GRID ITSELF, so the whole section is gated on the
+ *      `revise` cell's own answer and proves the refusal while that cell
+ *      refuses.
+ *  12. A WORDING EDIT LEAVES A BOUNDARY MEMBER INSIDE ITS BOUNDARY. This is
+ *      the failure a round trip cannot see: the pad is read off the block
+ *      being replaced, and a re-derived one dedents a use case out of the
+ *      system box while every serialiser assertion stays green.
+ *  13. `id` AND `kind` ARE REFUSED. Both are spellable as extra keys on a
+ *      revision object at runtime, and both would be a graph edit wearing a
+ *      field edit's clothes — a rename detaches every line that names the
+ *      element, and a kind change moves it across the boundary and rewrites
+ *      what its edges mean.
+ *  14. AN EMPTY LABEL IS REFUSED, because the parser refuses it: a reader who
+ *      cleared the box would be left with an error over a diagram they could
+ *      no longer edit.
+ *  15. A WORDING EDIT CARRIES THE PLACEMENT KEYS. Rebuilding an element
+ *      without them would run the release gesture from the wrong control.
+ *
+ * AND THE ER CANVAS ANSWERS `revise` TOO, from the detail panel it already
+ * opened to name a table's joins. Same reason it lives here: same fixture,
+ * same class of thing proved. What it asserts that the use-case section does
+ * not is what an ER entity's id COSTS — every relationship line names it — and
+ * what its columns are:
+ *
+ *  16. THE GESTURE ASKS THE GRID ITSELF, so this section is gated on the
+ *      `revise` cell's own answer and proves the refusal while it refuses.
+ *  17. A LINE PATCH, NOT A RE-EMIT: every comment and blank line survives.
+ *  18. THE PATCHED TEXT RE-PARSES TO THE NEW WORDING, read off the adopted
+ *      document rather than off the bytes, so a gesture that wrote text one
+ *      way and handed back a model built another cannot pass.
+ *  19. A NO-OP REVISE IS REFUSED, and an emptied box REMOVES its field.
+ *  20. `id` AND `attributes` ARE REFUSED, both spellable as extra keys on a
+ *      revision object at runtime. A rename leaves every relationship line
+ *      pointing at a table that is no longer there; a column list would make
+ *      a prose panel the second reader of the `attr` grammar.
+ *  21. AN EMPTY LABEL IS REFUSED — whitespace included, because the
+ *      serializer would quote it and draw a box with no name on it.
+ *  22. A WORDING EDIT CARRIES THE PLACEMENT KEYS.
+ *  23. A MERMAID PANE IS REFUSED, measured against `serializeMermaidEr`.
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -103,7 +151,17 @@ registerHooks({
 const load = async (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 
 const er = await load("src/features/playground/input/er-edit.ts");
+/* THE NEIGHBOURING CANVAS, for one assertion. `flowchart-edit.ts` is loaded
+   by NO check script — `check:canvas-edit` pins the purity of its three
+   siblings and never imports this one — so none of its nine gestures has a
+   direct assertion, which is how the bug below shipped. This covers the one
+   failure the ER and use-case wording gestures were built to avoid; the wider
+   gap is bigger than this file. */
+const flow = await load("src/features/playground/input/flowchart-edit.ts");
 const uc = await load("src/features/playground/input/usecase-edit.ts");
+const { canvasEditability } = await load(
+  "src/features/playground/input/canvas-edit.ts",
+);
 const { parseViewSource, convertedSourceText } = await load(
   "src/features/playground/input/parse.ts",
 );
@@ -346,6 +404,486 @@ for (const n of NOTATIONS) {
     }) === null,
     "splicing into line numbers that mean something else corrupts the file",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The use-case wording gesture                                            */
+/* ----------------------------------------------------------------------- */
+
+console.log("");
+console.log("usecase: the wording gesture");
+
+const wording = NOTATIONS.find((n) => n.kind === "usecase");
+const wordingSeed = wording.source;
+const wordingDoc = parse(wordingSeed);
+const revise = (d, t, id, fields) =>
+  uc.revisedUseCaseElementEdit(d, t, id, fields);
+
+/* 11. THE GESTURE ASKS THE GRID ITSELF, and this script asks it the same
+   question rather than hard-coding the answer. While the `revise` cell
+   refuses a use case there is exactly one thing to prove — that the gesture
+   refuses too, at the gesture and not advisorily at the table. The moment the
+   cell offers, everything below runs and a hand-typed expectation here would
+   have been the stale claim `canvas-editing.md` spends a paragraph on. */
+const offersWording = canvasEditability(wordingDoc, "revise").editable;
+check(
+  "the wording gesture agrees with the grid's own `revise` cell for a use case",
+  (revise(wordingDoc, wordingSeed, "pay", { label: "Pay the courier" }) ===
+    null) ===
+    !offersWording,
+  offersWording
+    ? "the cell offers `revise` and the gesture still declined"
+    : "the cell refuses `revise` and the gesture edited anyway",
+);
+
+if (offersWording) {
+  check(
+    "the wording gesture declines another notation's document",
+    revise(
+      parse(NOTATIONS.find((n) => n.kind === "er").source),
+      wordingSeed,
+      "pay",
+      {
+        label: "Pay the courier",
+      },
+    ) === null,
+    "it acted on a document of the wrong kind",
+  );
+
+  const revised = revise(wordingDoc, wordingSeed, "pay", {
+    label: "Pay the courier",
+    technology: "Stripe",
+    tags: ["checkout"],
+    description: "Card on file, or cash at the door.",
+  });
+  check("a wording edit produces an edit", revised !== null, "got null");
+  if (revised !== null) {
+    const blanks = (text) => text.split("\n").filter((l) => l === "").length;
+    check(
+      "the wording edit is a patch, and every comment and blank line survives it",
+      revised.path === "patch" &&
+        comments(revised.text) === comments(wordingSeed) &&
+        blanks(revised.text) === blanks(wordingSeed),
+      `path ${revised.path}, ${comments(revised.text)} comments against ` +
+        `${comments(wordingSeed)}, ${blanks(revised.text)} blank lines ` +
+        `against ${blanks(wordingSeed)}`,
+    );
+
+    /* 12. STILL INSIDE ITS BOUNDARY. Read off the patched text's own
+       indentation rather than off the model, because the model cannot say
+       where the line sits — which is the whole reason the pad is read and not
+       derived. */
+    const payLine = revised.text
+      .split("\n")
+      .find((line) => line.includes("usecase pay"));
+    check(
+      "a wording edit leaves a boundary member INSIDE its boundary",
+      payLine !== undefined && /^ {4}usecase pay/.test(payLine),
+      `the line dedented out of the system box: ${JSON.stringify(payLine)}`,
+    );
+
+    check(
+      "the patched text re-parses to the new wording",
+      (() => {
+        const element = revised.doc.file.elements.find((e) => e.id === "pay");
+        return (
+          element?.label === "Pay the courier" &&
+          element.description === "Card on file, or cash at the door." &&
+          element.tags?.join(" ") === "checkout"
+        );
+      })(),
+      "the adopted document does not carry what the dock submitted",
+    );
+
+    /* 3. A NO-OP REVISE IS REFUSED, so a form submitted with nothing changed
+       in it costs the reader no undo entry. */
+    check(
+      "a wording edit that changes nothing costs no undo entry",
+      revise(revised.doc, revised.text, "pay", {
+        label: "Pay the courier",
+        technology: "Stripe",
+        tags: ["checkout"],
+        description: "Card on file, or cash at the door.",
+      }) === null,
+      "it rewrote the pane for nothing",
+    );
+
+    check(
+      "an emptied field REMOVES it rather than writing an empty one",
+      (() => {
+        const cleared = revise(revised.doc, revised.text, "pay", {
+          label: "Pay the courier",
+        });
+        return (
+          cleared !== null &&
+          !cleared.text.includes("[Stripe]") &&
+          !cleared.text.includes("#checkout") &&
+          !/\bdesc\b/.test(
+            cleared.text.split("\n").find((l) => l.includes("usecase pay")) ??
+              "",
+          ) &&
+          cleared.doc.file.elements.find((e) => e.id === "pay")?.technology ===
+            undefined
+        );
+      })(),
+      "a cleared box left the old value behind, or wrote an empty token",
+    );
+  }
+
+  /* 13. `id` AND `kind` ARE REFUSED — spelled as the extra keys a caller can
+     put on a revision object at runtime, which is the only way this refusal
+     can be provoked at all now that the type omits them. */
+  const smuggled = revise(wordingDoc, wordingSeed, "pay", {
+    label: "Pay the courier",
+    technology: "Stripe",
+    id: "paid",
+    kind: "actor",
+  });
+  check(
+    "a revision cannot rename an element: `id` is refused",
+    smuggled !== null &&
+      !smuggled.text.includes("paid") &&
+      smuggled.text.includes("usecase pay") &&
+      smuggled.doc.file.elements.some((e) => e.id === "pay"),
+    "a rename detaches every association and dependency line that names it",
+  );
+  check(
+    "a revision cannot turn a use case into an actor: `kind` is refused",
+    smuggled !== null &&
+      !/\bactor pay\b/.test(smuggled.text) &&
+      smuggled.doc.file.elements.find((e) => e.id === "pay")?.kind ===
+        "usecase",
+    "a kind change moves the symbol across the boundary and rewrites what " +
+      "its edges mean",
+  );
+
+  /* 14. AN EMPTY LABEL. */
+  check(
+    "an empty label is refused rather than written",
+    revise(wordingDoc, wordingSeed, "pay", { label: "" }) === null,
+    "the parser refuses an empty element label, so this would leave an " +
+      "error over a diagram the reader could no longer edit",
+  );
+
+  /* 15. THE PLACEMENT KEYS SURVIVE A WORDING EDIT. */
+  const placed = uc.movedUseCaseElementEdit(wordingDoc, wordingSeed, "pay", {
+    x: 320,
+    y: 96,
+  });
+  const pinned =
+    placed === null
+      ? null
+      : uc.pinnedUseCaseElementEdit(placed.doc, placed.text, "pay", true);
+  check(
+    "a wording edit carries the position and the pin rather than releasing them",
+    (() => {
+      if (pinned === null) return false;
+      const next = revise(pinned.doc, pinned.text, "pay", {
+        label: "Pay the courier",
+        technology: "Stripe",
+      });
+      return (
+        next !== null &&
+        next.text.includes("(320,96)") &&
+        /\bpin\b/.test(next.text)
+      );
+    })(),
+    "retyping a caption ran the release gesture from the wrong control",
+  );
+
+  /* 10 again, for this gesture: A MERMAID PANE IS REFUSED. Measured against
+     `serializeMermaidUseCase`, whose own caveat names an element's desc
+     detail, [technology] and #tags among what the convention cannot hold — so
+     the pane has no line numbers to splice into AND no slot for three of the
+     four fields this form writes. */
+  const asMermaid = convertedSourceText(wordingDoc, "mermaid");
+  const mermaidDoc = parse(asMermaid);
+  check(
+    "a use-case document in a Mermaid pane refuses the wording edit",
+    revise(mermaidDoc, asMermaid, "pay", { label: "Pay the courier" }) === null,
+    "Mermaid holds no desc, [technology] or #tags for an element, so the " +
+      "edit would show once and be lost on the next parse",
+  );
+} else {
+  console.log(
+    "  · the `revise` cell refuses a use case, so the wording assertions " +
+      "below it are the refusal itself",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The ER wording gesture                                                  */
+/* ----------------------------------------------------------------------- */
+
+console.log("");
+console.log("er: the wording gesture");
+
+const erSeed = NOTATIONS.find((n) => n.kind === "er").source;
+const erDoc = parse(erSeed);
+const erRevise = (d, t, id, fields) => er.revisedErEntityEdit(d, t, id, fields);
+
+/* 16. THE GESTURE ASKS THE GRID ITSELF, and so does this section rather than
+   hard-coding what the cell currently says. While the `revise` cell refuses an
+   ER document there is exactly one thing to prove — that the gesture refuses
+   too, at the gesture and not advisorily at the table. The moment the cell
+   offers, everything below runs; a hand-typed expectation here would be the
+   stale claim `canvas-editing.md` spends a paragraph on. */
+const offersErWording = canvasEditability(erDoc, "revise").editable;
+check(
+  "the wording gesture agrees with the grid's own `revise` cell for an ER document",
+  (erRevise(erDoc, erSeed, "order", { label: "Purchase order" }) === null) ===
+    !offersErWording,
+  offersErWording
+    ? "the cell offers `revise` and the gesture still declined"
+    : "the cell refuses `revise` and the gesture edited anyway",
+);
+
+if (offersErWording) {
+  check(
+    "the ER wording gesture declines another notation's document",
+    erRevise(
+      parse(NOTATIONS.find((n) => n.kind === "usecase").source),
+      erSeed,
+      "order",
+      { label: "Purchase order" },
+    ) === null,
+    "it acted on a document of the wrong kind",
+  );
+
+  const erRevised = erRevise(erDoc, erSeed, "order", {
+    label: "Purchase order",
+    technology: "partitioned",
+    tags: ["billing"],
+    description: "One line per basket, kept for seven years.",
+  });
+  check("an ER wording edit produces an edit", erRevised !== null, "got null");
+  if (erRevised !== null) {
+    /* 17. A LINE PATCH, NOT A RE-EMIT — proved from the fixture's own
+       non-canonical shape, because a re-emit of canonical text IS canonical
+       text. The author's comment and their blank lines are what a re-emit ate
+       once, so both are counted rather than the diff being eyeballed. */
+    const erBlanks = (text) => text.split("\n").filter((l) => l === "").length;
+    check(
+      "the ER wording edit is a patch, and every comment and blank line survives it",
+      erRevised.path === "patch" &&
+        comments(erRevised.text) === comments(erSeed) &&
+        erBlanks(erRevised.text) === erBlanks(erSeed),
+      `path ${erRevised.path}, ${comments(erRevised.text)} comments against ` +
+        `${comments(erSeed)}, ${erBlanks(erRevised.text)} blank lines against ` +
+        `${erBlanks(erSeed)}`,
+    );
+
+    /* 18. THE PATCHED TEXT RE-PARSES TO THE NEW WORDING. Read off the adopted
+       document rather than off the bytes: `adopt` re-parses, and a gesture
+       that wrote text one way and handed back a model built another way is the
+       two-halves-disagreeing failure `codebase.md` names. */
+    check(
+      "the patched ER text re-parses to the new wording",
+      (() => {
+        const entity = erRevised.doc.file.entities.find(
+          (e) => e.id === "order",
+        );
+        return (
+          entity?.label === "Purchase order" &&
+          entity.technology === "partitioned" &&
+          entity.description === "One line per basket, kept for seven years." &&
+          entity.tags?.join(" ") === "billing"
+        );
+      })(),
+      "the adopted document does not carry what the panel submitted",
+    );
+
+    /* 19. A NO-OP REVISE IS REFUSED, so a form submitted with nothing changed
+       in it costs the reader no undo entry. */
+    check(
+      "an ER wording edit that changes nothing costs no undo entry",
+      erRevise(erRevised.doc, erRevised.text, "order", {
+        label: "Purchase order",
+        technology: "partitioned",
+        tags: ["billing"],
+        description: "One line per basket, kept for seven years.",
+      }) === null,
+      "it rewrote the pane for nothing",
+    );
+
+    check(
+      "an emptied ER field REMOVES it rather than writing an empty one",
+      (() => {
+        const cleared = erRevise(erRevised.doc, erRevised.text, "order", {
+          label: "Purchase order",
+        });
+        const entity = cleared?.doc.file.entities.find((e) => e.id === "order");
+        return (
+          cleared !== null &&
+          !cleared.text.includes("[partitioned]") &&
+          !cleared.text.includes("#billing") &&
+          entity?.technology === undefined &&
+          entity.description === undefined &&
+          entity.tags === undefined
+        );
+      })(),
+      "a cleared box left the old value behind, or wrote an empty token",
+    );
+  }
+
+  /* 20. `id` AND `attributes` ARE REFUSED — spelled as the extra keys a caller
+     can put on a revision object at runtime, which is the only way this
+     refusal can be provoked now that the type omits them. A rename would
+     detach every relationship line that names the entity; a column list would
+     make a prose panel the second reader of the `attr` grammar. */
+  const erSmuggled = erRevise(erDoc, erSeed, "order", {
+    label: "Purchase order",
+    id: "purchase_order",
+    attributes: [],
+  });
+  check(
+    "an ER revision cannot rename an entity: `id` is refused",
+    erSmuggled !== null &&
+      !erSmuggled.text.includes("purchase_order") &&
+      /\bentity order\b/.test(erSmuggled.text) &&
+      erSmuggled.doc.file.entities.some((e) => e.id === "order"),
+    "a rename leaves every relationship line pointing at a table that is " +
+      "no longer there",
+  );
+  check(
+    "an ER revision cannot drop a column: `attributes` is refused",
+    erSmuggled !== null &&
+      erSmuggled.text.includes("attr id uuid pk") &&
+      erSmuggled.doc.file.entities.find((e) => e.id === "order")?.attributes
+        ?.length === 1,
+    "the panel edits prose; a column is its own line with its own syntax",
+  );
+
+  /* 21. AN EMPTY LABEL IS REFUSED, because the parser refuses it ("the entity
+     label must not be empty"): a reader who cleared the box would be left with
+     an error over a diagram they could no longer edit. Whitespace counts —
+     `entity order " "` parses and draws a box with no name on it. */
+  /* A THROW IS A FAILURE, NOT AN ESCAPE. `serializeErText` refuses an empty
+     label by THROWING, so a gesture that stopped guarding it would take the
+     page down from the panel's Apply rather than dropping the edit — and an
+     assertion that let the throw escape would kill this script before its own
+     line was printed, which is one of the five ways an assertion here has
+     already failed to fail. */
+  const refusesLabel = (label) => {
+    try {
+      return erRevise(erDoc, erSeed, "order", { label }) === null
+        ? true
+        : "it wrote the edit";
+    } catch (error) {
+      return `it threw instead of refusing: ${error.message}`;
+    }
+  };
+  const emptyLabel = refusesLabel("");
+  const blankLabel = refusesLabel("   ");
+  check(
+    "an empty ER label is refused rather than written",
+    emptyLabel === true && blankLabel === true,
+    `empty: ${emptyLabel}; whitespace: ${blankLabel}`,
+  );
+
+  /* 22. THE PLACEMENT KEYS SURVIVE A WORDING EDIT. The block patch respells
+     the whole declaration line, so an entity rebuilt from the revision alone
+     comes back released — retyping a caption would have run the release
+     gesture from the wrong control, a gesture the reader last used elsewhere. */
+  const erPlaced = er.movedErEntityEdit(erDoc, erSeed, "order", {
+    x: 320,
+    y: 96,
+  });
+  const erPinned =
+    erPlaced === null
+      ? null
+      : er.pinnedErEntityEdit(erPlaced.doc, erPlaced.text, "order", true);
+  check(
+    "an ER wording edit carries the position and the pin rather than releasing them",
+    (() => {
+      if (erPinned === null) return false;
+      const next = erRevise(erPinned.doc, erPinned.text, "order", {
+        label: "Purchase order",
+      });
+      return (
+        next !== null &&
+        next.text.includes("(320,96)") &&
+        /\bpin\b/.test(next.text)
+      );
+    })(),
+    "retyping a caption ran the release gesture from the wrong control",
+  );
+
+  /* 23. A MERMAID PANE IS REFUSED, and the refusal is MEASURED against
+     `serializeMermaidEr` rather than assumed: that emitter writes an entity as
+     its id, an optional `["Label"]` alias and its columns, and nothing else —
+     `MERMAID_ER_EXPORT_CAVEAT` names the `[technology]`, the `#tags` and the
+     entity's own description as what `erDiagram` has nowhere to put, because
+     its only comment slot is on a COLUMN. Three of the four fields this panel
+     writes would show once and be gone on the next parse. */
+  const erAsMermaid = convertedSourceText(erDoc, "mermaid");
+  const erMermaidDoc = parse(erAsMermaid);
+  check(
+    "an ER document in a Mermaid pane refuses the wording edit",
+    erRevise(erMermaidDoc, erAsMermaid, "order", {
+      label: "Purchase order",
+    }) === null,
+    "Mermaid erDiagram holds no description, [technology] or #tags for an " +
+      "entity, so the edit would show once and be lost on the next parse",
+  );
+} else {
+  console.log(
+    "  · the `revise` cell refuses an ER document, so the wording " +
+      "assertions below it are the refusal itself",
+  );
+}
+
+/* --------------------------------------------------------------------- */
+
+console.log("");
+console.log("flowchart: a wording edit keeps the position (the bug next door)");
+
+{
+  /* WHY THIS LIVES HERE. The ER and use-case wording gestures carry their
+     `position` and `pin` through a revision on purpose, because a block patch
+     respells the whole declaration line and a rebuilt element without them
+     would run the RELEASE gesture from the wording control. Writing that
+     assertion is what found the same bug already shipped next door:
+     `revisedFlowNodeEdit` rebuilt its node without `position`, so retyping a
+     step's caption deleted its `(x,y)` and the node jumped back to where the
+     solver wanted it. It is asserted beside its siblings rather than in a
+     script of its own because this is where it was found. */
+  const PINNED = `archlab 1.0 flowchart
+title "Checkout"
+
+// A comment the author wrote.
+@flowchart
+  start begin "Start"
+  step pay "Take payment" (320,96)
+
+  begin -> pay
+`;
+  const doc = parse(PINNED);
+  const revised = flow.revisedFlowNodeEdit(doc, PINNED, "pay", {
+    label: "Charge the card",
+  });
+  check(
+    "a flowchart wording edit produces an edit, so the assertion is real",
+    revised !== null,
+    "got null — the fixture or the guard changed",
+  );
+  if (revised !== null) {
+    check(
+      "retyping a pinned step's label KEEPS its (x,y)",
+      revised.text.includes("(320,96)") &&
+        revised.text.includes('"Charge the card"'),
+      "the wording control ran the release gesture: " +
+        JSON.stringify(
+          revised.text.split("\n").find((line) => line.includes("pay")),
+        ),
+    );
+    check(
+      "and it stays a one-line patch that keeps the author's comment",
+      comments(revised.text) === comments(PINNED) &&
+        revised.text.split("\n").length === PINNED.split("\n").length,
+      "the edit rewrote more than the step's own line",
+    );
+  }
 }
 
 console.log("");

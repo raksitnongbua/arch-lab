@@ -21,6 +21,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   alignment that makes the table readable — so a drag there moves a section or
   a field **earlier or later in the reading order**, which the text already
   states.
+- **An entity's and an element's own wording can be edited on the canvas.**
+  Select an ER entity or a use-case actor and its label, technology, tags and
+  details are editable in the panel that already opened to show them — no
+  second inspector. Renaming an element's `id` and changing an actor into a use
+  case are deliberately not offered: both rewrite lines you never pointed at.
+  In a Mermaid pane the fields are refused rather than silently lost, because
+  that convention has nowhere to put a description, a `[technology]` or a
+  `#tag`.
+- **A diagram's title and description can be retyped on the canvas.** Click the
+  heading a use-case diagram draws and retype it; a dictionary's title works
+  the same way above its table. Clearing the description removes the line
+  rather than writing an empty one, and a diagram cannot be left without a
+  title, because no `.alab` document parses without one. Seven canvases refuse
+  this and say which — the ER canvas because it draws no heading at all.
+- **Fixed: retyping a flowchart step's caption no longer un-pins it.** A step
+  you had dragged jumped back to where the layout wanted it the moment you
+  renamed it, and the position vanished from the source text with nothing
+  saying so.
 - **Leaving a position out is still the normal case.** Every use-case, ER and
   dictionary file already on disk, and in every share link, parses and lays
   out to exactly the pixel it did before. An element with no `(x,y)` is placed
