@@ -115,7 +115,17 @@ would be the same lie twice.
   across the whole document** so that every section shares one grid, and that
   shared grid is what lets a reader scan two sections against each other. A
   free coordinate would break it, and there is no graph for one to fight with.
-  Its `move` cell stays refused on grammar grounds. What a dictionary drag
-  writes is a **reorder**, which needs no format change because order already
-  *is* the text — and per `canvas-editing.md` a reorder is not a move, so it
-  rides under `revise`.
+  Its `move` cell stays refused on grammar grounds and always will.
+
+  What a dictionary drag writes instead is a **reorder**, and that shipped in
+  the same change: it needs no format change at all, because order already
+  *is* the text. Per `canvas-editing.md` a reorder is not a move — "if your
+  notation's drag would take a neighbour's slot rather than land at a point,
+  you are describing `revise`" — so it rides under `revise`, whose dictionary
+  cell was a `"surface"` refusal ("this canvas has no editor on it") and moved
+  the way a `"surface"` refusal is supposed to: somebody built the surface, on
+  the section band and the field row the table already drew.
+
+  **This is the distinction the whole change turns on.** Three notations grew
+  a coordinate; one grew a handle. Conflating them would have put an `(x,y)`
+  into a grammar whose readability depends on not having one.

@@ -108,7 +108,7 @@ const {
 
 /* The REAL patcher the canvas uses, not a copy of it — the whole point of the
    section below is that this module and the spans agree. */
-const { applyPatches, indentOf } = await import(
+const { applyPatches } = await import(
   pathToFileURL(path.join(ROOT, "src/features/playground/input/line-patch.ts"))
     .href
 );
@@ -639,7 +639,9 @@ console.log("spans, and the line patch they exist for");
       ),
     };
     const span = spans.entities.get(id);
-    const pad = indentOf(sourceLines[span.start - 1]);
+    /* NO PAD IS READ, unlike the use-case check's equivalent: an ER entity is
+       pinned by the parser to one indentation, so `canonicalErEntityBlock`
+       takes none. Reading one here would assert nothing. */
     const patched = applyPatches(MESSY, [
       { span, lines: canonicalErEntityBlock(moved, id) },
     ]);

@@ -45,6 +45,21 @@ export const inWords = (count: number): string =>
   NUMBER_WORD[count] ?? String(count);
 
 /**
+ * `text` with its first character upper-cased, for a derived value that lands
+ * at the start of a sentence.
+ *
+ * `inWords(4)` is "four", which is right mid-sentence and wrong as the first
+ * word — a shipped passage read "four of the nine notations carry a
+ * per-element position" with a lower-case f, because the count is derived and
+ * the sentence around it is not. Only the first character is touched: a name
+ * later in the string is the caller's own business, and title-casing would
+ * mangle "C4" and "ER".
+ */
+export function sentenceCase(text: string): string {
+  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
+}
+
+/**
  * "C4 diagrams and sequence diagrams", or a comma list ending in the
  * conjunction once there are three.
  *

@@ -34,11 +34,19 @@
  *      that cannot draw ordinary schemas.
  *   6. DECLARATION ORDER SURVIVES within a column. The model says order is
  *      data.
+ *   7. A PIN MOVES THE DRAWN BOX AND NOTHING ELSE, and the frame grows to
+ *      contain it. THE DEFECTS THIS EXISTS FOR: the flowchart shipped a pin
+ *      whose coordinate outside the solved bounds was CROPPED — a step drawn
+ *      64% off the picture on screen and baked into every PNG at the same
+ *      crop (ADR 0002, amended) — and the whole reason `ErEntity.position`
+ *      could be added without a major bump is that a document stating none
+ *      lays out to the same pixel it always did. Neither claim is provable by
+ *      reading the code, so both are measured here.
  *
  * Exits non-zero on any failure. Run with: pnpm check:er-layout
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -102,6 +110,8 @@ const check = (label, condition, detail) => {
 };
 
 const width = (text, size) => text.length * size * CHAR_WIDTH_RATIO;
+/** A rectangle in one line, for a failure message that says where. */
+const box = (r) => `[x ${r.x}, y ${r.y}, w ${r.width}, h ${r.height}]`;
 const layout = layoutEr(parseErText(ER_EXAMPLE));
 
 /* EVERY REGISTERED EXAMPLE, not just the seed. The label-vs-foot bug was
@@ -464,6 +474,290 @@ title "Self"
       point.y < box.y + box.height - 1,
   );
   check("a self-join routes beside its box, not through it", !through);
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("pins");
+
+/* THE SAME SCHEMA TWICE: once stating nothing, once pinning one entity a long
+   way from where the solver put it. Every pin assertion below is a comparison
+   between these two layouts, because that is the only way to tell "the pin
+   moved this" from "the layout always did this". */
+const PIN_FREE = `archlab 1.0 er
+title "Orders"
+
+@er
+  entity customer "Customer"
+    attr id uuid pk
+    attr email string uk
+  entity order "Order"
+    attr id uuid pk
+    attr customer_id uuid pk fk
+    attr placed_at timestamptz
+  entity order_line "Order line"
+    attr id uuid pk
+    attr order_id uuid fk
+  entity product "Product"
+    attr id uuid pk
+    attr name string
+
+  customer ||--o{ order : places
+  order ||--|{ order_line : contains
+  product ||--o{ order_line : "is sold as"
+`;
+const unpinned = layoutEr(parseErText(PIN_FREE));
+
+{
+  /* THE NON-BREAKING GUARANTEE, as a golden rather than a claim. These
+     coordinates were read off the layout as it stood BEFORE `position`
+     existed — `[id, depth, x, y, width, height]` — and every `.alab` ER
+     document on disk and in every share link states no `(x,y)`, so if the pin
+     pass can move any of these numbers then adding the field was a breaking
+     change that shipped as a minor one. A golden is the wrong shape for a
+     spacing rule and the right one for this: the value being protected is
+     "unchanged", which nothing relational can express. Update it only
+     alongside a changelog entry saying every existing ER diagram moved. */
+  const BEFORE_PINS_EXISTED = [
+    ["customer", 0, 40, 40, 168, 90],
+    ["product", 0, 40, 202, 168, 90],
+    ["order", 1, 376, 108, 199, 116],
+    ["order_line", 2, 743, 121, 168, 90],
+  ];
+  const actual = unpinned.entities.map((e) => [
+    e.id,
+    e.depth,
+    e.x,
+    e.y,
+    e.width,
+    e.height,
+  ]);
+  check(
+    "a document that states no (x,y) lays out exactly where it did before the field existed — the property that made `position` a minor change",
+    JSON.stringify(actual) === JSON.stringify(BEFORE_PINS_EXISTED) &&
+      unpinned.width === 951 &&
+      unpinned.height === 332,
+    `${JSON.stringify(actual)} at ${unpinned.width}x${unpinned.height}`,
+  );
+
+  /* And the frame it reports is the frame every renderer used to compute for
+     itself. A pin-free schema whose bounds differ from `0 0 width height`
+     would move the viewBox of every diagram already published. */
+  const originFramed = ALL_LAYOUTS.every(
+    ([, l]) =>
+      l.bounds.x === 0 &&
+      l.bounds.y === 0 &&
+      l.bounds.width === l.width &&
+      l.bounds.height === l.height,
+  );
+  check(
+    "every registered example — all of them token-free — reports bounds identical to its origin-measured canvas",
+    originFramed && unpinned.bounds.x === 0 && unpinned.bounds.y === 0,
+    ALL_LAYOUTS.map(([id, l]) => `${id} ${box(l.bounds)}`).join(" "),
+  );
+}
+
+/** The same schema with one entity's declaration line carrying an `(x,y)`. */
+const pinnedAt = (id, at) =>
+  layoutEr(
+    parseErText(
+      PIN_FREE.replace(
+        new RegExp(`^  entity ${id} ("[^"]*")$`, "m"),
+        `  entity ${id} $1 ${at}`,
+      ),
+    ),
+  );
+const entityOf = (layout, id) =>
+  layout.entities.find((entity) => entity.id === id);
+
+{
+  /* PER-ELEMENT PRECEDENCE. `entity.position ?? solved`, resolved one entity
+     at a time — so the stated coordinate wins for `order` and its three
+     neighbours keep the slots the solver gave them. A pin implemented as a
+     whole-layout mode instead would move everything, which is the failure
+     this separates from a working one. */
+  const pinned = pinnedAt("order", "(700,-260)");
+  const moved = entityOf(pinned, "order");
+  check(
+    "a stated (x,y) is where that entity is drawn, to the pixel",
+    moved.x === 700 && moved.y === -260,
+    `${box(moved)}`,
+  );
+  check(
+    "and its three unpinned neighbours are byte-identical to the pin-free layout — a pin is per element, not a mode the whole diagram enters",
+    JSON.stringify(pinned.entities.filter((e) => e.id !== "order")) ===
+      JSON.stringify(unpinned.entities.filter((e) => e.id !== "order")),
+    JSON.stringify(pinned.entities.filter((e) => e.id !== "order")),
+  );
+
+  /* THE ROWS TRAVEL WITH THE BOX. Every row's y and its three x positions are
+     absolute — computed during placement so the key badge can be measured
+     against the type beside it — so a pin that moved only the box would leave
+     `PK`, `email` and `string` printed where the box used to be. */
+  const insideOwnBox = moved.attributes.every(
+    (attribute) =>
+      attribute.y > moved.y &&
+      attribute.y < moved.y + moved.height &&
+      attribute.nameX >= moved.x &&
+      attribute.typeX <= moved.x + moved.width &&
+      (attribute.keysX === null ||
+        (attribute.keysX > moved.x && attribute.keysX < attribute.typeX)),
+  );
+  check(
+    "the pinned entity's rows and key badges travel with it, still inside its own box",
+    insideOwnBox,
+    JSON.stringify(moved.attributes),
+  );
+}
+
+{
+  /* THE COLUMN IS NOT THE PIN'S TO CHANGE. An entity's column is its
+     longest-path dependency depth, which is a fact about the relationships;
+     ADR 0003 lists "structure is never overridden" as the thing NOT given up.
+     Laid out at four wildly different pin positions, because one position
+     proves nothing about invariance. */
+  const columnsAt = ["(700,-260)", "(-900,900)", "(0,0)", "(4000,60)"].map(
+    (at) => pinnedAt("order", at),
+  );
+  const expected = unpinned.entities.map((e) => `${e.id}:${e.depth}`).join(",");
+  check(
+    "pinning one entity leaves EVERY entity's column exactly where the relationships put it, at every pin position",
+    columnsAt.every(
+      (l) =>
+        l.entities.map((e) => `${e.id}:${e.depth}`).join(",") === expected &&
+        l.columns === unpinned.columns,
+    ),
+    columnsAt
+      .map((l) => l.entities.map((e) => `${e.id}:${e.depth}`).join(","))
+      .join(" vs "),
+  );
+  /* The other half of "structure is untouched": the connector side choice is
+     read off the SOLVED boxes, so the crow's feet leave the faces the column
+     earned even when the box has moved. ADR 0003 accepts the visible
+     consequence — a connector into a pinned entity can leave the wrong face —
+     as a cost, so what is asserted is that the DIRECTIONS did not change,
+     which is exactly the thing a "fix" would break. */
+  const sidesOf = (l) =>
+    l.relationships
+      .map(
+        (r) =>
+          `${r.from}>${r.to}:${r.fromEnd.dx},${r.fromEnd.dy}|${r.toEnd.dx},${r.toEnd.dy}`,
+      )
+      .join(" ");
+  check(
+    "and every connector still leaves and enters the faces the SOLVED geometry chose — the side choice is not a function of where a pin sits",
+    columnsAt.every((l) => sidesOf(l) === sidesOf(unpinned)),
+    columnsAt.map(sidesOf).join(" vs "),
+  );
+}
+
+{
+  /* THE FRAME GROWS AROUND A FAR-FLUNG PIN. This is the flowchart's shipped
+     defect, transplanted: `viewBox="0 0 width height"` cropped a pinned step
+     off the picture on screen and cropped it identically in the PNG. The
+     fixture pins BOTH ways past the origin-measured canvas so neither
+     direction can pass vacuously. */
+  const far = pinnedAt("order", "(2400,1500)");
+  const negative = pinnedAt("order", "(-620,-410)");
+  const frameContains = (l, e) =>
+    e.x >= l.bounds.x &&
+    e.y >= l.bounds.y &&
+    e.x + e.width <= l.bounds.x + l.bounds.width &&
+    e.y + e.height <= l.bounds.y + l.bounds.height;
+
+  check(
+    "the fixtures really do pin outside the origin-measured canvas — otherwise the containment clauses below prove nothing about pins",
+    entityOf(far, "order").x > unpinned.width &&
+      entityOf(negative, "order").x < 0 &&
+      entityOf(negative, "order").y < 0,
+    `far ${box(entityOf(far, "order"))} vs canvas ${unpinned.width}x${unpinned.height}, negative ${box(entityOf(negative, "order"))}`,
+  );
+  check(
+    "a pin beyond the solved bounds GROWS width and height rather than being cropped out of the picture",
+    far.width > unpinned.width &&
+      far.height > unpinned.height &&
+      far.bounds.width > unpinned.bounds.width &&
+      far.bounds.height > unpinned.bounds.height,
+    `${far.width}x${far.height} vs ${unpinned.width}x${unpinned.height}`,
+  );
+  check(
+    "and every box in that layout — pinned and solved alike — lies inside the reported bounds, which is what all three renderers set their viewBox to",
+    far.entities.every((e) => frameContains(far, e)),
+    far.entities
+      .filter((e) => !frameContains(far, e))
+      .map((e) => `${e.id} ${box(e)}`)
+      .join(" "),
+  );
+
+  /* A NEGATIVE COORDINATE IS A PLACE, NOT AN ERROR. Clamping it to 0 was the
+     tempting fix and it is the wrong one: it silently relocates the box the
+     author placed, which is the deformation `.claude/rules` calls out as worse
+     than a refusal. The drawing is not slid back to reach the pin either —
+     the solved boxes must not move — so the frame is what reaches out. */
+  const negOrder = entityOf(negative, "order");
+  check(
+    "a negative (x,y) is honoured rather than clamped to the origin",
+    negOrder.x === -620 && negOrder.y === -410,
+    box(negOrder),
+  );
+  check(
+    "the bounds reach past the origin to contain it while the solved boxes stay put — the frame grows, the drawing does not shift",
+    negative.bounds.x < 0 &&
+      negative.bounds.y < 0 &&
+      negative.entities.every((e) => frameContains(negative, e)) &&
+      JSON.stringify(negative.entities.filter((e) => e.id !== "order")) ===
+        JSON.stringify(unpinned.entities.filter((e) => e.id !== "order")),
+    `bounds ${box(negative.bounds)}`,
+  );
+  check(
+    "the bounds always CONTAIN the origin-measured canvas, so no existing diagram's frame can shrink",
+    [unpinned, far, negative].every(
+      (l) =>
+        l.bounds.x <= 0 &&
+        l.bounds.y <= 0 &&
+        l.bounds.x + l.bounds.width >= l.width &&
+        l.bounds.y + l.bounds.height >= l.height,
+    ),
+    [unpinned, far, negative].map((l) => box(l.bounds)).join(" "),
+  );
+}
+
+{
+  /* THE FRAME IS ONLY REAL IF THE RENDERERS READ IT. Two halves of one thing,
+     each self-consistent, that disagree is the most expensive defect class in
+     this repo (`codebase.md`) — and it is exactly what shipped on the
+     flowchart: the layout reported a grown frame while the canvas and the
+     exporter still wrote `0 0 width height`. Read from the FILES, so a
+     renderer that quietly goes back to the origin fails here. */
+  const diagramSrc = readFileSync(
+    path.join(ROOT, "src/features/er/components/er-diagram.tsx"),
+    "utf8",
+  );
+  const exportSrc = readFileSync(
+    path.join(ROOT, "src/features/er/export/render-svg.ts"),
+    "utf8",
+  );
+  const viewerSrc = readFileSync(
+    path.join(ROOT, "src/features/er/components/er-viewer.tsx"),
+    "utf8",
+  );
+  check(
+    "the canvas sets its viewBox from the layout's bounds, not from `0 0 width height`",
+    /viewBox=\{`\$\{layout\.bounds\.x\} \$\{layout\.bounds\.y\} \$\{layout\.bounds\.width\} \$\{layout\.bounds\.height\}`\}/.test(
+      diagramSrc,
+    ) && !/viewBox=\{`0 0 /.test(diagramSrc),
+  );
+  check(
+    "the SVG exporter frames the file from the same bounds, so the screen and the PNG cannot crop differently",
+    /const frame = layout\.bounds;/.test(exportSrc) &&
+      /viewBox="\$\{frame\.x\} \$\{frame\.y\} \$\{frame\.width\} \$\{frame\.height\}"/.test(
+        exportSrc,
+      ),
+  );
+  check(
+    "and the camera measures the content from the bounds, so fit-to-view frames the pin instead of scrolling past it",
+    /contentWidth: size\.bounds\.width/.test(viewerSrc) &&
+      /contentHeight: size\.bounds\.height/.test(viewerSrc),
+  );
 }
 
 /* ----------------------------------------------------------------------- */

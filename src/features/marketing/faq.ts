@@ -1,5 +1,8 @@
 import { MCP_TOOLS, SKILL_INSTALL } from "@/features/mcp/catalog";
-import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
+import {
+  CANVAS_EDITING_PASSAGE,
+  CANVAS_POSITION_PASSAGE,
+} from "@/features/playground/input/canvas-edit";
 import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import { APP_NAME } from "@/lib/constants";
 import { THEMES_PASSAGE } from "@/lib/theme-copy";
@@ -189,38 +192,37 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
         answer:
           `${CANVAS_EDITING_PASSAGE} Which notations answer a drag is a ` +
           "property of their grammars rather than a roadmap — the next answer " +
-          "explains why an ER diagram cannot.",
+          "explains what each grammar has to write a drag into.",
         links: [{ href: "/live", label: "The playground" }],
       },
       {
-        /* Asked because the canvas answers a drag on one notation and ignores
-           it on four, which reads as a bug rather than as a property of the
-           notations. Written as one self-contained passage: an assistant
+        /* Asked because the canvas answers a drag on some notations and
+           ignores it on others, which reads as a bug rather than as a
+           property of the notations. Deliberately not saying HOW MANY of
+           each here: that is the answer's job and the answer derives it,
+           and a count in a comment is the thing that goes stale. Written as one self-contained passage: an assistant
            quotes a passage, not a page, and this is the answer a reader
            reaches for at the moment the drag does nothing.
 
-           THE SEQUENCE CLAUSE IS NEW AND IS THE POINT OF THE REWRITE. This
-           answer said "the other five kinds" for as long as a sequence message
-           could not be dragged; a sequence message can now be dragged to
-           another row and a lifeline card to another column, so leaving it
-           would have made this passage the third stale claim on one branch.
-           The distinction it draws instead — REORDER versus POSITION — is the
-           real one, and it is what a reader arriving from a drawing tool has
+           THE ANSWER IS DERIVED NOW, AND THE QUESTION HAD TO CHANGE WITH IT.
+           It was "Why can't I drag my ER diagram?" and it opened "Because only
+           the C4 canvas has anywhere to write a POSITION down" — a hand-typed
+           claim that was ALREADY WRONG when it shipped, because the flowchart
+           had grown a coordinate in ADR 0002, and that then became wrong a
+           second way when use case and ER grew one in ADR 0003: the question
+           itself asserted the opposite of what ships. Nothing caught either.
+           `check:seo`'s C4-only sweep looks for "only C4" and this said "only
+           the C4 canvas", one word off the pattern.
+
+           So the prose moved into `CANVAS_POSITION_PASSAGE`, which reads the
+           three groups — a position, an order, or a solved layout — off
+           `CANVAS_EDIT_OFFERS`. `canvas-editing.md`'s rule is the one this
+           answer kept breaking: never hand-type which notations are editable.
+           The distinction it draws — REORDER versus POSITION — is still the
+           real one, and still what a reader arriving from a drawing tool has
            to be told before their first drag. */
-        question: "Why can't I drag my ER diagram?",
-        answer:
-          "Because only the C4 canvas has anywhere to write a POSITION down. The C4 grammar " +
-          "carries per-element geometry, so dragging a box edits the text and the change survives " +
-          "a reload. A sequence diagram is the halfway case: it has no coordinates either, but it " +
-          "does have an ORDER, so dragging a message up or down moves it in time and dragging a " +
-          "lifeline card sideways moves its column — the element takes a neighbour's place rather " +
-          "than staying where you drop it. The remaining seven — flowchart, use case, ER, data " +
-          "dictionary, gantt, milestone timeline and lifecycle — work their layout out FROM the " +
-          "text: an ER diagram solves its columns from the relationships, a data dictionary is a " +
-          "table, a gantt's bars are placed by the calendar and the dependency graph, and a " +
-          "timeline's events and a lifecycle's states are placed by the order you wrote them in, " +
-          "so a dragged box would be put back by the next render and there would be no line to " +
-          "write it on. Change the text and the layout follows.",
+        question: "Why does dragging work on some diagrams and not others?",
+        answer: CANVAS_POSITION_PASSAGE,
         links: [{ href: "/syntax", label: "Syntax reference" }],
       },
     ],

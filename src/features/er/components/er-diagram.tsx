@@ -169,10 +169,16 @@ function Entity({
   entity,
   state,
   onFocus,
+  onDragStart,
+  drag = null,
 }: {
   entity: LaidErEntity;
   state: "none" | "focused" | "related" | "dimmed";
   onFocus?: (focus: ErFocus) => void;
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
+  /** Where this box's top-left is being dragged to, or null when it is not
+   *  the box in flight. */
+  drag?: { x: number; y: number } | null;
 }): React.JSX.Element {
   const headerY = entity.y + ER.headerHeight;
   const interactive = onFocus !== undefined;
@@ -187,7 +193,14 @@ function Entity({
 
   return (
     <g
-      className={["af-er-entity", `af-er-${state}`].join(" ")}
+      /* `af-er-hit` names the thing a pointer aims at, the way `.af-uc-hit`
+         and `.af-flow-hit` do on the neighbouring canvases: it is the focus
+         target, the drag handle, and the selector the focus-ring suppression
+         hangs off. Unlike those two it sits on the GROUP rather than on an
+         invisible rect, because an ER box is a rectangle already and a second
+         stacked hit area over one box is how a click starts landing on
+         whichever happens to be on top after the next edit. */
+      className={["af-er-entity", "af-er-hit", `af-er-${state}`].join(" ")}
       style={
         { "--er-wave": Math.min(entity.depth, WAVE_CAP) } as React.CSSProperties
       }
@@ -197,6 +210,15 @@ function Entity({
             tabIndex: 0,
             "aria-pressed": state === "focused",
             "aria-label": `${entity.label}: ${entity.attributes.length} columns`,
+            /* The SAME group is the focus target and the move handle. The host
+               tells a click from a drag by distance travelled, so there is no
+               second affordance to aim at and no arbitration between two. */
+            ...(onDragStart === undefined
+              ? {}
+              : {
+                  onPointerDown: (event: React.PointerEvent) =>
+                    onDragStart(entity.id, event),
+                }),
             onClick: (event: React.MouseEvent) => {
               /* Stopped, or the backdrop clears the focus this click set. */
               event.stopPropagation();
@@ -221,107 +243,131 @@ function Entity({
         <title>{`${entity.label} — ${entity.description}`}</title>
       ) : null}
 
-      <rect
-        x={entity.x}
-        y={entity.y}
-        width={entity.width}
-        height={entity.height}
-        rx={12}
-        fill="var(--node)"
-        stroke="var(--node-border)"
-        strokeWidth={1.2}
-        filter="url(#af-er-shadow)"
-      />
-      {/* A tinted header band, not a bare rule. It is what makes the box read
+      {/* THE DRAG RIDES A CHILD GROUP, not the entity's own group, and that is
+          not tidiness. The entrance (`af-er-rise` in ../styles/er-motion.css)
+          animates `.af-er-entity`'s transform and opacity with `forwards`
+          fill, and a finished animation's value outranks a presentation
+          attribute for the life of the page — so a `transform` written up
+          there is simply never applied. The use-case canvas puts the same
+          translate on the group itself because its entrance animates a child
+          (`.af-uc-body`) instead.
+
+          THE REAL BOX MOVES, at reduced opacity, rather than a ghost outline
+          beside it — the flowchart canvas's answer, and for its reason: a
+          reader dragging a box wants to see the box, not translate between two
+          shapes to judge where it lands. The connectors cannot follow until
+          the next solve, so the ones touching this box dim for the length of
+          the gesture (see `Relationship`). */}
+      <g
+        transform={
+          drag === null
+            ? undefined
+            : `translate(${drag.x - entity.x} ${drag.y - entity.y})`
+        }
+        opacity={drag === null ? undefined : 0.6}
+      >
+        <rect
+          x={entity.x}
+          y={entity.y}
+          width={entity.width}
+          height={entity.height}
+          rx={12}
+          fill="var(--node)"
+          stroke="var(--node-border)"
+          strokeWidth={1.2}
+          filter="url(#af-er-shadow)"
+        />
+        {/* A tinted header band, not a bare rule. It is what makes the box read
           as a TABLE rather than a bordered list — the header of every table a
           reader has seen is a band — and it is drawn as a low-opacity fill of
           the accent so every theme gets it from its own palette rather than
           from a hardcoded grey. */}
-      <path
-        d={topRoundedPath(
-          entity.x,
-          entity.y,
-          entity.width,
-          ER.headerHeight,
-          12,
-        )}
-        fill="var(--primary)"
-        opacity={0.11}
-      />
-      {entity.attributes.length > 0 ? (
-        <line
-          x1={entity.x}
-          y1={headerY}
-          x2={entity.x + entity.width}
-          y2={headerY}
-          stroke="var(--node-border)"
-          strokeWidth={1.2}
+        <path
+          d={topRoundedPath(
+            entity.x,
+            entity.y,
+            entity.width,
+            ER.headerHeight,
+            12,
+          )}
+          fill="var(--primary)"
+          opacity={0.11}
         />
-      ) : null}
+        {entity.attributes.length > 0 ? (
+          <line
+            x1={entity.x}
+            y1={headerY}
+            x2={entity.x + entity.width}
+            y2={headerY}
+            stroke="var(--node-border)"
+            strokeWidth={1.2}
+          />
+        ) : null}
 
-      <text
-        x={entity.x + ER.padX}
-        y={entity.y + ER.headerHeight / 2}
-        dominantBaseline="central"
-        fontSize={ER.labelSize}
-        fontWeight={650}
-        fill="var(--node-foreground)"
-      >
-        {entity.label}
-      </text>
-      {entity.technology !== undefined ? (
         <text
-          x={entity.x + entity.width - ER.padX}
+          x={entity.x + ER.padX}
           y={entity.y + ER.headerHeight / 2}
-          textAnchor="end"
           dominantBaseline="central"
-          fontSize={ER.rowSize - 1}
-          fill="var(--node-meta)"
+          fontSize={ER.labelSize}
+          fontWeight={650}
+          fill="var(--node-foreground)"
         >
-          {entity.technology}
+          {entity.label}
         </text>
-      ) : null}
-
-      {entity.attributes.map((attribute) => (
-        <g key={attribute.name}>
-          {attribute.description !== undefined ? (
-            <title>{`${attribute.name} — ${attribute.description}`}</title>
-          ) : null}
+        {entity.technology !== undefined ? (
           <text
-            x={attribute.nameX}
-            y={attribute.y}
+            x={entity.x + entity.width - ER.padX}
+            y={entity.y + ER.headerHeight / 2}
+            textAnchor="end"
             dominantBaseline="central"
-            fontSize={ER.rowSize}
-            fill="var(--node-foreground)"
+            fontSize={ER.rowSize - 1}
+            fill="var(--node-meta)"
           >
-            {attribute.name}
+            {entity.technology}
           </text>
-          {attribute.keysX !== null ? (
+        ) : null}
+
+        {entity.attributes.map((attribute) => (
+          <g key={attribute.name}>
+            {attribute.description !== undefined ? (
+              <title>{`${attribute.name} — ${attribute.description}`}</title>
+            ) : null}
             <text
-              x={attribute.keysX}
+              x={attribute.nameX}
+              y={attribute.y}
+              dominantBaseline="central"
+              fontSize={ER.rowSize}
+              fill="var(--node-foreground)"
+            >
+              {attribute.name}
+            </text>
+            {attribute.keysX !== null ? (
+              <text
+                x={attribute.keysX}
+                y={attribute.y}
+                textAnchor="end"
+                dominantBaseline="central"
+                fontSize={ER.rowSize - 1.5}
+                fontWeight={700}
+                letterSpacing={0.3}
+                fill="var(--primary)"
+              >
+                {attribute.keys}
+              </text>
+            ) : null}
+            <text
+              x={attribute.typeX}
               y={attribute.y}
               textAnchor="end"
               dominantBaseline="central"
-              fontSize={ER.rowSize - 1.5}
-              fontWeight={700}
-              letterSpacing={0.3}
-              fill="var(--primary)"
+              fontSize={ER.rowSize}
+              fill="var(--node-meta)"
             >
-              {attribute.keys}
+              {attribute.type}
             </text>
-          ) : null}
-          <text
-            x={attribute.typeX}
-            y={attribute.y}
-            textAnchor="end"
-            dominantBaseline="central"
-            fontSize={ER.rowSize}
-            fill="var(--node-meta)"
-          >
-            {attribute.type}
-          </text>
-        </g>
-      ))}
+          </g>
+        ))}
+      </g>
     </g>
   );
 }
@@ -335,11 +381,15 @@ function Relationship({
   index,
   state,
   onFocus,
+  stale = false,
 }: {
   relationship: LaidErRelationship;
   index: number;
   state: "none" | "lit" | "dimmed";
   onFocus?: (focus: ErFocus) => void;
+  /** True while one of the two tables this line joins is being dragged, so
+   *  the route it draws no longer describes where that table is. */
+  stale?: boolean;
 }): React.JSX.Element {
   const d = relationship.points
     .map((point, at) => `${at === 0 ? "M" : "L"} ${point.x} ${point.y}`)
@@ -361,6 +411,12 @@ function Relationship({
     <g
       className={[
         "af-er-edge",
+        /* The connector GROUP is what carries the tabindex here, so it is what
+           the ring suppression has to name — a clicked multi-segment route got
+           `:focus` without `:focus-visible` and the browser boxed its whole
+           bounding rectangle, which on an orthogonal route is most of the
+           diagram. */
+        "af-er-hit",
         `af-er-${state}`,
         dashed ? "af-er-edge-dashed" : null,
       ]
@@ -387,35 +443,42 @@ function Relationship({
           }
         : {})}
     >
-      {/* A WIDE INVISIBLE HIT PATH. A 1.5px line is not a click target — the
+      {/* A CHILD GROUP CARRIES THE STALE WASH for the same cascade reason the
+          entity's translate does: `af-er-fade` parks `.af-er-edge`'s opacity
+          with `forwards` fill, so an opacity written on the group above would
+          never be applied. A stale route drawn at full strength is the drawing
+          asserting something untrue — the table it points at has moved and it
+          has not — and a faded one reads as "this will be redrawn". */}
+      <g opacity={stale ? 0.3 : undefined}>
+        {/* A WIDE INVISIBLE HIT PATH. A 1.5px line is not a click target — the
           pointer has to land within a pixel of it — so the same geometry is
           drawn again at 18px and transparent, purely to be hit.
           `pointer-events: stroke` is set explicitly because a transparent
           stroke receives no events by default. */}
-      {interactive ? (
+        {interactive ? (
+          <path
+            d={d}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={18}
+            strokeLinejoin="round"
+            style={{ cursor: "pointer", pointerEvents: "stroke" }}
+          />
+        ) : null}
         <path
+          className="af-er-edge-line"
           d={d}
           fill="none"
-          stroke="transparent"
-          strokeWidth={18}
+          stroke={stroke}
+          strokeWidth={1.5}
           strokeLinejoin="round"
-          style={{ cursor: "pointer", pointerEvents: "stroke" }}
-        />
-      ) : null}
-      <path
-        className="af-er-edge-line"
-        d={d}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        /* The dash is the NOTATION, not decoration: a non-identifying
+          /* The dash is the NOTATION, not decoration: a non-identifying
            relationship IS a dashed line. The stylesheet therefore fades this
            kind in rather than drawing it with a dashoffset, which would
            overwrite the dash that carries the meaning. */
-        strokeDasharray={dashed ? "6 5" : undefined}
-      />
-      {/* THE AMBIENT PULSE, a SECOND path over the first rather than a dash on
+          strokeDasharray={dashed ? "6 5" : undefined}
+        />
+        {/* THE AMBIENT PULSE, a SECOND path over the first rather than a dash on
           the line itself. Dashing the base line would destroy the notation — a
           solid line means identifying and a dashed one means it is not, so
           animating a solid line into a dashed one changes what the diagram
@@ -424,31 +487,31 @@ function Relationship({
           motion the other four canvases have, which
           `new-diagram-type.md` requires: "line connectors are always
           animated". */}
-      {/* The halo, under the sharp mark and sharing its dash so the two travel
+        {/* The halo, under the sharp mark and sharing its dash so the two travel
           as one. Drawn as a path rather than a blur for the reason in `defs`. */}
-      <path
-        className="af-er-edge-halo"
-        d={d}
-        fill="none"
-        stroke="var(--edge-drift)"
-        strokeWidth={9}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        className="af-er-edge-pulse"
-        d={d}
-        fill="none"
-        stroke="var(--edge-drift)"
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <EndGlyph end={relationship.fromEnd} stroke={stroke} />
-      <EndGlyph end={relationship.toEnd} stroke={stroke} />
-      {relationship.label !== undefined ? (
-        <g className="af-er-edge-label">
-          {/* A PLATE ON THE NODE SURFACE, outlined, not a bare canvas-coloured
+        <path
+          className="af-er-edge-halo"
+          d={d}
+          fill="none"
+          stroke="var(--edge-drift)"
+          strokeWidth={9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          className="af-er-edge-pulse"
+          d={d}
+          fill="none"
+          stroke="var(--edge-drift)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <EndGlyph end={relationship.fromEnd} stroke={stroke} />
+        <EndGlyph end={relationship.toEnd} stroke={stroke} />
+        {relationship.label !== undefined ? (
+          <g className="af-er-edge-label">
+            {/* A PLATE ON THE NODE SURFACE, outlined, not a bare canvas-coloured
               patch. Three things made the verb hard to read: it was painted in
               `--muted-foreground`, which is the token for text that should
               RECEDE and this text is the only thing naming what a line means;
@@ -459,29 +522,30 @@ function Relationship({
               the same pair every box on this canvas uses, so it reads as a
               label belonging to the diagram — and the text is
               `--node-foreground`, which that surface is measured against. */}
-          <rect
-            x={relationship.labelX - labelPlateWidth(relationship.label) / 2}
-            y={relationship.labelY - LABEL_PLATE_HALF_HEIGHT}
-            width={labelPlateWidth(relationship.label)}
-            height={LABEL_PLATE_HALF_HEIGHT * 2}
-            rx={LABEL_PLATE_HALF_HEIGHT}
-            fill="var(--node)"
-            stroke="var(--node-border)"
-            strokeWidth={1}
-          />
-          <text
-            x={relationship.labelX}
-            y={relationship.labelY}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={12}
-            fontWeight={500}
-            fill="var(--node-foreground)"
-          >
-            {relationship.label}
-          </text>
-        </g>
-      ) : null}
+            <rect
+              x={relationship.labelX - labelPlateWidth(relationship.label) / 2}
+              y={relationship.labelY - LABEL_PLATE_HALF_HEIGHT}
+              width={labelPlateWidth(relationship.label)}
+              height={LABEL_PLATE_HALF_HEIGHT * 2}
+              rx={LABEL_PLATE_HALF_HEIGHT}
+              fill="var(--node)"
+              stroke="var(--node-border)"
+              strokeWidth={1}
+            />
+            <text
+              x={relationship.labelX}
+              y={relationship.labelY}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={12}
+              fontWeight={500}
+              fill="var(--node-foreground)"
+            >
+              {relationship.label}
+            </text>
+          </g>
+        ) : null}
+      </g>
     </g>
   );
 }
@@ -497,6 +561,25 @@ export interface ErDiagramProps {
    * server-rendered diagram. */
   focus?: ErFocus;
   onFocus?: (focus: ErFocus) => void;
+  /**
+   * The live `<svg>`, handed back so the host can turn client pixels into
+   * layout units through the element's own matrix.
+   *
+   * A REF RATHER THAN THE HOST RE-DERIVING THE CAMERA: the frame below is
+   * `layout.bounds`, whose `x`/`y` go negative the moment something is pinned
+   * left of or above the origin, and `preserveAspectRatio` letterboxes on top
+   * of that. `getScreenCTM` already knows both.
+   */
+  svgRef?: React.Ref<SVGSVGElement>;
+  /**
+   * Start moving an entity by dragging its box. PRESENCE IS THE OFFER, as on
+   * the flowchart canvas: a locked, read-only or Mermaid-pane canvas passes
+   * nothing and the press falls through to the focus click it has always been.
+   */
+  onEntityDragStart?: (id: string, event: React.PointerEvent) => void;
+  /** The in-flight move, in LAYOUT UNITS: where the dragged box's top-left
+   *  would land. Null when nothing is being dragged. */
+  entityDrag?: { id: string; x: number; y: number } | null;
 }
 
 export function ErDiagram({
@@ -504,6 +587,9 @@ export function ErDiagram({
   className,
   focus = null,
   onFocus,
+  svgRef,
+  onEntityDragStart,
+  entityDrag = null,
 }: ErDiagramProps): React.JSX.Element {
   const layout = layoutEr(file);
   const focusId = focus?.kind === "entity" ? focus.id : null;
@@ -533,6 +619,7 @@ export function ErDiagram({
 
   return (
     <svg
+      ref={svgRef}
       className={[
         "af-er-canvas",
         focus !== null ? "af-er-has-focus" : null,
@@ -540,7 +627,11 @@ export function ErDiagram({
       ]
         .filter(Boolean)
         .join(" ")}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      /* THE LAYOUT'S OWN FRAME, which is `0 0 width height` for every schema
+         with nothing pinned and reaches further whenever a pin sits outside
+         the solved bounds. Reading `0 0` here would crop exactly that case,
+         which is the defect ADR 0002 had to amend for the flowchart. */
+      viewBox={`${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.width} ${layout.bounds.height}`}
       width="100%"
       role="img"
       aria-label={`Entity-relationship diagram: ${file.metadata?.title ?? "untitled"}, ${layout.entities.length} entities`}
@@ -581,10 +672,10 @@ export function ErDiagram({
           its absence reads as the focus being stuck. */}
       {onFocus !== undefined ? (
         <rect
-          x={0}
-          y={0}
-          width={layout.width}
-          height={layout.height}
+          x={layout.bounds.x}
+          y={layout.bounds.y}
+          width={layout.bounds.width}
+          height={layout.bounds.height}
           fill="transparent"
           onClick={() => onFocus(null)}
           /* A click TARGET, not a control: keyboard users clear focus with
@@ -602,6 +693,11 @@ export function ErDiagram({
           relationship={relationship}
           index={index}
           onFocus={onFocus}
+          stale={
+            entityDrag !== null &&
+            (relationship.from === entityDrag.id ||
+              relationship.to === entityDrag.id)
+          }
           state={
             focus === null
               ? "none"
@@ -629,6 +725,8 @@ export function ErDiagram({
                   : "dimmed"
           }
           onFocus={onFocus}
+          onDragStart={onEntityDragStart}
+          drag={entityDrag?.id === entity.id ? entityDrag : null}
         />
       ))}
     </svg>

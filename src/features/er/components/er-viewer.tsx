@@ -45,10 +45,85 @@ import { layoutEr } from "../lib/layout";
 import { ErDiagram } from "./er-diagram";
 import type { ErFocus } from "./er-diagram";
 
+/**
+ * The gestures this canvas can send back, when editing is on.
+ *
+ * PRESENCE IS THE OFFER, the contract the flowchart and sequence canvases
+ * already keep: the whole bundle is `undefined` while the canvas is locked,
+ * read-only or in a Mermaid pane, and the viewer then renders no editing
+ * chrome at all rather than disabled controls. `editable` is the second half
+ * of the same answer for a host that holds the handlers but cannot let them
+ * run yet — a bundle whose `editable` is false is treated exactly like an
+ * absent one, so there is one branch to read and not two.
+ *
+ * AN ENTITY IS ADDRESSED BY ID, which the parser proves unique per file — none
+ * of the index-addressing the flowchart needs for its unnamed edges applies.
+ *
+ * NOTHING HERE IMPORTS THE PLAYGROUND. The host passes these in, the same
+ * direction the flowchart's `FlowchartEditHandlers` points: this feature knows
+ * what a gesture means geometrically and nothing about the text it becomes.
+ */
+export interface ErEditHandlers {
+  /**
+   * Place `entityId`'s box top-left at `position`, in the LAYOUT's own units —
+   * which is what `ErEntity.position` holds unchanged.
+   *
+   * NO OFFSET TO SUBTRACT, and that is a real difference from the flowchart's
+   * `onMoveNode`: `layoutEr` writes a stated `(x,y)` straight onto the box
+   * (`box.x = at.x`), so the space the canvas draws in and the space the text
+   * records are the same one. The flowchart solves its rows around axis 0 and
+   * has to give back `layout.offset`; writing the drawn coordinate through
+   * there walked the step off the page one drag at a time.
+   */
+  onMoveEntity: (entityId: string, position: { x: number; y: number }) => void;
+  /** Hand one entity back to the solver — its `(x,y)` and its `pin` both go,
+   *  because a pin with no position is a document the parser refuses. */
+  onReleaseEntity: (entityId: string) => void;
+  /** Set or clear one entity's pin, which exempts it from a whole-diagram
+   *  release. Pinning needs a position to keep. */
+  onPinEntity: (entityId: string, pinned: boolean) => void;
+  /** False while the host holds the handlers but must not run them. */
+  editable: boolean;
+}
+
 export interface ErViewerProps {
   file: ErLabFile;
   onAnnounce?: (message: string) => void;
+  /** Editing gestures, or absent — see `ErEditHandlers`. */
+  edit?: ErEditHandlers;
+  /**
+   * The canvas lock, mounted at the pane's own top-right corner exactly as the
+   * C4, sequence and flowchart canvases mount theirs.
+   *
+   * A SLOT RATHER THAN A FLAG, and it lives on the canvas rather than in the
+   * host's strip for the reason `67b35ae` bought: a lock that was correct in
+   * `canvasEditability` and rendered only inside another notation's branch left
+   * a whole canvas silently uneditable with no control anywhere to unlock it,
+   * for a release, with every assertion green.
+   *
+   * DELIBERATELY NOT GATED ON `edit`: locking WITHDRAWS the handlers, so a lock
+   * that only rendered alongside them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }
+
+/**
+ * How far a press must travel before it stops being a click on a table and
+ * becomes a move.
+ *
+ * IN CSS PIXELS, MEASURED ON CLIENT COORDINATES. A threshold in the layout's
+ * user units is a threshold that shrinks with the zoom: at the default "fit"
+ * scale a schema wider than its pane draws at well under 1:1, so two pixels of
+ * hand jitter clear several user units and every click becomes a drag. A
+ * pointer's tremor is a physical quantity, so its threshold has to be one too.
+ *
+ * MAINTAINED BY HAND against its twins — `NODE_DRAG_THRESHOLD` in
+ * `flowchart-viewer.tsx` and `CANVAS_DRAG_THRESHOLD` in
+ * `sequence/lib/reorder.ts` — because a feature may not deep-import another
+ * feature's internals and this has no home in `src/lib` yet. Give it one when
+ * a fourth canvas needs it.
+ */
+const ENTITY_DRAG_THRESHOLD = 4;
 
 /** Cardinality in words, for the panel. The glyphs are the notation and the
  * canvas draws them; this is the reading for someone who has not memorised
@@ -63,6 +138,8 @@ const CARDINALITY_PROSE: Record<ErCardinality, string> = {
 export function ErViewer({
   file,
   onAnnounce,
+  edit,
+  lockSlot,
 }: ErViewerProps): React.JSX.Element {
   const [rawFocus, setRawFocus] = useState<ErFocus>(null);
 
@@ -142,17 +219,152 @@ export function ErViewer({
     }
   }, [focused, focusedEdge, joins.length, labelOf, onAnnounce]);
 
-  /* The layout is computed here as well as inside the canvas so the camera
-     knows the content's size. Cheap and pure — and cheaper than threading the
-     measurement back out of a component that has no reason to expose it. */
-  const size = useMemo(() => layoutEr(file), [file]);
+  /* The layout is computed here as well as inside the canvas, so the camera
+     knows the content's size and the drag knows where each box currently is.
+     Cheap and pure — and cheaper than threading the measurement back out of a
+     component that has no reason to expose it. */
+  const layout = useMemo(() => layoutEr(file), [file]);
+  const laidById = useMemo(
+    () => new Map(layout.entities.map((entity) => [entity.id, entity])),
+    [layout],
+  );
   const paneRef = useRef<HTMLDivElement>(null);
   const camera = useCanvasZoom({
     paneRef,
-    contentWidth: size.width,
-    contentHeight: size.height,
+    contentWidth: layout.bounds.width,
+    contentHeight: layout.bounds.height,
     onAnnounce,
   });
+
+  /* ---- the move gesture --------------------------------------------------
+   * IT COSTS NO NEW POINTER ARBITRATION, which is what made it addable to a
+   * canvas that already drag-pans. `useCanvasZoom`'s pan stands down for any
+   * press whose target `closest`es a `[role="button"]`, and an entity group
+   * carries that role — so the pan never sees the press that starts a move,
+   * and a drag that both panned and placed is unreachable rather than merely
+   * unlikely. The flowchart canvas stands down for `.af-flow-hit` the same
+   * way. */
+
+  const editing = edit !== undefined && edit.editable;
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /**
+   * Client coordinates → LAYOUT units, through the SVG's own matrix.
+   *
+   * `getScreenCTM` rather than arithmetic on the camera's scale and the pane's
+   * scroll offsets: it already accounts for the viewBox — whose origin is
+   * `layout.bounds.x`/`y` and goes NEGATIVE the moment something is pinned
+   * left of or above the origin — for the `preserveAspectRatio` letterboxing
+   * a fitted canvas introduces, and for any page transform above the pane.
+   * Three things a hand-rolled conversion has to get right separately, one of
+   * which changes with the pane's aspect ratio.
+   */
+  const toLayoutUnits = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const svg = svgRef.current;
+      const matrix = svg?.getScreenCTM();
+      if (svg == null || matrix == null) return null;
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+      const local = point.matrixTransform(matrix.inverse());
+      return { x: local.x, y: local.y };
+    },
+    [],
+  );
+
+  /**
+   * The in-flight move: which entity, and where its top-left would land.
+   * `grab` is the offset from that corner to the pointer, so the box does not
+   * jump to centre itself under the cursor on the first move.
+   *
+   * `moved` is what separates a click from a drag. The entity's group is both
+   * the focus target and the move handle, so a press that travels less than
+   * `ENTITY_DRAG_THRESHOLD` stays a click and focuses the table, and one that
+   * travels further places it.
+   */
+  const [entityDrag, setEntityDrag] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    grab: { dx: number; dy: number };
+    /** Where the press started, in CLIENT pixels — the threshold's own unit. */
+    from: { clientX: number; clientY: number };
+    moved: boolean;
+  } | null>(null);
+
+  const handleEntityDragStart = useCallback(
+    (id: string, event: React.PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      /* A MODIFIER-CLICK IS NOT A MOVE. The flowchart canvas shipped without
+         this and any hand jitter past the threshold turned a shift-click into
+         a drag; the same three keys are the whole of the gesture's split
+         wherever a canvas has one, so they are read identically here. */
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+      const at = toLayoutUnits(event.clientX, event.clientY);
+      const laid = laidById.get(id);
+      if (at === null || laid === undefined) return;
+      setEntityDrag({
+        id,
+        x: laid.x,
+        y: laid.y,
+        grab: { dx: at.x - laid.x, dy: at.y - laid.y },
+        from: { clientX: event.clientX, clientY: event.clientY },
+        moved: false,
+      });
+      /* NO POINTER CAPTURE HERE, and the omission is the whole point: capture
+         on pointerdown retargets the following `click` to the capturing
+         element, so the entity's own `onClick` never runs and clicking a table
+         stops focusing it. Capture is taken LAZILY below, on the first move
+         that crosses the threshold — by which point there is a real drag to
+         keep hold of and no click left to protect. */
+    },
+    [laidById, toLayoutUnits],
+  );
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (entityDrag === null) return;
+      const at = toLayoutUnits(event.clientX, event.clientY);
+      if (at === null) return;
+      const crossed =
+        entityDrag.moved ||
+        Math.abs(event.clientX - entityDrag.from.clientX) +
+          Math.abs(event.clientY - entityDrag.from.clientY) >
+          ENTITY_DRAG_THRESHOLD;
+      if (crossed && !entityDrag.moved) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+      setEntityDrag({
+        ...entityDrag,
+        x: at.x - entityDrag.grab.dx,
+        y: at.y - entityDrag.grab.dy,
+        moved: crossed,
+      });
+    },
+    [entityDrag, toLayoutUnits],
+  );
+
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (entityDrag === null) return;
+      setEntityDrag(null);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      /* Under the threshold this was a click, and it is left alone: the
+         entity's own `onClick` runs after this handler and focuses the table,
+         which is what a press that went nowhere has always done. A
+         zero-distance move would also write a coordinate the reader never
+         asked for and opt the table out of the solver for good. */
+      if (!entityDrag.moved) return;
+      edit?.onMoveEntity(entityDrag.id, { x: entityDrag.x, y: entityDrag.y });
+      /* No offset correction — see `onMoveEntity`. A capture was taken above,
+         which is also what stops the trailing click from reaching the box and
+         toggling its focus out from under the reader. */
+    },
+    [edit, entityDrag],
+  );
 
   return (
     <div className="relative h-full w-full">
@@ -170,6 +382,14 @@ export function ErViewer({
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}
+        /* The move's pointer handlers live on the PANE, not on the box: a drag
+           that leaves the box mid-gesture must keep moving it, and the pane is
+           what takes the capture. They no-op unless a drag is in flight, so
+           the camera's own pan listeners (attached natively by
+           `useCanvasZoom`) are untouched. */
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {/* Sized in PIXELS from the camera's scale rather than `width="100%"`:
             a percentage width can only ever shrink to the pane, which is why
@@ -188,8 +408,8 @@ export function ErViewer({
         <div
           className="shrink-0"
           style={{
-            width: size.width * camera.scale,
-            height: size.height * camera.scale,
+            width: layout.bounds.width * camera.scale,
+            height: layout.bounds.height * camera.scale,
           }}
         >
           <ErDiagram
@@ -197,9 +417,35 @@ export function ErViewer({
             focus={focus}
             onFocus={setRawFocus}
             className="block"
+            svgRef={svgRef}
+            onEntityDragStart={editing ? handleEntityDragStart : undefined}
+            /* Only a drag that has really travelled reaches the canvas, so a
+               press that stays a click never nudges the box it focuses. */
+            entityDrag={entityDrag?.moved === true ? entityDrag : null}
           />
         </div>
       </div>
+      {/* The lock, at the pane's top-right — the corner the C4, sequence and
+          flowchart canvases all put theirs in, so a reader moving between the
+          notations finds it in one place.
+
+          IT SLIDES LEFT OF AN OPEN PANEL, the sequence canvas's fix for the
+          same collision: the detail panel owns this corner while it is open,
+          and two controls in one corner is how one of them ends up
+          unreachable — which is exactly the failure the lock's own history is
+          about. */}
+      {lockSlot !== undefined ? (
+        <div
+          className={cn(
+            "absolute top-4 z-30",
+            focused !== null || focusedEdge !== null
+              ? "right-[19.5rem]"
+              : "right-4",
+          )}
+        >
+          {lockSlot}
+        </div>
+      ) : null}
       {/* The house zoom pill — the same control, classes and gesture hints
           every other canvas mounts, so 400% and the pinch behave identically
           across the product. */}

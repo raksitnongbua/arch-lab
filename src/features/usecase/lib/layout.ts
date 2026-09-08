@@ -47,6 +47,15 @@
  *      the box sits high, which is what keeps same-side associations from
  *      crossing each other.
  *
+ * A PIN OVERRIDES THE DRAWN PLACE AND NOTHING ELSE. An element carrying an
+ * author-stated `(x,y)` draws at that TOP-LEFT corner; every other element
+ * still takes the slot solved above, the split, the columns, the side
+ * refinement and every route are decided against the SOLVED geometry, and the
+ * boundary rectangle and the reported `bounds` GROW to hold a far-flung pin
+ * rather than cropping it. The costs of that were accepted, not mitigated —
+ * ADR 0003 lists them, and `bounds` and the `drawnBox` helper below are where
+ * each one is held to.
+ *
  * Use cases inside a boundary pack into columns (max `maxPerColumn` per
  * column) in declaration order — the author's narration order, which the
  * model calls out as data. Use cases in NO boundary are legal and placed
@@ -84,7 +93,12 @@ import {
   type DiagramHeadingMetrics,
 } from "@/lib/diagram-heading";
 import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
-import type { UseCaseEdgeKind, UseCaseElement, UseCaseLabFile } from "@/types";
+import type {
+  PinnedPoint,
+  UseCaseEdgeKind,
+  UseCaseElement,
+  UseCaseLabFile,
+} from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /* Constants — exported so the check script asserts against the same numbers   */
@@ -325,6 +339,24 @@ export interface UseCaseLayout {
   edges: LaidUseCaseEdge[];
   /** Use cases in no boundary, placed below the boundaries. */
   unbounded: readonly string[];
+  /**
+   * THE RECTANGLE EVERY DRAWN THING ACTUALLY OCCUPIES — what a viewBox must
+   * be, as against `width`/`height`, which measure the canvas from the
+   * origin.
+   *
+   * The two are the same rectangle for every document that pins nothing,
+   * which is why this field did not exist until pins did. The shift that
+   * normalises the drawing into the margins is measured off the SOLVED
+   * geometry alone (see the extents pass), so an unpinned element keeps the
+   * pixel it had; the price is that a pin at a negative coordinate
+   * legitimately draws left of x=0, and `viewBox="0 0 width height"` then cut
+   * it off. The flowchart shipped exactly that — a pinned step 64% outside
+   * the picture on screen and the same crop baked into every PNG (ADR 0002,
+   * amended) — and this notation does not repeat it: the frame GROWS around a
+   * far-flung pin instead of the drawing shifting to reach it. Every surface
+   * that needs a frame takes it from here.
+   */
+  bounds: UCRect;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -499,6 +531,24 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
   const actors = file.elements.filter((e) => e.kind === "actor");
   const usecases = file.elements.filter((e) => e.kind === "usecase");
 
+  /* ---- pins: the corners the author stated -------------------------------
+   * Absent is the normal case and the whole design (`src/types/usecase.ts`):
+   * an element with no `(x,y)` is solved from the boundary and the
+   * associations exactly as it was before the field existed, which is what
+   * made growing one a minor change rather than a breaking one.
+   *
+   * A non-finite coordinate is DROPPED rather than honoured. One NaN would
+   * poison every extent in the drawing — and with it the shift, so the whole
+   * picture, not just the element that carried it. The flowchart's pin pass
+   * drops them for the same reason. */
+  const pins = new Map<string, PinnedPoint>();
+  for (const element of file.elements) {
+    const at = element.position;
+    if (at === undefined) continue;
+    if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
+    pins.set(element.id, at);
+  }
+
   /* ---- zones: one per boundary, in declaration order, plus one trailing
    * zone for use cases outside every boundary. ---- */
   const boundaries = file.boundaries ?? [];
@@ -571,6 +621,36 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
   };
 
   const placed = new Map<string, Placed>();
+  /**
+   * THE DRAWN BOX — the solved slot, or the author's corner where one is
+   * stated.
+   *
+   * `placed` STAYS THE SOLVED GEOMETRY for the whole layout, and every pass
+   * that decides structure reads it: the columns, the side refinement, the
+   * corridor and bend choices, the actor flanks, the cast order and the
+   * shift. A pin moves the drawn shape and the line ends attached to it,
+   * never the structure (ADR 0003). Two maps rather than one mutated map is
+   * what makes that true by construction instead of by discipline.
+   *
+   * The stated point is the shape's TOP-LEFT, as in every other notation.
+   * A use case is centre-based downstream (`cx`/`cy` on
+   * `LaidUseCaseEllipse`), so the centre is derived here — a pin read as a
+   * centre would draw the ellipse half a box up and left of where the author
+   * asked for it.
+   */
+  const drawnBox = (id: string): Placed | undefined => {
+    const p = placed.get(id);
+    if (p === undefined) return undefined;
+    const at = pins.get(id);
+    if (at === undefined) return p;
+    return {
+      ...p,
+      x: at.x,
+      y: at.y,
+      cx: at.x + p.width / 2,
+      cy: at.y + p.height / 2,
+    };
+  };
   /** Column index per use case — becomes the element's `wave`. */
   const waveOf = new Map<string, number>();
   interface ZoneShape {
@@ -1030,13 +1110,107 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
     edges[index] = { ...edges[index], points };
   });
 
+  /* ---- the pins applied: the frame grows, the drawing does not shift ------
+   * Everything above this line ran on solved geometry, which is what ADR 0003
+   * means by a pin never overriding structure — an actor keeps the flank the
+   * solver gave it, a use case keeps its column, and no line is re-routed on
+   * a pin's behalf. What is left is the two things a pin genuinely changes:
+   * the boundary rectangle that must still contain its members, and the line
+   * ends that must still touch the shapes they name. */
+
+  /* A BOUNDARY GROWS AROUND A PINNED MEMBER rather than cropping it out. The
+   * rectangle is measured from the columns the solver packed, so a member
+   * pinned clear of them would sit outside the very box that declares it a
+   * member — the frame contradicting the document. It grows by the pad a
+   * solved member breathes in; upward that is the PLAIN pad rather than
+   * `boundaryPadTop`, which is room for the title band, and the title band
+   * has not moved. Nothing inside the box shifts: the title stays centred
+   * over the members it names, because the frame grows and the drawing does
+   * not (ADR 0002, amended). */
+  const drawnBoundaries: LaidUseCaseBoundary[] = boundaryRects.map((rect) => {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    for (const id of rect.usecases) {
+      if (!pins.has(id)) continue;
+      const p = drawnBox(id);
+      if (p === undefined) continue;
+      left = Math.min(left, p.x - UC.boundaryPadX);
+      right = Math.max(right, p.x + p.width + UC.boundaryPadX);
+      top = Math.min(top, p.y - UC.boundaryPadBottom);
+      bottom = Math.max(bottom, p.y + p.height + UC.boundaryPadBottom);
+    }
+    return {
+      ...rect,
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
+  });
+
+  /** The route as the solver left it, per re-seated edge — read by the
+   * extents pass, which measures the SHIFT off solved geometry only. */
+  const solvedRoutes = new Map<number, LaidUseCaseEdge>();
+  /* A LINE END FOLLOWS ITS PINNED SHAPE, AND ONLY THE END DOES. The route —
+   * straight, bent over an ellipse's vertex, or detoured up a corridor — was
+   * chosen against the solved boxes and is not chosen again here: a pin that
+   * re-planned the routing would fling corridors and bends across the picture
+   * on behalf of an element they have nothing to do with, which is the cost
+   * the flowchart's `solvedCx`/`solvedRight` snapshots exist to refuse. So a
+   * straight line is redrawn between the two DRAWN shapes, and a routed one
+   * keeps every via point and re-seats only the terminal on the pinned side.
+   *
+   * ADR 0003 accepts what that leaves: a pinned actor keeps the side the
+   * solver gave it, so its spokes leave from that side and can now cross the
+   * boundary they used to flank. That is intended — do not "fix" it. */
+  file.edges.forEach((edge, index) => {
+    if (!pins.has(edge.from) && !pins.has(edge.to)) return;
+    const laid = edges[index];
+    const from = drawnBox(edge.from);
+    const to = drawnBox(edge.to);
+    if (from === undefined || to === undefined) return;
+    /* The polyline the router produced, with a generalization's trimmed base
+       put back to its apex so the trim can be redone from the moved end. */
+    const route =
+      laid.tip === null
+        ? [...laid.points]
+        : [...laid.points.slice(0, -1), laid.tip];
+    if (route.length < 2) return;
+    const last = route.length - 1;
+    if (route.length === 2) {
+      // Both ends, even when only one moved: the unpinned end's attachment
+      // is a point on its own outline facing the other shape, so leaving it
+      // where it was runs the line straight through the ellipse to its far
+      // side.
+      route[0] = outlinePoint(from, anchor(to));
+      route[last] = outlinePoint(to, anchor(from));
+    } else {
+      if (pins.has(edge.from)) route[0] = outlinePoint(from, route[1]);
+      if (pins.has(edge.to)) {
+        route[last] = outlinePoint(to, route[last - 1]);
+      }
+    }
+    const next: LaidUseCaseEdge = { ...laid };
+    if (laid.tip === null) next.points = route;
+    else applyTriangle(next, route);
+    solvedRoutes.set(index, laid);
+    edges[index] = next;
+  });
+
   /* ---- edge labels: beside the line, clear of everything ------------------
    * The multiplicity/role of an association and the «stereotype» of a
    * dependency. A deterministic candidate walk around the line's midpoint —
    * perpendicular offsets on either side, stepped outward and along — takes
    * the first spot clear of EVERY line, element box, boundary title and
    * already-placed label; the check script re-tests all four clearances. */
-  const elementBoxes = [...placed.values()].map(boxOf);
+  /* The DRAWN boxes: a label tucked under a pinned shape is a label nobody
+     can read, and the lines it dodges are already the drawn ones. */
+  const elementBoxes = [...placed.keys()]
+    .map((id) => drawnBox(id))
+    .filter((p): p is Placed => p !== undefined)
+    .map(boxOf);
   const placedLabels: UCRect[] = [...boundaryRects.map((b) => b.labelBox)];
   file.edges.forEach((edge, index) => {
     const laid = edges[index];
@@ -1110,28 +1284,83 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
   const contentSpan = contentRightEdge - contentLeftEdge;
   const heading = layoutHeading(file, contentSpan);
 
+  /* TWO SETS OF MINIMA, and the whole pin compromise lives in the difference.
+     `minX`/`minY` feed the SHIFT, and they see the SOLVED geometry only —
+     never where a pin sits, and never the absence of the box that got pinned.
+     The shift is what every element's final coordinate is measured through,
+     so anything a pin can do to it, a pin does to the whole cast: ADR 0002
+     accepted exactly that for the flowchart (pinning one node shifts other
+     rows) and ADR 0003's cost list for this notation deliberately does not.
+     Measuring the shift off solved geometry alone is how that promise is
+     kept, and it is also what would let a drag invert the shift exactly.
+
+     `fullMinX`/`fullMinY` see what is actually DRAWN and feed `bounds`, the
+     rectangle the drawing really occupies. Reporting only the shift's minima
+     is what cropped a pinned flowchart step out of the frame on screen and
+     out of every PNG (ADR 0002, amended). */
   let minX = Infinity;
   let minY = Infinity;
+  let fullMinX = Infinity;
+  let fullMinY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  const stretch = (rect: UCRect): void => {
-    minX = Math.min(minX, rect.x);
-    minY = Math.min(minY, rect.y);
+  /** Grows the maxima and the true minima — everything, pinned or not. */
+  const reach = (rect: UCRect): void => {
+    fullMinX = Math.min(fullMinX, rect.x);
+    fullMinY = Math.min(fullMinY, rect.y);
     maxX = Math.max(maxX, rect.x + rect.width);
     maxY = Math.max(maxY, rect.y + rect.height);
   };
-  for (const p of placed.values()) stretch(boxOf(p));
-  for (const b of boundaryRects) stretch(b);
-  for (const e of edges) {
-    for (const point of [...e.points, ...(e.tip === null ? [] : [e.tip])]) {
-      minX = Math.min(minX, point.x);
-      minY = Math.min(minY, point.y);
-      maxX = Math.max(maxX, point.x);
-      maxY = Math.max(maxY, point.y);
-    }
-    if (e.labelBox !== null) stretch(e.labelBox);
+  /** `reach`, plus the shift's own pin-free minima. */
+  const stretch = (rect: UCRect): void => {
+    reach(rect);
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+  };
+  const pointRect = (p: UCPoint): UCRect => ({
+    x: p.x,
+    y: p.y,
+    width: 0,
+    height: 0,
+  });
+  const routePoints = (edge: LaidUseCaseEdge): UCPoint[] => [
+    ...edge.points,
+    ...(edge.tip === null ? [] : [edge.tip]),
+  ];
+  // The solved slot sets the shift; the drawn box only grows the frame.
+  for (const [id, p] of placed) {
+    stretch(boxOf(p));
+    if (pins.has(id)) reach(boxOf(drawnBox(id) ?? p));
   }
-  if (minX === Infinity) {
+  // Likewise the solved rectangle against the one grown around a pinned
+  // member.
+  boundaryRects.forEach((rect, zone) => {
+    stretch(rect);
+    const grown = drawnBoundaries[zone];
+    if (grown !== undefined) reach(grown);
+  });
+  for (const e of edges) {
+    const solved = solvedRoutes.get(e.index);
+    for (const point of routePoints(solved ?? e)) stretch(pointRect(point));
+    if (solved !== undefined) {
+      for (const point of routePoints(e)) reach(pointRect(point));
+    }
+    if (e.labelBox !== null) {
+      /* A LABEL BESIDE A RE-SEATED LINE ONLY GROWS THE FRAME. It was placed
+         against drawn geometry — there is no solved counterpart to measure
+         the shift from — and a shift that moved with it would be a shift that
+         moves with the pin. Nothing is cropped either way: `bounds` grows
+         around it. */
+      if (solved === undefined) stretch(e.labelBox);
+      else reach(e.labelBox);
+    }
+  }
+  if (fullMinX === Infinity) {
+    // Nothing measurable at all — a document with no elements and no edges.
+    // Both sets go to the origin together: every solved box feeds `stretch`
+    // whether it is pinned or not, so the two can only be empty together.
+    fullMinX = 0;
+    fullMinY = 0;
     minX = 0;
     minY = 0;
     maxX = 0;
@@ -1147,7 +1376,7 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
   const shiftPoint = (p: UCPoint): UCPoint => ({ x: p.x + dx, y: p.y + dy });
 
   const elements: LaidUseCaseElement[] = file.elements.map((element) => {
-    const p = placed.get(element.id);
+    const p = drawnBox(element.id);
     if (p === undefined) {
       // Unreachable for a parsed file — every declared element is placed —
       // but the map access is typed optional and a throw keeps this total.
@@ -1207,7 +1436,7 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
     tip: edge.tip === null ? null : shiftPoint(edge.tip),
     labelBox: edge.labelBox === null ? null : shiftRect(edge.labelBox),
   }));
-  const shiftedBoundaries = boundaryRects.map((boundary) => ({
+  const shiftedBoundaries = drawnBoundaries.map((boundary) => ({
     ...boundary,
     x: boundary.x + dx,
     y: boundary.y + dy,
@@ -1218,6 +1447,17 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
     Math.max(maxX + dx, UC.marginX + heading.width) + UC.marginX,
   );
   const height = Math.ceil(maxY + dy + UC.marginBottom);
+  /* THE FRAME GROWS, IT NEVER SHIFTS. Origin at 0 unless something genuinely
+     reaches past it, and then out by the same margin the rest of the drawing
+     gets — ink sitting exactly on the viewBox edge loses half its stroke
+     width to the crop, which is the same defect in miniature. Floored to
+     whole units so the frame can never end a fraction short of the ink;
+     `width`/`height` are measured from 0, so the far edges are already inside
+     them and the span is simply the origin subtracted. */
+  const overflowX = Math.floor(fullMinX + dx);
+  const overflowY = Math.floor(fullMinY + dy);
+  const boundsX = overflowX < 0 ? overflowX - UC.marginX : 0;
+  const boundsY = overflowY < 0 ? overflowY - UC.marginTop : 0;
   return {
     width,
     height,
@@ -1226,6 +1466,12 @@ export function layoutUseCase(file: UseCaseLabFile): UseCaseLayout {
     boundaries: shiftedBoundaries,
     edges: shiftedEdges,
     unbounded,
+    bounds: {
+      x: boundsX,
+      y: boundsY,
+      width: width - boundsX,
+      height: height - boundsY,
+    },
   };
 }
 

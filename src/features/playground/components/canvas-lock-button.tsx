@@ -256,7 +256,7 @@ export function canvasStateLabel(locked: boolean) {
  * mode this whole module exists to prevent.
  */
 export const CANVAS_LOCK_COPY: Record<
-  "c4" | "sequence" | "flowchart",
+  "c4" | "sequence" | "flowchart" | "usecase" | "er" | "dict",
   CanvasLockCopy
 > = {
   c4: {
@@ -280,16 +280,60 @@ export const CANVAS_LOCK_COPY: Record<
      accessible name describes another notation's gestures is the drift the
      `Record` exists to make impossible.
 
-     IT NEVER SAYS "MOVE", and that is deliberate rather than incidental. A
-     flowchart node cannot be dragged to a position and never will be able to
-     (`CANVAS_EDIT_OFFERS.move.flowchart`, and ADR 0001), so a hint promising
-     it would send every reader who unlocked this canvas straight into the one
-     gesture it refuses. */
+     IT SAYS "MOVE" NOW, AND IT USED NOT TO. This comment carried the opposite
+     rule for a release — "a flowchart node cannot be dragged to a position and
+     never will be able to (ADR 0001), so a hint promising it would send every
+     reader who unlocked this canvas straight into the one gesture it refuses."
+     That was true when it was written and ADR 0002 reversed it: the format
+     grew the coordinate, `CANVAS_EDIT_OFFERS.move.flowchart` offers, and the
+     drag ships. The stale half is quoted rather than deleted because the hint
+     it produced — a lock whose accessible name omitted the gesture the canvas
+     had just gained — is invisible to every assertion in this file. */
   flowchart: {
-    unlockHint: "edit a step's wording, connect two steps, or remove an arrow",
+    unlockHint:
+      "drag a step to pin it, edit one's wording, connect two, or remove an arrow",
     unlockedAnnouncement:
-      "Canvas unlocked — click a step or an arrow to edit its wording, drag from one step to another to connect them, and remove an arrow you no longer want. Every change is written into the source text.",
+      "Canvas unlocked — drag a step to pin it where you put it, click a step or an arrow to edit its wording, drag from one step to another to connect them, and remove an arrow you no longer want. Every change is written into the source text.",
     lockedAnnouncement:
-      "Canvas locked — the diagram is read-only. Nothing on it can be edited, connected or removed.",
+      "Canvas locked — the diagram is read-only. Nothing on it can be moved, edited, connected or removed.",
+  },
+  /* THE TWO CANVASES THAT ANSWER ONLY `move`, and their wording says so rather
+     than borrowing the C4 sentence. C4's names a details panel and an icon
+     picker; neither of these canvases has one, and a lock whose accessible
+     name promises a surface the reader cannot find is the drift this `Record`
+     exists to make impossible.
+
+     BOTH NAME THE WAY BACK, which the other three do not, because these are
+     the first canvases to ship one. ADR 0002 recorded "there is no unpin
+     gesture" for the flowchart as a real gap; a reader who has pinned
+     something needs to know the layout can have it back, and the accessible
+     name is the only channel a screen-reader or voice-control user has here. */
+  usecase: {
+    unlockHint: "drag an actor or a use case to place it, or hand one back",
+    unlockedAnnouncement:
+      "Canvas unlocked — drag an actor or a use case to place it where you put it, pin one to keep it through a reset, or hand a single element back to the layout. Every change is written into the source text.",
+    lockedAnnouncement:
+      "Canvas locked — the diagram is read-only. Nothing on it can be moved or handed back to the layout.",
+  },
+  er: {
+    unlockHint: "drag an entity to place it, or hand one back",
+    unlockedAnnouncement:
+      "Canvas unlocked — drag an entity to place it where you put it, pin one to keep it through a reset, or hand a single entity back to the layout. Every change is written into the source text.",
+    lockedAnnouncement:
+      "Canvas locked — the diagram is read-only. Nothing on it can be moved or handed back to the layout.",
+  },
+  /* THE ONE CANVAS WHOSE DRAG WRITES AN ORDER, and its wording never says
+     "move" or "place" — the two words every other entry here leans on. A
+     dictionary section takes a neighbour's slot rather than landing where it
+     was dropped, because the table's columns are measured across the whole
+     document and one shared grid is what makes it readable. A hint promising
+     a position would send the reader looking for a gesture this canvas
+     refuses on grammar grounds and always will. */
+  dict: {
+    unlockHint: "drag a section or a field to reorder it",
+    unlockedAnnouncement:
+      "Canvas unlocked — drag a section or a field to move it earlier or later in the reading order. The order on screen is the order in the text, and every change is written into it.",
+    lockedAnnouncement:
+      "Canvas locked — the table is read-only. Nothing in it can be reordered.",
   },
 };

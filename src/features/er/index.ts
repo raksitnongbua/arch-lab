@@ -41,6 +41,7 @@ export { ER_EXAMPLE } from "./input/example";
 export { ER, layoutEr } from "./lib/layout";
 export type {
   ErLayout,
+  ErRect,
   LaidErAttribute,
   LaidErEnd,
   LaidErEntity,

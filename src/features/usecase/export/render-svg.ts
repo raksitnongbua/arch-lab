@@ -100,6 +100,13 @@ export function renderUseCaseSvg(
      README or a deck, where nothing else supplies alt text — see
      `lib/svg-a11y.ts` for why the description says what the diagram is ABOUT
      rather than narrating its shapes, and why the ids carry a slug. */
+  /* THE FRAME IS THE LAYOUT'S `bounds`, NOT `0 0 width height`. They are the
+     same rectangle for every document that pins nothing; a pin at a negative
+     coordinate legitimately draws left of the origin, and the old frame cut
+     it off — the flowchart baked that crop into every PNG for two releases.
+     The sheet and the backdrop follow it, because a sheet does not stop where
+     the drawing stops. */
+  const frame = layout.bounds;
   const a11y = svgAccessibility({
     title: file.metadata.title,
     description: file.metadata.description,
@@ -113,17 +120,17 @@ export function renderUseCaseSvg(
     idSeed: file.metadata.title,
   });
   push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +
-      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}"${a11y.attributes}>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}" ` +
+      `viewBox="${fmt(frame.x)} ${fmt(frame.y)} ${fmt(frame.width)} ${fmt(frame.height)}" font-family="${FONT_SANS}"${a11y.attributes}>`,
   );
   push(a11y.elements);
   // Explicit backdrop: without one the file composites over whatever the
   // viewer paints behind it — black in most image viewers.
   push(
-    `<rect x="0" y="0" width="${layout.width}" height="${layout.height}" fill="${theme.canvas}"/>`,
+    `<rect x="${fmt(frame.x)}" y="${fmt(frame.y)}" width="${fmt(frame.width)}" height="${fmt(frame.height)}" fill="${theme.canvas}"/>`,
   );
   push(`<defs>${ground.defs}</defs>`);
-  push(ground.layers(0, 0, layout.width, layout.height));
+  push(ground.layers(frame.x, frame.y, frame.width, frame.height));
 
   /* ---- boundaries (context first — the paint order the screen uses) ------ */
   for (const boundary of layout.boundaries) {
@@ -284,7 +291,7 @@ export function renderUseCaseSvg(
   });
 
   push("</svg>");
-  return { svg: parts.join(""), width: layout.width, height: layout.height };
+  return { svg: parts.join(""), width: frame.width, height: frame.height };
 }
 
 /**

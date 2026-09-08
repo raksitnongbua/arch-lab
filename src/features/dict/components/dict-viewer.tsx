@@ -38,11 +38,24 @@ import { DictDiagram } from "./dict-diagram";
 export interface DictViewerProps {
   file: DictLabFile;
   onAnnounce?: (message: string) => void;
+  /**
+   * The canvas lock, rendered at this pane's own top-right — the corner every
+   * other canvas puts its own in, so a reader moving between notations finds
+   * it in one place.
+   *
+   * A SLOT RATHER THAN A BOOLEAN, matching the four canvases that already take
+   * one: the host owns the lock state (it is the reader's "I am presenting
+   * this", which is about the session and not about one notation) and this
+   * viewer only decides where it sits. Absent means there is nothing here to
+   * lock, and a control that cannot change anything is worse than no control.
+   */
+  lockSlot?: React.ReactNode;
 }
 
 export function DictViewer({
   file,
   onAnnounce,
+  lockSlot,
 }: DictViewerProps): React.JSX.Element {
   const paneRef = useRef<HTMLDivElement>(null);
   const sections = useMemo(() => file.sections ?? [], [file]);
@@ -88,6 +101,12 @@ export function DictViewer({
 
   return (
     <div className="relative h-full w-full">
+      {/* The lock, in the same corner as every other canvas's — see
+          `flowchart-viewer.tsx`, and the header of `canvas-lock-button.tsx`
+          for why it is mounted per branch rather than once beside them. */}
+      {lockSlot !== undefined ? (
+        <div className="absolute top-2 right-2 z-20">{lockSlot}</div>
+      ) : null}
       {/* See `er-viewer.tsx` for why the pane uses `safe center` and the
           wrapper is sized in pixels on both axes. */}
       <div

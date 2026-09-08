@@ -39,10 +39,22 @@ export const metadata: Metadata = {
      that ranks for the names, and nobody arrives at a diagram playground by
      searching "arch-lab JSON" — that form is named on `/syntax`, in `/faq` and
      in both `llms*.txt`, where a reader who needs it is actually looking.
-     Measured at 154 again, which is the same six characters of headroom this
-     line has had since the seventh notation and no more: a TENTH cannot be
-     added by cutting a format, because there is one left. When that day comes,
-     drop the list and name the count, as `APP_DESCRIPTION` did. */
+     THAT DAY CAME, AND THE TAIL IS A COUNT NOW. The line above used to end
+     "…and no more: a TENTH cannot be added by cutting a format, because there
+     is one left. When that day comes, drop the list and name the count, as
+     `APP_DESCRIPTION` did." The fourth and fifth editable canvases — use case
+     and ER — took the assembled description to 170 against the 160, so
+     `CANVAS_EDITABLE_SUMMARY` dropped its list of notation names and spells
+     the count instead. The names live in `CANVAS_EDITING_PASSAGE`, which is
+     unbudgeted and is where a reader who wants to know WHICH canvases looks.
+
+     THE HEAD IS STILL THE LIST, deliberately: this is the route that ranks
+     for the notation names, and the head is where they earn that. It is the
+     TAIL that stopped growing — a sixth editable canvas now changes one word
+     rather than adding a name. Measured at 143, and `check:canvas-edit`
+     measures the assembled description rather than trusting this comment: a
+     recorded "six characters of headroom" is not a measurement, which is how
+     the 166 shipped green. */
   description: `C4, sequence, flowchart, use case, ER, dictionary, gantt, timeline or lifecycle in .alab or Mermaid. ${CANVAS_EDITABLE_SUMMARY}`,
   // Self-canonical now. `/live/c4` and `/live/seq` used to be the real pages
   // and this one canonicalised INTO them; they are forwarding aliases now, so

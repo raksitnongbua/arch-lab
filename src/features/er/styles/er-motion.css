@@ -265,6 +265,26 @@
   cursor: pointer;
 }
 
+/* THE NATIVE RING DIES ON BOTH PSEUDO-CLASSES, and `:focus` is the half that
+ * matters. `globals.css` puts `outline-ring/50` on every element in
+ * `@layer base`, so nothing here authors an outline and the browser's own
+ * indicator paints in `--ring` — and CLICKING an SVG element that carries a
+ * tabindex gives it `:focus` WITHOUT `:focus-visible`, for which Chrome still
+ * paints `outline: auto`. An outline boxes the BOUNDING BOX, which on a
+ * three-segment orthogonal connector is a rectangle around the whole route.
+ * The rules below this one suppress `:focus-visible` per element kind; this
+ * pair closes the click case for both, against the class the components mark
+ * their hit targets with — the shape `.af-uc-hit` and `.af-flow-hit` have
+ * carried in `globals.css` for five canvases.
+ *
+ * The KEYBOARD ring is untouched: it is drawn further down, by this canvas's
+ * own `:focus-visible` rules, because a keyboard reader has no pointer and no
+ * hover and would otherwise have nothing telling them where they are. */
+.af-er-hit:focus,
+.af-er-hit:focus-visible {
+  outline: none;
+}
+
 /* HOVER DOES NOT RESTYLE THE LINE EITHER. It used to recolour the stroke to
    `--edge-drift` and thicken it to 2.5px, which is the same "a new border
    appeared" the lit state was asked to stop doing — and it was the one people

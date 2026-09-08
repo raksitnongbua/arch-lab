@@ -39,6 +39,13 @@
  *  10. A long spaceless Thai label still fits its ellipse — the flowchart
  *      shipped a slice() that cut Thai base characters from combining
  *      marks; the ellipse case is proven here, measured, not assumed.
+ *  13. PINS (an author-stated `(x,y)`): a document that states none lays
+ *      out to the same pixel it did before the field existed; a stated
+ *      corner wins for that element ALONE — every neighbour keeps its solved
+ *      slot, an actor keeps the walk-on order its solved flank earned it,
+ *      and a member pinned clear of its boundary GROWS the rectangle instead
+ *      of being cropped out of it. Negative coordinates are honoured, and
+ *      `bounds` is the frame that proves nothing was cut off.
  *  11. TS↔CSS motion pins: every duration fallback in usecase-motion.css
  *      equals its USECASE_DURATIONS constant; everything animated (and the
  *      draw's dasharray) sits inside the reduced-motion gate; and NOTHING
@@ -185,6 +192,24 @@ const segments = (edge) => {
   return out;
 };
 
+/* THE FRAME IS `bounds`, NOT `0 0 width height`. They are the same rectangle
+   for every document that pins nothing; a pin at a negative coordinate
+   legitimately draws left of the origin, and measuring against the origin
+   would demand the clamp the whole design refuses. */
+const insideFrame = (layout) => {
+  const frame = layout.bounds;
+  const held = (p) =>
+    p.x >= frame.x &&
+    p.x <= frame.x + frame.width &&
+    p.y >= frame.y &&
+    p.y <= frame.y + frame.height;
+  return (
+    layout.elements.every((e) => rectInside(e, frame)) &&
+    layout.boundaries.every((b) => rectInside(b, frame)) &&
+    layout.edges.every((e) => segments(e).every((seg) => seg.every(held)))
+  );
+};
+
 const rectInside = (inner, outer, pad = 0) =>
   inner.x >= outer.x + pad &&
   inner.y >= outer.y + pad &&
@@ -211,36 +236,9 @@ function assertStructure(label, file, layout) {
   );
 
   check(
-    `${label}: every element, boundary, edge point and label lies inside the canvas — clipped geometry is invisible geometry`,
-    layout.elements.every(
-      (e) =>
-        e.x >= 0 &&
-        e.y >= 0 &&
-        e.x + e.width <= layout.width &&
-        e.y + e.height <= layout.height,
-    ) &&
-      layout.boundaries.every((b) =>
-        rectInside(b, {
-          x: 0,
-          y: 0,
-          width: layout.width,
-          height: layout.height,
-        }),
-      ) &&
-      layout.edges.every((e) =>
-        segments(e).every(
-          ([a, b]) =>
-            a.x >= 0 &&
-            a.x <= layout.width &&
-            b.x >= 0 &&
-            b.x <= layout.width &&
-            a.y >= 0 &&
-            a.y <= layout.height &&
-            b.y >= 0 &&
-            b.y <= layout.height,
-        ),
-      ),
-    `canvas ${layout.width}×${layout.height}`,
+    `${label}: every element, boundary, edge point and label lies inside the frame the layout REPORTS — clipped geometry is invisible geometry, and every surface takes its viewBox from that frame`,
+    insideFrame(layout),
+    `frame ${box(layout.bounds)} in a ${layout.width}×${layout.height} canvas`,
   );
 
   /* THE semantic of the picture. */
@@ -769,6 +767,253 @@ check(
   (thaiLayout.elements.find((e) => e.id === "order")?.rx ?? 0) >
     UC.ellipseMinRx,
 );
+
+/* ----------------------------------------------------------------------- */
+/* Fixture 4 — pins: an author-stated (x,y) on one element                  */
+/*                                                                          */
+/* Every assertion here is a DIFFERENCE between two layouts of the SAME      */
+/* document, one with the token and one without, because that difference is  */
+/* exactly what the promise is about: a pin moves one shape and nothing      */
+/* else. Absolute coordinates are never hand-typed — a pin is stated in the  */
+/* layout's own solved space, which the shift then moves, so a literal here  */
+/* would only restate the shift.                                            */
+/* ----------------------------------------------------------------------- */
+
+console.log("pins (a stated position wins for one element and nothing else)");
+
+/** One document with a seam per element to hang an `(x,y)` token off. */
+const pinnedDoc = (pins = {}) => `archlab 1.0 usecase
+title "Billing, placed by hand"
+
+@usecase
+  actor customer "Customer"
+  actor admin "Administrator"
+  boundary "Billing"
+    usecase pay "Pay online"${pins.pay ?? ""}
+    usecase refund "Issue a refund"${pins.refund ?? ""}
+    usecase invoice "Send the invoice"${pins.invoice ?? ""}
+  actor auditor "Auditor"${pins.auditor ?? ""}
+
+  customer -- pay
+  customer -- invoice
+  admin -- refund
+  auditor -- invoice
+  refund ..> pay : include
+`;
+const laidOut = (pins) => layoutUseCase(parseUseCaseText(pinnedDoc(pins)));
+
+const solvedLayout = laidOut();
+assertStructure("solved", parseUseCaseText(pinnedDoc()), solvedLayout);
+
+check(
+  "a document that states no position reports a frame that IS its canvas measured from the origin — the frame only ever grows around something that reaches past it, so nothing in the pin machinery moved a document that pins nothing",
+  solvedLayout.bounds.x === 0 &&
+    solvedLayout.bounds.y === 0 &&
+    solvedLayout.bounds.width === solvedLayout.width &&
+    solvedLayout.bounds.height === solvedLayout.height,
+  `bounds ${box(solvedLayout.bounds)} vs canvas ${solvedLayout.width}×${solvedLayout.height}`,
+);
+
+/** The NEIGHBOURS' side of a pin: everything the pinned element is not, and
+ * no line that touches it.
+ *
+ * THREE THINGS ARE LEFT OUT, each because it is SUPPOSED to answer to a pin.
+ * The canvas and the boundary rectangle grow around a far-flung one, and each
+ * is asserted where that growth is the subject. An edge LABEL is placed, not
+ * solved — it walks outward until it clears every line in the picture — so a
+ * pinned element's own spoke sweeping across the page can legitimately push a
+ * stranger's label aside, and the alternative is a label sitting on a line. */
+const neighbours = (layout, ids) => ({
+  heading: layout.heading,
+  elements: layout.elements.filter((e) => !ids.includes(e.id)),
+  edges: layout.edges
+    .filter((e) => !ids.includes(e.from) && !ids.includes(e.to))
+    .map(({ index, kind, from, to, points, tip, labelLines }) => ({
+      index,
+      kind,
+      from,
+      to,
+      points,
+      tip,
+      labelLines,
+    })),
+  unbounded: layout.unbounded,
+});
+
+/* WHAT A PINNED DOCUMENT IS STILL HELD TO, and it is deliberately not the
+ * whole structural suite. ADR 0003 accepts that a pinned element can overlap a
+ * solved one, that a line into it can cross an ellipse it does not connect,
+ * and that a label can end up beside that line — asserting those here would
+ * assert the opposite of what was decided. The SOLVED twin of every fixture
+ * below goes through `assertStructure` in full, so the picture the solver
+ * draws is still held to all of it. */
+const assertPinnedInvariants = (label, file, layout) => {
+  check(
+    `${label}: the same model twice gives byte-identical layout — a pin must not make the layout a function of anything but the document`,
+    JSON.stringify(layoutUseCase(file)) === JSON.stringify(layout),
+  );
+  check(
+    `${label}: every element, boundary and edge point lies inside the frame the layout reports — the frame grows around a pin instead of cropping it, which is the amendment ADR 0002 had to make`,
+    insideFrame(layout),
+    `frame ${box(layout.bounds)} in a ${layout.width}×${layout.height} canvas`,
+  );
+};
+
+/* ---- a member pinned clear of its own boundary ---- */
+{
+  /* Below the columns the solver packed and outside the rectangle they
+     measured: the case that used to be unspellable and, once spellable, the
+     case a frame can crop. */
+  const source = pinnedDoc({ pay: " (-60,300)" });
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("pinned member", parseUseCaseText(source), pinned);
+  const el = (id) => pinned.elements.find((e) => e.id === id);
+  const solvedEl = (id) => solvedLayout.elements.find((e) => e.id === id);
+
+  check(
+    "the stated position wins for that element and moves nothing else: every other element, the heading, the canvas and every line that does not touch it are byte-identical to the same document without the token — the guarantee that made this a minor change rather than a breaking one",
+    JSON.stringify(neighbours(pinned, ["pay"])) ===
+      JSON.stringify(neighbours(solvedLayout, ["pay"])),
+  );
+  check(
+    "the pinned use case did move — without this the assertions around it would be proving properties of a document that ignores its own token",
+    el("pay").x !== solvedEl("pay").x && el("pay").y !== solvedEl("pay").y,
+    `pinned ${box(el("pay"))} vs solved ${box(solvedEl("pay"))}`,
+  );
+  check(
+    "moving the token by 20 moves the drawn shape by exactly 20 in each axis — the coordinate is honoured one-to-one and is neither re-solved, snapped to a grid, nor nudged back toward its column",
+    (() => {
+      const moved = layoutUseCase(
+        parseUseCaseText(pinnedDoc({ pay: " (-40,320)" })),
+      ).elements.find((e) => e.id === "pay");
+      return moved.x - el("pay").x === 20 && moved.y - el("pay").y === 20;
+    })(),
+  );
+  check(
+    "the token is the shape's TOP-LEFT for an ellipse as well as a figure: two elements pinned 300 apart on one row have top-left corners exactly 300 apart and level, which a centre-based read of the same token could not produce (a use case would sit rx left and ry up of it)",
+    (() => {
+      const both = layoutUseCase(
+        parseUseCaseText(
+          pinnedDoc({ auditor: " (-40,300)", invoice: " (260,300)" }),
+        ),
+      );
+      const a = both.elements.find((e) => e.id === "auditor");
+      const u = both.elements.find((e) => e.id === "invoice");
+      return u.x - a.x === 300 && u.y === a.y;
+    })(),
+  );
+
+  const frame = pinned.boundaries[0];
+  const solvedFrame = solvedLayout.boundaries[0];
+  check(
+    "the boundary GROWS around the member pinned outside it rather than the member being cropped out of the box that declares it a member — the amendment ADR 0002 had to make after a pinned flowchart step drew 64% outside its frame",
+    frame.height > solvedFrame.height &&
+      frame.width === solvedFrame.width &&
+      rectInside(el("pay"), frame),
+    `grown ${box(frame)} from ${box(solvedFrame)} around ${box(el("pay"))}`,
+  );
+  check(
+    "the title band did not move when the rectangle grew — the frame grows and the drawing does not shift, so the name stays over the members it names instead of drifting into the space a pin opened up",
+    JSON.stringify(frame.labelBox) === JSON.stringify(solvedFrame.labelBox),
+  );
+  check(
+    "the lines into the pinned use case still TOUCH it — a route planned on solved geometry whose ends were left behind draws spokes into empty space, which reads exactly like a broken layout",
+    pinned.edges
+      .filter((e) => e.from === "pay" || e.to === "pay")
+      .every((e) => {
+        const points = e.tip === null ? e.points : [...e.points, e.tip];
+        const end = e.from === "pay" ? points[0] : points[points.length - 1];
+        return rectsOverlap(
+          { x: end.x, y: end.y, width: 0, height: 0 },
+          el("pay"),
+          1,
+        );
+      }),
+    pinned.edges
+      .filter((e) => e.from === "pay" || e.to === "pay")
+      .map((e) => `${e.from}->${e.to} ${JSON.stringify(e.points)}`)
+      .join(" "),
+  );
+}
+
+/* ---- an actor pinned across the boundary it used to flank ---- */
+{
+  /* Across to the right flank AND above every other actor, so an order read
+     off the drawn boxes instead of the solved ones would put this actor
+     first — the fixture has to be able to tell the two apart. */
+  const source = pinnedDoc({ auditor: " (200,-300)" });
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("pinned actor", parseUseCaseText(source), pinned);
+  const auditor = pinned.elements.find((e) => e.id === "auditor");
+  const solvedAuditor = solvedLayout.elements.find((e) => e.id === "auditor");
+  const frame = pinned.boundaries[0];
+
+  check(
+    "a pinned actor keeps the SIDE the solver gave it: the walk-on order is read off the solved flanks, so an actor pinned across the picture and above the whole cast keeps the index its solved flank earned it — the reveal must stagger the cast the layout composed, not the one a pin rearranged",
+    auditor.cast === solvedAuditor.cast &&
+      auditor.cast ===
+        solvedLayout.elements.filter((e) => e.kind === "actor").length - 1 &&
+      auditor.y <
+        Math.min(
+          ...pinned.elements
+            .filter((e) => e.kind === "actor" && e.id !== "auditor")
+            .map((e) => e.y),
+        ),
+    `cast ${auditor.cast} at x ${auditor.x} (solved ${solvedAuditor.cast} at x ${solvedAuditor.x})`,
+  );
+  check(
+    "and its spoke therefore still leaves from that side and now CROSSES the boundary it used to flank — ADR 0003 accepts this cost explicitly; a spoke re-planned around the box would mean the routing had begun reading pinned geometry, which is what keeps every OTHER line where it was",
+    pinned.edges
+      .filter((e) => e.from === "auditor" || e.to === "auditor")
+      .every((e) => segments(e).some(([a, b]) => segmentHitsRect(a, b, frame))),
+  );
+  check(
+    "every element the token did not name keeps its solved slot, the pinned actor's own use case included — a pin that re-balanced the flanks would repack the columns and move the whole cast",
+    JSON.stringify(neighbours(pinned, ["auditor"])) ===
+      JSON.stringify(neighbours(solvedLayout, ["auditor"])),
+  );
+}
+
+/* ---- a negative coordinate, in a document with no boundary at all ---- */
+{
+  const sketch = (pin = "") => `archlab 1.0 usecase
+title "Sketch"
+
+@usecase
+  actor a "Author"
+  usecase draft "Draft the note"${pin}
+  usecase publish "Publish the note"
+
+  a -- draft
+  a -- publish
+`;
+  const solvedSketch = layoutUseCase(parseUseCaseText(sketch()));
+  assertStructure("sketch", parseUseCaseText(sketch()), solvedSketch);
+  const source = sketch(" pin (-900,-400)");
+  const pinned = layoutUseCase(parseUseCaseText(source));
+  assertPinnedInvariants("negative pin", parseUseCaseText(source), pinned);
+  const draft = pinned.elements.find((e) => e.id === "draft");
+
+  check(
+    "a NEGATIVE coordinate is honoured rather than clamped into the canvas: the pinned use case draws above and left of the origin, which is where the author asked for it",
+    draft.x < 0 && draft.y < 0,
+    box(draft),
+  );
+  check(
+    "and the reported frame reaches out to hold it, so it is cropped neither on screen nor in the PNG that inherits the same viewBox",
+    pinned.bounds.x < draft.x &&
+      pinned.bounds.y < draft.y &&
+      rectInside(draft, pinned.bounds),
+    `frame ${box(pinned.bounds)} around ${box(draft)}`,
+  );
+  check(
+    "and the drawing did NOT shift to reach it: the canvas measured from the origin is unchanged and every unpinned element sits on the pixel it sat on before the token existed — the shift is a function of the solved layout alone",
+    pinned.width === solvedSketch.width &&
+      pinned.height === solvedSketch.height &&
+      JSON.stringify(neighbours(pinned, ["draft"])) ===
+        JSON.stringify(neighbours(solvedSketch, ["draft"])),
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 /* TS ↔ CSS pins — motion                                                   */

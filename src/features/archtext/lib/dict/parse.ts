@@ -57,7 +57,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
 import { USECASE_HEADER_WORD } from "../usecase/keywords";
@@ -92,6 +92,11 @@ interface PendField extends Loc {
   source?: string;
   values?: string;
   example?: string;
+  /** The last line of this field's own block — its `field` line until a
+   *  `desc`, `source`, `values`, `example` or `!` escape extends it. A field
+   *  carries a span of its own because a field reorders WITHIN its section
+   *  (see `DictSpans`), and it is rolled into the owning section's span too. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -106,6 +111,10 @@ interface PendSection extends Loc {
   /** True once a `field` has been read, which closes this section's `desc`
    * window (see the file header). */
   sawField: boolean;
+  /** The last line of this section's OWN lines — its opener until a `desc` or
+   *  an `!` escape extends it. The section's BLOCK reaches further, because
+   *  its fields sit inside it; `DictSpans` takes the max. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -144,8 +153,67 @@ function flagList(): string {
 /* The parser                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Where each section and each field of a parse sits in the source text.
+ *
+ * The dictionary counterpart of `ArchTextSpans`, `SequenceSpans`,
+ * `FlowchartSpans`, `UseCaseSpans` and `ErSpans`, and it exists for the same
+ * one reason: an edit to a dictionary on the canvas has to be a LINE PATCH.
+ * `serializeDictText` writes canonical text, which has no `//` comments, no
+ * author blank lines and no field the author spelled out that the canonical
+ * form omits at its default — so a re-emit is lossy in a way that passes
+ * every assertion, because canonical text re-emitted IS canonical text.
+ * Splicing by span keeps every byte the edit did not touch.
+ *
+ * WHAT A DICTIONARY GESTURE WRITES IS A REORDER, not a move. `layoutDict`
+ * solves the column grid ONCE across the whole document so two sections can
+ * be scanned against each other, and a free `(x,y)` would break that grid —
+ * so this grammar carries no coordinate and never will. What a drag here does
+ * is take a neighbour's slot in the reading order, which `canvas-editing.md`
+ * classes under `revise`: order already IS the text, so a reorder needs no
+ * format change, only these spans.
+ *
+ * SECTIONS ARE KEYED BY LABEL, not by index. The grammar gives a section no
+ * id, but its quoted heading serves as one: the parser already refuses a
+ * duplicate label, on the argument that a reader cites a section by its
+ * heading. And a key has to survive the edit it is used for — an index names
+ * a DIFFERENT section the moment two of them swap, so a caller holding one
+ * across a reorder would address the wrong block on its second gesture.
+ *
+ * FIELDS ARE KEYED BY NAME, UNDER THEIR SECTION'S LABEL, for both halves of
+ * that reason. A field name is unique inside its section (the parser refuses
+ * a duplicate there) but not across the file — `id` in two sections is
+ * ordinary text — so the map has to be nested rather than flat. Nesting also
+ * makes "a field cannot escape into a neighbouring section" true by
+ * construction rather than by a guard: a reorder resolves both of its ends
+ * inside one section's map.
+ *
+ * A SECTION'S SPAN COVERS ITS WHOLE BLOCK, fields and their continuations
+ * included. A section carries its fields exactly as an ER entity carries its
+ * columns — `emitSection` writes them too — so a span that ended at the
+ * opener would move a heading away from the rows it introduces.
+ */
+export interface DictSpans {
+  sections: ReadonlyMap<string, LineSpan>;
+  /** Each section's fields, keyed by the section's label then the field's
+   *  name — see the nesting argument above. */
+  fields: ReadonlyMap<string, ReadonlyMap<string, LineSpan>>;
+}
+
 /** Parses `.alab` dictionary source. Pure, deterministic, all-or-nothing. */
 export function parseDictText(source: string): DictLabFile {
+  return parseDictTextWithSpans(source).file;
+}
+
+/**
+ * `parseDictText`, plus where every section and field came from — the SAME
+ * parse, so the spans cannot describe a different reading of the text than
+ * the model does. Callers that only want the model use `parseDictText`.
+ */
+export function parseDictTextWithSpans(source: string): {
+  file: DictLabFile;
+  spans: DictSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -340,7 +408,42 @@ export function parseDictText(source: string): DictLabFile {
     );
   }
 
-  return resolve(header, sections);
+  const file = resolve(header, sections);
+  /* Built from the SAME pending array `resolve` just read, AFTER it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. */
+  return {
+    file,
+    spans: {
+      sections: new Map(
+        sections.map((section) => [
+          section.label,
+          {
+            start: section.line,
+            /* The MAX over the section's own lines and every field's, rather
+               than the section's `endLine` alone: a field's `example` is the
+               last line of the block and sits two levels deeper than the
+               opener, so nothing but a max can see it. */
+            end: section.fields.reduce(
+              (last, field) => Math.max(last, field.endLine),
+              section.endLine,
+            ),
+          },
+        ]),
+      ),
+      fields: new Map(
+        sections.map((section) => [
+          section.label,
+          new Map(
+            section.fields.map((field) => [
+              field.name,
+              { start: field.line, end: field.endLine },
+            ]),
+          ),
+        ]),
+      ),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -629,6 +732,7 @@ function parseSectionOpener(
     fields: [],
     fieldByName: new Map(),
     sawField: false,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -704,6 +808,7 @@ function parseFieldLine(
     ...loc,
     name,
     type,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -744,6 +849,12 @@ function parseFieldLine(
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each accepting path, because a span that stopped one line short would
+     make a reorder leave the author's `example` behind under the field that
+     no longer precedes it. */
+  target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     const loc = { line: cursor.line, column: cursor.column };
     const keyword = cursor.readBare(/^[a-z]+/, "a continuation keyword");

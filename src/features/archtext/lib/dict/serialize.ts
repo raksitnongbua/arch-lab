@@ -141,6 +141,93 @@ export function serializeDictText(file: DictLabFile): string {
   return `${lines.join("\n")}\n`;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks, for the editable canvas                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE SECTION'S CANONICAL LINES — heading, `desc`, `!` escapes and every
+ * field it holds — so a canvas gesture can splice them into the author's own
+ * text instead of re-emitting the file. `canonicalErEntityBlock`,
+ * `canonicalFlowNodeBlock` and `canonicalUseCaseElementBlock` are the same
+ * idea, and `line-patch.ts` holds the argument for why every gesture must go
+ * through one of them.
+ *
+ * THE FIELDS COME WITH IT, on the ER entity's argument about its columns: a
+ * section's `field` lines are part of its declaration rather than siblings of
+ * it, so a block that stopped at the heading would leave the rows orphaned
+ * under a heading that no longer introduces them — and a reorder that carried
+ * the heading alone would move it away from the rows a reader was scanning.
+ *
+ * NO `pad` PARAMETER, the ER helper's choice rather than the use-case one. A
+ * use-case element sits at two spaces or four depending on whether a
+ * `boundary` encloses it, so its helper cannot know its own indentation; a
+ * dictionary section is pinned by the parser to exactly one level (`itemIndent`
+ * is 2 whenever no section is open, and sections do not nest), so there is one
+ * possible answer and a parameter could only ever hold it. Configuration for a
+ * fixed value is a place for the two to disagree, not flexibility.
+ *
+ * Returns `null` when `sectionLabel` is not in `file`.
+ */
+export function canonicalDictSectionBlock(
+  file: DictLabFile,
+  sectionLabel: string,
+): string[] | null {
+  const section = findSection(file, sectionLabel);
+  if (section === null) return null;
+  const lines: string[] = [];
+  emitSection(lines, section);
+  return lines;
+}
+
+/**
+ * ONE FIELD'S CANONICAL LINES — its `field` line and its four prose slots —
+ * for the gesture that reorders a field within its section.
+ *
+ * ITS OWN BLOCK, unlike an ER column, which has none: a column is only ever
+ * rewritten as part of its entity, whereas a field reorders against its
+ * siblings and so is addressed on its own. `DictSpans` explains why the name
+ * is scoped to the section rather than to the file.
+ *
+ * NO `pad` PARAMETER, for the same reason the section helper has none: the
+ * parser pins a field to indent 4 (`itemIndent` is 4 whenever a section is
+ * open, and fields do not nest).
+ *
+ * Returns `null` when the section or the field is not in `file`.
+ */
+export function canonicalDictFieldBlock(
+  file: DictLabFile,
+  sectionLabel: string,
+  fieldName: string,
+): string[] | null {
+  const section = findSection(file, sectionLabel);
+  if (section === null) return null;
+  if (!isRecord(section)) invalid("a section", section);
+  const fields = section.fields;
+  if (!Array.isArray(fields))
+    invalid(`section ${JSON.stringify(sectionLabel)}.fields`, fields);
+  const field = fields.find(
+    (candidate) => isRecord(candidate) && candidate.name === fieldName,
+  );
+  if (field === undefined) return null;
+  const lines: string[] = [];
+  emitField(lines, sectionLabel, field);
+  return lines;
+}
+
+/** The section a canonical block was asked for, or `null` when the file holds
+ * no such heading. Sections are addressed by LABEL — see `DictSpans` for why
+ * the heading is the key and an index is not. */
+function findSection(file: DictLabFile, sectionLabel: string): unknown {
+  if (!isRecord(file)) invalid("the file", file);
+  const sections = file.sections;
+  if (!Array.isArray(sections)) invalid("sections", sections);
+  const found = sections.find(
+    (candidate) => isRecord(candidate) && candidate.label === sectionLabel,
+  );
+  return found === undefined ? null : found;
+}
+
 function emitSection(lines: string[], value: unknown): void {
   if (!isRecord(value)) invalid("a section", value);
   const label = value.label;

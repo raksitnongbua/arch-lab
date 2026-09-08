@@ -177,12 +177,17 @@ export function UseCaseDiagram({
 
   return (
     <svg
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      /* THE LAYOUT'S OWN FRAME, which is `0 0 width height` for every
+         document that pins nothing and wider than it whenever a pinned
+         element sits outside the solved bounds. Reading `0 0` here cropped
+         exactly that case in the flowchart — a pinned shape drawn 64% off the
+         picture, with the export inheriting the crop. */
+      viewBox={`${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.width} ${layout.bounds.height}`}
       {...(zoom === "fit"
         ? { width: "100%", height: "100%" }
         : {
-            width: Math.round(layout.width * zoom),
-            height: Math.round(layout.height * zoom),
+            width: Math.round(layout.bounds.width * zoom),
+            height: Math.round(layout.bounds.height * zoom),
           })}
       preserveAspectRatio="xMidYMid meet"
       role="img"

@@ -176,8 +176,13 @@ export {
   LEFT_CARDINALITY,
   RIGHT_CARDINALITY,
 } from "./lib/er/keywords";
-export { parseDictText } from "./lib/dict/parse";
-export { serializeDictText } from "./lib/dict/serialize";
+export { parseDictText, parseDictTextWithSpans } from "./lib/dict/parse";
+export type { DictSpans } from "./lib/dict/parse";
+export {
+  canonicalDictFieldBlock,
+  canonicalDictSectionBlock,
+  serializeDictText,
+} from "./lib/dict/serialize";
 export { DICT_HEADER_WORD, FIELD_FLAGS } from "./lib/dict/keywords";
 export { parseGanttText } from "./lib/gantt/parse";
 export { serializeGanttText } from "./lib/gantt/serialize";

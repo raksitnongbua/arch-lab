@@ -102,16 +102,24 @@ export function renderErSvg(file: ErLabFile, theme: ExportTheme): RenderedSvg {
     )} and ${countOf(file.relationships.length, "relationship")}.`,
     idSeed: file.metadata.title,
   });
+  /* THE FRAME IS THE LAYOUT'S BOUNDS, not `0 0 width height`. The two are the
+     same rectangle for every schema with nothing pinned; a pin at a negative
+     coordinate legitimately draws left of or above the origin, and the
+     origin-measured frame crops it — cropped on screen and baked into the PNG
+     at the same crop, which is the defect ADR 0002 had to amend. The backdrop
+     and the sheet follow it, because a sheet does not stop where the drawing
+     stops. */
+  const frame = layout.bounds;
   push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +
-      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}"${a11y.attributes}>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}" ` +
+      `viewBox="${frame.x} ${frame.y} ${frame.width} ${frame.height}" font-family="${FONT_SANS}"${a11y.attributes}>`,
   );
   push(a11y.elements);
   push(
-    `<rect x="0" y="0" width="${layout.width}" height="${layout.height}" fill="${theme.canvas}"/>`,
+    `<rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="${theme.canvas}"/>`,
   );
   push(`<defs>${ground.defs}</defs>`);
-  push(ground.layers(0, 0, layout.width, layout.height));
+  push(ground.layers(frame.x, frame.y, frame.width, frame.height));
 
   /* Relationships first, so a line is never drawn over a box it only passes —
      the paint order the canvas uses. */
@@ -200,5 +208,5 @@ export function renderErSvg(file: ErLabFile, theme: ExportTheme): RenderedSvg {
   }
 
   push("</svg>");
-  return { svg: parts.join(""), width: layout.width, height: layout.height };
+  return { svg: parts.join(""), width: frame.width, height: frame.height };
 }

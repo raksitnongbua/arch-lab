@@ -102,6 +102,23 @@ import {
   type FlowEdgeRevision,
   type FlowNodeRevision,
 } from "../input/flowchart-edit";
+import {
+  movedErEntityEdit,
+  pinnedErEntityEdit,
+  resetErEntityPositionEdit,
+  resetErPositionsEdit,
+} from "../input/er-edit";
+import {
+  movedUseCaseElementEdit,
+  pinnedUseCaseElementEdit,
+  resetUseCaseElementPositionEdit,
+  resetUseCasePositionsEdit,
+} from "../input/usecase-edit";
+import {
+  dictReorderRefusal,
+  reorderedDictFieldEdit,
+  reorderedDictSectionEdit,
+} from "../input/dict-edit";
 
 /**
  * How many canvas edits back the diagram-side undo reaches. Deep enough to
@@ -111,6 +128,56 @@ import {
 const CANVAS_UNDO_DEPTH = 50;
 
 /** What the hook needs from the page that owns the document. */
+/**
+ * What a PLACEMENT canvas needs from the host — the ER and use-case canvases,
+ * whose only ability is `move`.
+ *
+ * ONE TYPE FOR BOTH, and that is the model being right rather than a
+ * shortcut: an ER entity and a use-case element are addressed by id, placed by
+ * a point, pinned by a flag and released the same way, so the two canvases
+ * differ in what they DRAW and in nothing this interface can see. A second
+ * identical interface would be the copy `dry.md` asks about — and asked what
+ * they would have to do differently in future, the answer is nothing, because
+ * both are opting one element out of a solver.
+ *
+ * `onReleaseAll` IS THE SWEEP, and it is the only consumer of `pin`. A pinned
+ * element is skipped by it and by nothing else; if this handler ever goes
+ * away, `pinned` becomes a field no reader reads, which is what
+ * `C4Node.pinned` was for two releases.
+ */
+export interface PlacementEditHandlers {
+  /** A drag that ended: the element's new top-left, in layout units. */
+  onMove: (id: string, position: { x: number; y: number }) => void;
+  /** Keep or stop keeping this element's coordinates through the sweep. */
+  onPin: (id: string, pinned: boolean) => void;
+  /** Hand ONE element back to the layout — a direct request, so it releases a
+   *  pinned element too. The pin exempts from the sweep, not from the author. */
+  onRelease: (id: string) => void;
+  /** Hand the whole diagram back, skipping pinned elements. */
+  onReleaseAll: () => void;
+}
+
+/**
+ * What the dictionary canvas needs from the host.
+ *
+ * NOT `PlacementEditHandlers`, and the difference is the whole point: a
+ * dictionary drag writes an ORDER, not a position. There is no point to place
+ * and nothing to pin, because the order it writes IS the text — so the two
+ * interfaces stay separate rather than one growing optional halves that mean
+ * "this canvas is the other kind".
+ */
+export interface DictEditHandlers {
+  onReorderSection: (label: string, direction: "earlier" | "later") => void;
+  onReorderField: (
+    sectionLabel: string,
+    fieldName: string,
+    direction: "earlier" | "later",
+  ) => void;
+  /** Why a handle is unavailable, so the canvas can grey it BEFORE the drag
+   *  rather than swallowing one. */
+  reorderRefusal: typeof dictReorderRefusal;
+}
+
 export interface CanvasEditingHost {
   doc: ViewDocument;
   /** The source pane's current text — every edit is a patch of these bytes. */
@@ -121,6 +188,12 @@ export interface CanvasEditingHost {
   sequenceEditable: boolean;
   /** Whether flowchart dock and connect gestures are offered at all. */
   flowchartEditable: boolean;
+  /** Whether ER canvas gestures are offered at all. */
+  erEditable: boolean;
+  /** Whether use-case canvas gestures are offered at all. */
+  usecaseEditable: boolean;
+  /** Whether dictionary reorder gestures are offered at all. */
+  dictEditable: boolean;
   setText: (value: string) => void;
   /** Drops a queued keystroke that would otherwise land after the edit. */
   setPending: (pending: null) => void;
@@ -135,6 +208,9 @@ export function useCanvasEditing({
   canvasEditable,
   sequenceEditable,
   flowchartEditable,
+  erEditable,
+  usecaseEditable,
+  dictEditable,
   setText,
   setPending,
   setAnnouncement,
@@ -144,6 +220,9 @@ export function useCanvasEditing({
   canvasEdit: CanvasEditHandlers | undefined;
   sequenceEdit: SequenceEditHandlers | undefined;
   flowchartEdit: FlowchartEditHandlers | undefined;
+  erEdit: PlacementEditHandlers | undefined;
+  usecaseEdit: PlacementEditHandlers | undefined;
+  dictEdit: DictEditHandlers | undefined;
   /**
    * Apply or clear a layout direction, at the diagram's scope or the file's.
    * Beside the handler sets rather than inside `canvasEdit`, because the
@@ -1213,6 +1292,214 @@ export function useCanvasEditing({
    * Presence is the signal, as on the sequence canvas: no bundle, no grip, no
    * editable dock, no disabled controls.
    */
+  /* ---------------------------------------------------------------------- */
+  /* The placement canvases: ER and use case                                */
+  /* ---------------------------------------------------------------------- */
+
+  /* ONE SET OF HANDLERS PER NOTATION, not one shared pair branching on
+     `doc.kind`. Each gesture module refuses a document of the wrong kind
+     itself, so a shared handler would ask two modules and discard one answer;
+     and the announcements differ in the noun a reader hears, which is the half
+     of this that reaches a screen-reader user. */
+
+  const handleMoveErEntity = useCallback(
+    (entityId: string, position: { x: number; y: number }) => {
+      const next = movedErEntityEdit(doc, text, entityId, position);
+      // null covers "landed where it started" as well as "cannot be edited",
+      // so a press that moves nothing costs no text change and no undo entry.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Placed ${entityId} at ${Math.round(position.x)}, ${Math.round(position.y)} — the source text follows. The layout no longer decides where this entity sits.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handlePinErEntity = useCallback(
+    (entityId: string, pinned: boolean) => {
+      const next = pinnedErEntityEdit(doc, text, entityId, pinned);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        pinned
+          ? `Pinned ${entityId} — a reset of this diagram's positions will now skip it.`
+          : `Unpinned ${entityId} — a reset of this diagram's positions will hand it back to the layout.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReleaseErEntity = useCallback(
+    (entityId: string) => {
+      const next = resetErEntityPositionEdit(doc, text, entityId);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Handed ${entityId} back to the layout — its coordinates are gone from the source text and its column places it again.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReleaseErPositions = useCallback(() => {
+    const next = resetErPositionsEdit(doc, text);
+    /* SAID WHEN IT DOES NOTHING, unlike every gesture above. A sweep that
+       finds only pinned entities is a button the reader pressed with a visible
+       result they expected — silence there reads as a broken control, whereas
+       a drag that moves nothing is self-evident. */
+    if (next === null) {
+      setAnnouncement(
+        "Nothing to hand back — every entity placed by hand is pinned, so the reset skipped all of them. Unpin one to release it.",
+      );
+      return;
+    }
+    applyCanvasEdit(
+      next,
+      "Handed this diagram back to the layout — every entity that was not pinned lost its coordinates, and the schema places them again.",
+    );
+  }, [doc, text, applyCanvasEdit, setAnnouncement]);
+
+  const handleMoveUseCaseElement = useCallback(
+    (elementId: string, position: { x: number; y: number }) => {
+      const next = movedUseCaseElementEdit(doc, text, elementId, position);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Placed ${elementId} at ${Math.round(position.x)}, ${Math.round(position.y)} — the source text follows. The layout no longer decides where this element sits.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handlePinUseCaseElement = useCallback(
+    (elementId: string, pinned: boolean) => {
+      const next = pinnedUseCaseElementEdit(doc, text, elementId, pinned);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        pinned
+          ? `Pinned ${elementId} — a reset of this diagram's positions will now skip it.`
+          : `Unpinned ${elementId} — a reset of this diagram's positions will hand it back to the layout.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReleaseUseCaseElement = useCallback(
+    (elementId: string) => {
+      const next = resetUseCaseElementPositionEdit(doc, text, elementId);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Handed ${elementId} back to the layout — its coordinates are gone from the source text, and the boundary and its associations place it again.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReleaseUseCasePositions = useCallback(() => {
+    const next = resetUseCasePositionsEdit(doc, text);
+    if (next === null) {
+      setAnnouncement(
+        "Nothing to hand back — every element placed by hand is pinned, so the reset skipped all of them. Unpin one to release it.",
+      );
+      return;
+    }
+    applyCanvasEdit(
+      next,
+      "Handed this diagram back to the layout — every element that was not pinned lost its coordinates, and the boundary places them again.",
+    );
+  }, [doc, text, applyCanvasEdit, setAnnouncement]);
+
+  /* ---------------------------------------------------------------------- */
+  /* The dictionary: an order, not a position                              */
+  /* ---------------------------------------------------------------------- */
+
+  const handleReorderDictSection = useCallback(
+    (label: string, direction: "earlier" | "later") => {
+      const next = reorderedDictSectionEdit(doc, text, label, direction);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Moved the ${label} section ${direction} — the section and every field in it moved together, and the source text follows.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReorderDictField = useCallback(
+    (
+      sectionLabel: string,
+      fieldName: string,
+      direction: "earlier" | "later",
+    ) => {
+      const next = reorderedDictFieldEdit(
+        doc,
+        text,
+        sectionLabel,
+        fieldName,
+        direction,
+      );
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Moved ${fieldName} ${direction} within ${sectionLabel} — the source text follows.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const erEdit = useMemo<PlacementEditHandlers | undefined>(
+    () =>
+      erEditable
+        ? {
+            onMove: handleMoveErEntity,
+            onPin: handlePinErEntity,
+            onRelease: handleReleaseErEntity,
+            onReleaseAll: handleReleaseErPositions,
+          }
+        : undefined,
+    [
+      erEditable,
+      handleMoveErEntity,
+      handlePinErEntity,
+      handleReleaseErEntity,
+      handleReleaseErPositions,
+    ],
+  );
+
+  const usecaseEdit = useMemo<PlacementEditHandlers | undefined>(
+    () =>
+      usecaseEditable
+        ? {
+            onMove: handleMoveUseCaseElement,
+            onPin: handlePinUseCaseElement,
+            onRelease: handleReleaseUseCaseElement,
+            onReleaseAll: handleReleaseUseCasePositions,
+          }
+        : undefined,
+    [
+      usecaseEditable,
+      handleMoveUseCaseElement,
+      handlePinUseCaseElement,
+      handleReleaseUseCaseElement,
+      handleReleaseUseCasePositions,
+    ],
+  );
+
+  const dictEdit = useMemo<DictEditHandlers | undefined>(
+    () =>
+      dictEditable
+        ? {
+            onReorderSection: handleReorderDictSection,
+            onReorderField: handleReorderDictField,
+            reorderRefusal: dictReorderRefusal,
+          }
+        : undefined,
+    [dictEditable, handleReorderDictSection, handleReorderDictField],
+  );
+
   const flowchartEdit = useMemo<FlowchartEditHandlers | undefined>(
     () =>
       flowchartEditable
@@ -1324,6 +1611,9 @@ export function useCanvasEditing({
     canvasEdit,
     sequenceEdit,
     flowchartEdit,
+    erEdit,
+    usecaseEdit,
+    dictEdit,
     applyDirection,
     clearDirection,
     resetLayerPositions,
