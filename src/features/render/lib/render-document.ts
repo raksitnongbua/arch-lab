@@ -32,20 +32,26 @@
  *     exotic CSS colour the grammar also accepts degrades to the role palette
  *     rather than throwing.
  *
- * ONE KIND THIS CANNOT DRAW — `sequence`, refused by name in
- * {@link SERVER_REFUSALS} rather than allowed to fail somewhere deeper.
- * `renderSequenceSvg` takes a live `SVGSVGElement` and clones the canvas, by
- * explicit design in its own header; there is no model-to-string builder for
- * it in the repo.
+ * EVERY KIND DRAWS. There is no refusal list any more, and the two that
+ * used to be on it are worth keeping written down, because both were about a
+ * browser dependency rather than about the notation:
  *
- * C4 USED TO BE REFUSED HERE TOO, for two reasons worth keeping written down,
- * because both were about a browser dependency rather than the notation. Its
- * connector geometry came from `getBezierPath`, a client-only export of
- * `@xyflow/react`, so `edge-geometry.ts` threw the moment it was reached from
- * a route; the curve is now `lib/bezier-path.ts`, the same arithmetic pinned
- * to React Flow's by `check:bezier-path`. And its icons needed a React
- * renderer; they now come from the generated table above. C4 draws, with its
- * marks.
+ *   - **C4** took its connector geometry from `getBezierPath`, a client-only
+ *     export of `@xyflow/react`, so `edge-geometry.ts` threw the moment it
+ *     was reached from a route; the curve is now `lib/bezier-path.ts`, the
+ *     same arithmetic pinned to React Flow's by `check:bezier-path`. Its
+ *     icons needed a React renderer and now come from the generated table
+ *     above.
+ *   - **Sequence** had no model-to-string builder at all: `renderSequenceSvg`
+ *     takes a live `SVGSVGElement` and clones the canvas, by explicit design
+ *     in its own header. It still does, for the download. The route calls
+ *     `renderSequenceFileSvg` instead — a second renderer this notation
+ *     argued against having, whose whole cost is drift and whose drift is
+ *     pinned by `check:sequence-render`. Its own header carries the trade.
+ *
+ * A notation added after this one is expected to arrive with a from-model
+ * builder rather than a refusal; a refusal here is a diagram a reader cannot
+ * put in a README, which is most of what the route is for.
  *
  * AND A BACKSTOP UNDER ALL OF THEM. Every builder runs inside a `try`, because
  * this route is reached by a URL a stranger composed and a 500 with an empty
@@ -57,8 +63,10 @@ import { parseViewSource } from "@/features/playground/input/parse";
 import { exportPaletteFor } from "@/features/viewer/export/palette.generated";
 import { embeddedIconSvgServer } from "@/features/viewer/export/icon-markup";
 import { renderDiagramSvg } from "@/features/viewer/export/render-svg";
+import { resolveExportGround } from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 import { renderFlowchartSvg } from "@/features/flowchart/export/render-svg";
+import { renderSequenceFileSvg } from "@/features/sequence/export/render-file-svg";
 import { renderUseCaseSvg } from "@/features/usecase/export/render-svg";
 import { renderErSvg } from "@/features/er/export/render-svg";
 import { renderDictSvg } from "@/features/dict/export/render-svg";
@@ -71,17 +79,11 @@ import { describeError } from "@/lib/errors";
 import { tagPaint } from "@/lib/tag-paint";
 import type { Theme } from "@/lib/constants";
 import type { IconStyle } from "@/lib/icon-style";
-
-/**
- * The kinds a route handler cannot draw, and why — in the reader's terms, not
- * the dependency's. Each sentence has to survive being read by someone who
- * pasted a link into a README and got a card back, so it says what they can do
- * instead rather than naming a module.
- */
-const SERVER_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
-  sequence:
-    "sequence diagrams cannot be drawn as an image yet — their renderer reads the live canvas rather than the model. The share link opens this one in full, with its motion.",
-};
+import {
+  framingPadding,
+  reframeSvg,
+  type DiagramFraming,
+} from "@/lib/diagram-framing";
 
 /**
  * Asked for a diagram this model does not hold. Thrown rather than returned
@@ -107,8 +109,14 @@ export interface RenderRequest {
   /** Which diagram of a C4 model to draw; the root when absent. */
   diagramId: string | null;
   theme: Theme;
-  /** One ink or two. Only the C4 drawing carries stack icons. */
+  /** One ink or two. C4 nodes and sequence participants carry stack icons. */
   iconStyle: IconStyle;
+  /**
+   * How much sheet around the drawing — the ordinary margin, a hairline, or
+   * a fixed rectangle. See `lib/diagram-framing.ts`, including why `trim`
+   * reaches C4 only.
+   */
+  framing: DiagramFraming;
 }
 
 /**
@@ -135,15 +143,25 @@ export function renderDocument(request: RenderRequest): RenderOutcome {
   }
 
   const document_ = parsed.value;
-  const refusal = SERVER_REFUSALS[document_.kind];
-  if (refusal !== undefined) return { status: "error", message: refusal };
-
   const theme = exportPaletteFor(request.theme);
 
   try {
+    /* THE ASPECT PRESETS ARE APPLIED HERE, once, rather than in nine
+       builders: expanding a finished viewBox to a ratio needs to know
+       nothing about the notation. `trim` is the half that cannot work this
+       way and is threaded into the builder that has a margin to drop. */
     return {
       status: "ok",
-      rendered: draw(document_, theme, request),
+      rendered: reframeSvg(
+        draw(document_, theme, request),
+        request.framing,
+        theme.canvas,
+        /* The same empty pair every builder here already gets — there is no
+           document to read a sheet from. Passed rather than omitted so a
+           server that one day HAS a ground relays it over the band too,
+           instead of quietly leaving the letterbox unruled. */
+        resolveExportGround(),
+      ),
     };
   } catch (error) {
     /* A diagram id the reader asked for and this model does not have is a BAD
@@ -171,9 +189,13 @@ function draw(
 ): RenderedSvg {
   switch (document_.kind) {
     case "sequence":
-      /* Refused above, by name. Reaching here means SERVER_REFUSALS and this
-         switch disagree, which is a defect rather than a bad request. */
-      throw new Error(`${document_.kind} is refused, not drawn`);
+      /* Icons go through the same seam C4 uses. A participant and a container
+         are usually the same system drawn twice, so they share one registry
+         and one embedder rather than growing a second vocabulary. */
+      return renderSequenceFileSvg(document_.file, theme, {
+        embedIcon: embeddedIconSvgServer,
+        iconStyle: request.iconStyle,
+      });
     case "c4": {
       const file = document_.synced.file;
       const wanted = request.diagramId ?? file.rootDiagramId;
@@ -189,6 +211,12 @@ function draw(
         iconStyle: request.iconStyle,
         tagColors: file.metadata.tagColors,
         paintForTagColor: paintForTagColor(theme),
+        /* THE ONLY BUILDER THAT TAKES A MARGIN, because it is the only one
+           whose margin is a margin: the other eight bake theirs into layout,
+           where removing it would move every coordinate rather than crop the
+           sheet. `f=trim` on one of those therefore draws the ordinary frame
+           — stated on the parameter rather than left to be discovered. */
+        padding: framingPadding(request.framing),
       });
     }
     case "flowchart":

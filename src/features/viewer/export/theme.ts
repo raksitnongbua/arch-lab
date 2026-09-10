@@ -13,7 +13,11 @@
  * values; components everywhere else stay on semantic tokens.
  */
 
+// `tagFillCss` alongside the role type, from the same module: the sequence
+// card fill IS a tag fill applied to a lane hue, and re-typing that
+// relative-colour expression here would let the export drift from the card.
 import type { NodeColorRole } from "@/features/editor/lib/node-colors";
+import { tagFillCss } from "@/features/editor/lib/node-colors";
 // Cross-feature on purpose, the inverse of the flowchart exporter's import
 // of this module: FLOW_SHAPE_TOKENS is the ONE shape→token table, and
 // restating the token names here would let the resolved palette drift from
@@ -58,6 +62,15 @@ export interface ExportTheme {
    * axis heavier than the one the reader saw.
    */
   canvasGrid: string;
+  /**
+   * `--secondary` / `--secondary-foreground` / `--border` — an activation
+   * bar, a fragment chip and the outline around it. Added for the sequence
+   * exporter; nothing before it painted scaffolding that was neither a node
+   * nor a connector.
+   */
+  secondary: string;
+  secondaryForeground: string;
+  border: string;
   /** The gantt's critical-path cap. Aliases `--primary` in every theme but
    * `pastel`, where the cap's 3:1-against-four-state-fills requirement and the
    * brand colour disagree. Resolved, never assumed to equal `primary`. */
@@ -99,7 +112,54 @@ export interface ExportTheme {
    * server needs that and why it does not replace {@link resolveTagPaint}.
    */
   tagFill: { lightness: number; chromaCap: number };
+  /**
+   * The sequence notation's own palette — the first exporter to need a
+   * per-participant colour LANE rather than a per-role fill.
+   *
+   * Its four lane values are DERIVED, not tokens: on screen the card fill is
+   * `tagFillCss(var(--seq-lane-N))` (a relative-colour expression) and the
+   * gradient stops and the message stroke are `color-mix()`es over it. Every
+   * one of those is resolved here, so a builder paints strings and owns no
+   * colour recipe that could drift from the stylesheet.
+   */
+  seq: SequenceExportPalette;
 }
+
+/** One participant lane, and the chrome the screen derives from it. */
+export interface SequenceLanePaint {
+  /** `--seq-lane-N` itself: the card border, the lifeline, the actor glyph. */
+  lane: string;
+  /** The card's flat fill — the lane hue at the theme's audited tag pins. */
+  cardFill: string;
+  /** The card gradient's lit stop (toward `--background`). */
+  cardTop: string;
+  /** Its grounded stop (leaning back into the lane). */
+  cardBottom: string;
+  /** A message stroke at this end of the ramp: the lane muted toward `--edge`. */
+  line: string;
+}
+
+export interface SequenceExportPalette {
+  /** Five lanes, in the order `LaidParticipant.lane` numbers them (1-based). */
+  lanes: readonly SequenceLanePaint[];
+  /** The dog-eared note's warning wash, and the ink around it. */
+  noteFill: string;
+  noteStroke: string;
+}
+
+/**
+ * The lane tokens, and the two expressions the screen derives a card and a
+ * line from. Kept beside the interface because the generator mirrors this
+ * list (see the duplication note in `scripts/gen-export-palette.mjs`) and the
+ * browser path below is the other half of the same pair.
+ */
+const SEQ_LANE_VARS = [
+  "--seq-lane-1",
+  "--seq-lane-2",
+  "--seq-lane-3",
+  "--seq-lane-4",
+  "--seq-lane-5",
+] as const;
 
 const TOKEN_VARS = {
   canvas: "--canvas",
@@ -118,6 +178,9 @@ const TOKEN_VARS = {
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
   roleTextureInk: "--role-texture-ink",
+  secondary: "--secondary",
+  secondaryForeground: "--secondary-foreground",
+  border: "--border",
 } as const;
 
 const ROLE_TOKEN_VARS: Record<NodeColorRole, { fill: string; border: string }> =
@@ -185,9 +248,14 @@ export function resolveExportTheme(): ExportTheme {
    * and reading `color` back always yields a plain resolved `rgb(…)`, because
    * that is a real used value rather than a custom property's token stream.
    */
-  const resolveExpression = (variable: string, fallback: string): string => {
+  /* IT TAKES A COLOUR VALUE, NOT A TOKEN NAME. It read a name until the
+     sequence palette arrived, whose entries are expressions in their own
+     right — a relative colour, a mix of a mix — with no custom property to
+     point at. A caller resolving a plain token passes `var(--x)`, which is
+     what the old signature built for it anyway. */
+  const resolveExpression = (value: string, fallback: string): string => {
     const probe = document.createElement("span");
-    probe.style.cssText = `position:absolute;visibility:hidden;color:var(${variable})`;
+    probe.style.cssText = `position:absolute;visibility:hidden;color:${value}`;
     document.body.append(probe);
     try {
       const used = getComputedStyle(probe).color;
@@ -237,7 +305,7 @@ export function resolveExportTheme(): ExportTheme {
 
   return {
     roleTexture: {
-      ink: resolveExpression(TOKEN_VARS.roleTextureInk, nodeBorder),
+      ink: resolveExpression(`var(${TOKEN_VARS.roleTextureInk})`, nodeBorder),
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
     },
     tagFill: {
@@ -260,14 +328,14 @@ export function resolveExportTheme(): ExportTheme {
     // themes — never to a literal, so a browser that cannot resolve the token
     // still exports a cap in the brand colour rather than a stray indigo.
     criticalCap: resolveExpression(
-      TOKEN_VARS.criticalCap,
+      `var(${TOKEN_VARS.criticalCap})`,
       resolve(TOKEN_VARS.primary, "#4f46e5"),
     ),
     accent: resolve(TOKEN_VARS.accent, "#22b8cf"),
     destructive: resolve(TOKEN_VARS.destructive, "#e5484d"),
     destructiveForeground: resolve(TOKEN_VARS.destructiveForeground, "#ffffff"),
     edgeDrift: resolveExpression(
-      TOKEN_VARS.edgeDrift,
+      `var(${TOKEN_VARS.edgeDrift})`,
       resolve(TOKEN_VARS.edge, "#7d828f"),
     ),
     mutedForeground: resolve(TOKEN_VARS.mutedForeground, "#6a7080"),
@@ -293,6 +361,45 @@ export function resolveExportTheme(): ExportTheme {
       decision: flowShape("decision"),
       io: flowShape("io"),
       call: flowShape("call"),
+    },
+    secondary: resolve(TOKEN_VARS.secondary, "#eceef2"),
+    secondaryForeground: resolve(TOKEN_VARS.secondaryForeground, "#1f2430"),
+    border: resolve(TOKEN_VARS.border, "#d8dbe2"),
+    /* THE LANE CHROME, THROUGH THE PROBE. Every one of these five is an
+       expression rather than a token — a relative colour and three mixes —
+       and `resolveExpression` is exactly the path for that: painting it on a
+       hidden span and reading `color` back gives the engine's own answer,
+       which is the answer the reader is looking at. The generator does the
+       same arithmetic by hand for the server; this side never approximates. */
+    seq: {
+      lanes: SEQ_LANE_VARS.map((token) => {
+        const lane = resolve(token, nodeBorder);
+        const cardFill = resolveExpression(tagFillCss(`var(${token})`), node);
+        return {
+          lane,
+          cardFill,
+          cardTop: resolveExpression(
+            `color-mix(in oklch, ${cardFill} 88%, var(--background))`,
+            cardFill,
+          ),
+          cardBottom: resolveExpression(
+            `color-mix(in oklch, ${cardFill} 88%, var(${token}))`,
+            cardFill,
+          ),
+          line: resolveExpression(
+            `color-mix(in oklch, var(${token}) 55%, var(--edge))`,
+            resolve(TOKEN_VARS.edge, "#7d828f"),
+          ),
+        };
+      }),
+      noteFill: resolveExpression(
+        "color-mix(in oklab, var(--warning) 16%, var(--card))",
+        node,
+      ),
+      noteStroke: resolveExpression(
+        "color-mix(in oklab, var(--warning) 55%, var(--border))",
+        nodeBorder,
+      ),
     },
   };
 }

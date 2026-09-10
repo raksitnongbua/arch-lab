@@ -126,8 +126,13 @@ export function NodeContextMenu(): React.JSX.Element | null {
       }
       setContextMenu(null);
     };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    /* CAPTURED. A menu over the C4 canvas otherwise never hears the press
+       that should dismiss it: the canvas stops propagation on the
+       pointerdown that begins a pan or a marquee, so a bubble-phase
+       listener misses a click on empty canvas — the commonest dismissal
+       gesture there is. `ui/menu-dismissal.ts` carries the full note. */
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
 
   if (!open || node === null || diagram === null) return null;

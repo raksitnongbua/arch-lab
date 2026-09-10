@@ -23,8 +23,12 @@
  * NOTHING IS UPLOADED BY A LINK. The payload lives in the URL fragment, which
  * browsers never send to a server — the copy in the link is the only copy.
  * Expiring links send a SHA-256 digest to the signing endpoint, never the flow
- * (see `viewer/share/signature.ts`). COPY MARKDOWN IS THE EXCEPTION, and this
- * wrapper refuses it anyway: see `SEQUENCE_MARKDOWN_REFUSAL` below.
+ * (see `viewer/share/signature.ts`). COPY MARKDOWN IS THE EXCEPTION, and it
+ * applies here like everywhere else: this wrapper used to pass a refusal,
+ * because `/api/render` could not draw a sequence document at all. It can
+ * now (`sequence/export/render-file-svg.ts`), so the prop is gone rather
+ * than left passing an empty string — a refusal nobody can trigger is a
+ * sentence that will one day be wrong.
  */
 
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
@@ -41,21 +45,6 @@ import { ShareButton } from "@/features/viewer/share/share-button";
  * against the long route before this alias existed still open unchanged.
  */
 const SHARE_ROUTE = "/live";
-
-/**
- * Why a sequence document has no Copy Markdown, in the sharer's terms.
- *
- * `/api/render` draws every other notation from its model, but this one's
- * exporter reads the LIVE CANVAS and clones it — a deliberate choice argued in
- * `sequence/export/render-svg.ts`, and the reason there is no model-to-string
- * builder for it to call. So the refusal names the notation's own situation
- * and points at what does work, which is the contract every refusal in this
- * codebase owes: never "not supported", never "coming soon".
- */
-const SEQUENCE_MARKDOWN_REFUSAL =
-  "a sequence diagram is drawn from the canvas rather than from the model, so " +
-  "there is nothing for the image route to draw yet. Copy the link instead — " +
-  "it opens the flow in full, with its motion.";
 
 export function SequenceShareButton({
   /** The document to pack — the pane's current text, verbatim. */
@@ -87,7 +76,6 @@ export function SequenceShareButton({
          the C4 exporter has always used from its own footer. */
       panelSide="up"
       downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
-      markdownRefusal={SEQUENCE_MARKDOWN_REFUSAL}
       onAnnounce={onAnnounce}
     />
   );

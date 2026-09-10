@@ -3,7 +3,7 @@
  *
  * ONE LINE, TWO DESTINATIONS:
  *
- *   [![<title>](<origin>/api/render?m=…&t=…&i=…)](<the share link>)
+ *   [![<title>](<origin>/api/render?m=…&t=…&i=…[&f=…])](<the share link>)
  *
  * The image is `/api/render` drawing the document on the server, so the
  * picture in that page is the one arch-lab draws — its theme, its role
@@ -33,6 +33,10 @@
 
 import type { Theme } from "@/lib/constants";
 import type { IconStyle } from "@/lib/icon-style";
+import {
+  DEFAULT_DIAGRAM_FRAMING,
+  type DiagramFraming,
+} from "@/lib/diagram-framing";
 
 /** Where `/api/render` lives, and what it should draw. */
 export interface RenderMarkdownInput {
@@ -49,6 +53,15 @@ export interface RenderMarkdownInput {
   theme: Theme;
   /** The reader's current icon style, for the same reason. */
   iconStyle: IconStyle;
+  /**
+   * The frame the image is drawn in.
+   *
+   * UNLIKE THE THEME AND THE ICON STYLE, this is not read off the screen —
+   * there is no framing on the canvas to mirror. It is a choice about the
+   * IMAGE, made in the panel beside the button that mints it, which is why
+   * the panel offers a control for it and offers none for the other two.
+   */
+  framing: DiagramFraming;
   /** Becomes the image's alt text. */
   title: string;
 }
@@ -72,10 +85,22 @@ function altFor(title: string): string {
  * minting the expiry — happened when the link was built.
  */
 export function buildRenderMarkdown(input: RenderMarkdownInput): string {
+  /* OMITTED AT THE DEFAULT, unlike `t=` and `i=`. Those two always appear
+     because they pin what the reader was LOOKING at, and a URL that inherits
+     whatever the server defaults to would show a different picture the day a
+     default moves. A framing is not a state of the screen — nobody was
+     looking at a 16:9 diagram — so `fit` is genuinely "unspecified", and
+     spelling it out would put a parameter in every README line that means
+     nothing. */
+  const frame =
+    input.framing === DEFAULT_DIAGRAM_FRAMING
+      ? ""
+      : `&f=${encodeURIComponent(input.framing)}`;
   const renderUrl =
     `${input.origin}/api/render?${input.fragment}` +
     `&t=${encodeURIComponent(input.theme)}` +
-    `&i=${encodeURIComponent(input.iconStyle)}`;
+    `&i=${encodeURIComponent(input.iconStyle)}` +
+    frame;
 
   return `[![${altFor(input.title)}](${renderUrl})](${input.shareUrl})\n`;
 }

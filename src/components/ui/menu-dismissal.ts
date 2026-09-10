@@ -15,7 +15,12 @@
  *     runs before the ladder's bubble-phase listener ever sees the event.
  *   - OUTSIDE `pointerdown` CLOSES, rather than `click`, so the menu is gone
  *     before the canvas beneath it reacts — otherwise dismissing the menu also
- *     pans the canvas or clears a selection.
+ *     pans the canvas or clears a selection. CAPTURED, for a reason that took
+ *     a bug report to find: the C4 canvas calls `stopPropagation()` on the
+ *     pointerdown that begins a pan or a marquee, so a bubble-phase listener
+ *     never hears the single most common "outside" press there is — a click
+ *     on the empty canvas. The menu stayed open, and the press it should have
+ *     been dismissed by panned the diagram instead.
  *   - One listener pair while open, none while closed.
  *
  * Deliberately dismissal ONLY: what the menu holds, where it opens (the zoom
@@ -46,10 +51,10 @@ export function useMenuDismissal(
       event.stopPropagation();
       close();
     };
-    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [open, close, wrapperRef]);

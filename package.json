@@ -75,6 +75,8 @@
     "check:sequence-collapse": "node scripts/sequence-collapse-check.mjs",
     "check:sequence-gif": "node scripts/sequence-gif-check.mjs",
     "check:sequence-export": "node scripts/sequence-export-check.mjs",
+    "check:sequence-render": "node scripts/sequence-render-check.mjs",
+    "check:diagram-framing": "node scripts/diagram-framing-check.mjs",
     "check:source-gutter": "node scripts/source-gutter-check.mjs",
     "check:syntax-docs": "node scripts/syntax-docs-check.mjs",
     "check:validate-samples": "node scripts/validate-samples-check.mjs",

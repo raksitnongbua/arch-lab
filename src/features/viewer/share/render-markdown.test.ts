@@ -8,6 +8,7 @@ const BASE = {
   shareUrl: "https://arch-lab.example/live#m=AF1.abc123",
   theme: "blueprint" as const,
   iconStyle: "colour" as const,
+  framing: "fit" as const,
   title: "Notification Email Platform",
 };
 
@@ -68,5 +69,34 @@ describe("buildRenderMarkdown", () => {
       origin: "http://localhost:3000",
     });
     expect(markdown).toContain("(http://localhost:3000/api/render?");
+  });
+});
+
+/**
+ * THE FRAME IS THE ONE PARAMETER THAT CAN BE ABSENT, and the pair below is
+ * why the asymmetry is deliberate rather than an oversight. `t=` and `i=`
+ * pin what the sharer was LOOKING at, so they are always written — a URL
+ * that inherited the server's defaults would show a different picture the
+ * day a default moves. A framing is not a state of the screen, so `fit`
+ * means "unspecified" and writing it out would put a parameter that says
+ * nothing into every README line the product mints.
+ */
+describe("the image frame", () => {
+  it("writes nothing for the default frame", () => {
+    const markdown = buildRenderMarkdown(BASE);
+    expect(markdown).not.toContain("&f=");
+    expect(markdown).toContain("&i=colour)");
+  });
+
+  it("names a frame the sharer chose, after the theme and the icon style", () => {
+    expect(buildRenderMarkdown({ ...BASE, framing: "16x9" })).toContain(
+      "&t=blueprint&i=colour&f=16x9)",
+    );
+  });
+
+  it("carries trim too, which is a frame rather than a ratio", () => {
+    expect(buildRenderMarkdown({ ...BASE, framing: "trim" })).toContain(
+      "&f=trim)",
+    );
   });
 });

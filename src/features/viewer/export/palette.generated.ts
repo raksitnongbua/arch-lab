@@ -28,6 +28,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#fff8f6",
     "mutedForeground": "#666c78",
     "foreground": "#141822",
+    "secondary": "#eef0f4",
+    "secondaryForeground": "#242933",
+    "border": "#dbdee3",
     "edgeDrift": "#6675c8",
     "criticalCap": "#6963ec",
     "nodeMeta": "#4e5564",
@@ -84,6 +87,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.93,
       "chromaCap": 0.055
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#1baf7a",
+          "cardFill": "#c8f4dd",
+          "cardTop": "#caf5e7",
+          "cardBottom": "#b7ecd1",
+          "line": "#409aa7"
+        },
+        {
+          "lane": "#eb6834",
+          "cardFill": "#ffdccc",
+          "cardTop": "#ffded9",
+          "cardBottom": "#fecfba",
+          "line": "#b672a0"
+        },
+        {
+          "lane": "#2a78d6",
+          "cardFill": "#d0eaff",
+          "cardTop": "#d5ecff",
+          "cardBottom": "#bbddfa",
+          "line": "#597db6"
+        },
+        {
+          "lane": "#e87ba4",
+          "cardFill": "#ffd9e8",
+          "cardTop": "#fbddf0",
+          "cardBottom": "#fdcee0",
+          "line": "#a883b8"
+        },
+        {
+          "lane": "#4a3aa7",
+          "cardFill": "#e2e4ff",
+          "cardTop": "#e3e7ff",
+          "cardBottom": "#cdd0f5",
+          "line": "#55609f"
+        }
+      ],
+      "noteFill": "#fcf0e1",
+      "noteStroke": "#e2bc8a"
+    },
     "roleTexture": {
       "ink": "#83868e",
       "opacity": 0
@@ -101,6 +145,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#fff8f6",
     "mutedForeground": "#685f54",
     "foreground": "#2a1d15",
+    "secondary": "#f1ede5",
+    "secondaryForeground": "#30271f",
+    "border": "#d2cbc1",
     "edgeDrift": "#905029",
     "criticalCap": "#a63c0c",
     "nodeMeta": "#5d5348",
@@ -157,6 +204,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.942,
       "chromaCap": 0.055
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#1baf7a",
+          "cardFill": "#ccf8e1",
+          "cardTop": "#d5f7de",
+          "cardBottom": "#bbefd4",
+          "line": "#798646"
+        },
+        {
+          "lane": "#eb6834",
+          "cardFill": "#ffe0d0",
+          "cardTop": "#fee3d2",
+          "cardBottom": "#fed3bd",
+          "line": "#b16a3e"
+        },
+        {
+          "lane": "#2a78d6",
+          "cardFill": "#d4eeff",
+          "cardTop": "#d4f1fa",
+          "cardBottom": "#bde1fa",
+          "line": "#915889"
+        },
+        {
+          "lane": "#e87ba4",
+          "cardFill": "#ffddec",
+          "cardTop": "#ffdfe8",
+          "cardBottom": "#fdd1e4",
+          "line": "#b67168"
+        },
+        {
+          "lane": "#4a3aa7",
+          "cardFill": "#e6e8ff",
+          "cardTop": "#efe7fc",
+          "cardBottom": "#d1d3f5",
+          "line": "#813e64"
+        }
+      ],
+      "noteFill": "#fbedd9",
+      "noteStroke": "#ddb479"
+    },
     "roleTexture": {
       "ink": "#7a7064",
       "opacity": 0
@@ -174,6 +262,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#f2e4e4",
     "mutedForeground": "#565666",
     "foreground": "#262635",
+    "secondary": "#cdcde0",
+    "secondaryForeground": "#2b2b39",
+    "border": "#c2c2d5",
     "edgeDrift": "#6670a7",
     "criticalCap": "#4f5aac",
     "nodeMeta": "#4b4b5c",
@@ -230,6 +321,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.93,
       "chromaCap": 0.055
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#1baf7a",
+          "cardFill": "#c8f4dd",
+          "cardTop": "#c3f2e5",
+          "cardBottom": "#b7ecd1",
+          "line": "#4198a9"
+        },
+        {
+          "lane": "#eb6834",
+          "cardFill": "#ffdccc",
+          "cardTop": "#fedad2",
+          "cardBottom": "#fecfba",
+          "line": "#b7709a"
+        },
+        {
+          "lane": "#2a78d6",
+          "cardFill": "#d0eaff",
+          "cardTop": "#d2e7fd",
+          "cardBottom": "#bbddfa",
+          "line": "#5d7ab5"
+        },
+        {
+          "lane": "#e87ba4",
+          "cardFill": "#ffd9e8",
+          "cardTop": "#fad9eb",
+          "cardBottom": "#fdcee0",
+          "line": "#aa81b3"
+        },
+        {
+          "lane": "#4a3aa7",
+          "cardFill": "#e2e4ff",
+          "cardTop": "#e1e2fc",
+          "cardBottom": "#cdd0f5",
+          "line": "#595d9d"
+        }
+      ],
+      "noteFill": "#dfd5d2",
+      "noteStroke": "#d4b189"
+    },
     "roleTexture": {
       "ink": "#7f7f8a",
       "opacity": 0
@@ -247,6 +379,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#fff8f6",
     "mutedForeground": "#666c78",
     "foreground": "#141822",
+    "secondary": "rgba(227, 232, 240, 0.6)",
+    "secondaryForeground": "#242933",
+    "border": "rgba(128, 134, 147, 0.28)",
     "edgeDrift": "#6675c8",
     "criticalCap": "#6963ec",
     "nodeMeta": "#4e5564",
@@ -303,6 +438,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.93,
       "chromaCap": 0.055
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#1baf7a",
+          "cardFill": "#c8f4dd",
+          "cardTop": "#c8f4e6",
+          "cardBottom": "#b7ecd1",
+          "line": "#409aa7"
+        },
+        {
+          "lane": "#eb6834",
+          "cardFill": "#ffdccc",
+          "cardTop": "#ffdcd7",
+          "cardBottom": "#fecfba",
+          "line": "#b672a0"
+        },
+        {
+          "lane": "#2a78d6",
+          "cardFill": "#d0eaff",
+          "cardTop": "#d4ebfe",
+          "cardBottom": "#bbddfa",
+          "line": "#597db6"
+        },
+        {
+          "lane": "#e87ba4",
+          "cardFill": "#ffd9e8",
+          "cardTop": "#fbdcef",
+          "cardBottom": "#fdcee0",
+          "line": "#a883b8"
+        },
+        {
+          "lane": "#4a3aa7",
+          "cardFill": "#e2e4ff",
+          "cardTop": "#e2e6ff",
+          "cardBottom": "#cdd0f5",
+          "line": "#55609f"
+        }
+      ],
+      "noteFill": "rgba(252, 240, 225, 0.622)",
+      "noteStroke": "rgba(184, 149, 104, 0.676)"
+    },
     "roleTexture": {
       "ink": "#83868e",
       "opacity": 0
@@ -320,6 +496,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#180807",
     "mutedForeground": "#a2a4ac",
     "foreground": "#f0f2f5",
+    "secondary": "#34363d",
+    "secondaryForeground": "#eaebef",
+    "border": "#3f4147",
     "edgeDrift": "#858bdb",
     "criticalCap": "#8f81ff",
     "nodeMeta": "#b7bac2",
@@ -376,6 +555,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.33,
       "chromaCap": 0.06
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#199e70",
+          "cardFill": "#113f2c",
+          "cardTop": "#093b31",
+          "cardBottom": "#134a34",
+          "line": "#4d96a4"
+        },
+        {
+          "lane": "#d95926",
+          "cardFill": "#4f2a1d",
+          "cardTop": "#4a2725",
+          "cardBottom": "#5e301f",
+          "line": "#b3719b"
+        },
+        {
+          "lane": "#3987e5",
+          "cardFill": "#1f3654",
+          "cardTop": "#20334e",
+          "cardBottom": "#233f64",
+          "line": "#6b8ac3"
+        },
+        {
+          "lane": "#d55181",
+          "cardFill": "#4e2734",
+          "cardTop": "#472637",
+          "cardBottom": "#5d2c3d",
+          "line": "#a576af"
+        },
+        {
+          "lane": "#9085e9",
+          "cardFill": "#333053",
+          "cardTop": "#2f2e4d",
+          "cardBottom": "#3d3963",
+          "line": "#878cc5"
+        }
+      ],
+      "noteFill": "#443e37",
+      "noteStroke": "#9f814e"
+    },
     "roleTexture": {
       "ink": "#757983",
       "opacity": 0
@@ -393,6 +613,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#180807",
     "mutedForeground": "#a1a4b0",
     "foreground": "#f0f1f6",
+    "secondary": "#1a1c26",
+    "secondaryForeground": "#eaebef",
+    "border": "#262832",
     "edgeDrift": "#8487da",
     "criticalCap": "#8f81ff",
     "nodeMeta": "#b6bac8",
@@ -449,6 +672,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.275,
       "chromaCap": 0.06
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#199e70",
+          "cardFill": "#00311f",
+          "cardTop": "#0f260e",
+          "cardBottom": "#013d28",
+          "line": "#4693a3"
+        },
+        {
+          "lane": "#d95926",
+          "cardFill": "#401c0f",
+          "cardTop": "#35150d",
+          "cardBottom": "#512312",
+          "line": "#b26c96"
+        },
+        {
+          "lane": "#3987e5",
+          "cardFill": "#112844",
+          "cardTop": "#141e38",
+          "cardBottom": "#153255",
+          "line": "#6885c2"
+        },
+        {
+          "lane": "#d55181",
+          "cardFill": "#3f1a26",
+          "cardTop": "#34141e",
+          "cardBottom": "#4f2030",
+          "line": "#a471ab"
+        },
+        {
+          "lane": "#9085e9",
+          "cardFill": "#262243",
+          "cardTop": "#221a36",
+          "cardBottom": "#312d55",
+          "line": "#8588c4"
+        }
+      ],
+      "noteFill": "#2c2622",
+      "noteStroke": "#927444"
+    },
     "roleTexture": {
       "ink": "#676b7a",
       "opacity": 0
@@ -466,6 +730,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#180807",
     "mutedForeground": "#d7d7d7",
     "foreground": "#ffffff",
+    "secondary": "#1b1b1b",
+    "secondaryForeground": "#ffffff",
+    "border": "#a2a4ab",
     "edgeDrift": "#b3b8ff",
     "criticalCap": "#baafff",
     "nodeMeta": "#dcdee5",
@@ -522,6 +789,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.2,
       "chromaCap": 0.06
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#199e70",
+          "cardFill": "#001e0e",
+          "cardTop": "#091804",
+          "cardBottom": "#012b18",
+          "line": "#5facbd"
+        },
+        {
+          "lane": "#d95926",
+          "cardFill": "#2b0901",
+          "cardTop": "#240703",
+          "cardBottom": "#3d1103",
+          "line": "#cd84af"
+        },
+        {
+          "lane": "#3987e5",
+          "cardFill": "#021630",
+          "cardTop": "#081029",
+          "cardBottom": "#052243",
+          "line": "#809edc"
+        },
+        {
+          "lane": "#d55181",
+          "cardFill": "#2a0714",
+          "cardTop": "#230610",
+          "cardBottom": "#3c0e1f",
+          "line": "#be89c5"
+        },
+        {
+          "lane": "#9085e9",
+          "cardFill": "#15102f",
+          "cardTop": "#140c26",
+          "cardBottom": "#221c42",
+          "line": "#9da1de"
+        }
+      ],
+      "noteFill": "#261f13",
+      "noteStroke": "#dfbe8a"
+    },
     "roleTexture": {
       "ink": "#cdd0df",
       "opacity": 0
@@ -539,6 +847,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#180807",
     "mutedForeground": "#a9b9ca",
     "foreground": "#eff6fd",
+    "secondary": "#223f5c",
+    "secondaryForeground": "#e9eff6",
+    "border": "#2d4a68",
     "edgeDrift": "#8298e8",
     "criticalCap": "#9c92ff",
     "nodeMeta": "#b2bfce",
@@ -595,6 +906,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
       "lightness": 0.33,
       "chromaCap": 0.06
     },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#199e70",
+          "cardFill": "#113f2c",
+          "cardTop": "#023d30",
+          "cardBottom": "#134a34",
+          "line": "#399ca3"
+        },
+        {
+          "lane": "#d95926",
+          "cardFill": "#4f2a1d",
+          "cardTop": "#4e2625",
+          "cardBottom": "#5e301f",
+          "line": "#b570aa"
+        },
+        {
+          "lane": "#3987e5",
+          "cardFill": "#1f3654",
+          "cardTop": "#1c3452",
+          "cardBottom": "#233f64",
+          "line": "#598fcc"
+        },
+        {
+          "lane": "#d55181",
+          "cardFill": "#4e2734",
+          "cardTop": "#492539",
+          "cardBottom": "#5d2c3d",
+          "line": "#a277bf"
+        },
+        {
+          "lane": "#9085e9",
+          "cardFill": "#333053",
+          "cardTop": "#2e2f51",
+          "cardBottom": "#3d3963",
+          "line": "#7c90d2"
+        }
+      ],
+      "noteFill": "#384753",
+      "noteStroke": "#9c8b66"
+    },
     "roleTexture": {
       "ink": "#6c839b",
       "opacity": 0
@@ -612,6 +964,9 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "destructiveForeground": "#fafafa",
     "mutedForeground": "#585858",
     "foreground": "#161616",
+    "secondary": "#e6e6e6",
+    "secondaryForeground": "#292929",
+    "border": "#d4d4d4",
     "edgeDrift": "#585858",
     "criticalCap": "#4d4d4d",
     "nodeMeta": "#3c3c3c",
@@ -667,6 +1022,47 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "tagFill": {
       "lightness": 0.93,
       "chromaCap": 0.055
+    },
+    "seq": {
+      "lanes": [
+        {
+          "lane": "#292929",
+          "cardFill": "#e8e8e8",
+          "cardTop": "#e9e9e9",
+          "cardBottom": "#cfcfcf",
+          "line": "#444444"
+        },
+        {
+          "lane": "#424242",
+          "cardFill": "#e8e8e8",
+          "cardTop": "#e9e9e9",
+          "cardBottom": "#d2d2d2",
+          "line": "#535353"
+        },
+        {
+          "lane": "#5d5d5d",
+          "cardFill": "#e8e8e8",
+          "cardTop": "#e9e9e9",
+          "cardBottom": "#d6d6d6",
+          "line": "#626262"
+        },
+        {
+          "lane": "#7a7a7a",
+          "cardFill": "#e8e8e8",
+          "cardTop": "#e9e9e9",
+          "cardBottom": "#dadada",
+          "line": "#727272"
+        },
+        {
+          "lane": "#989898",
+          "cardFill": "#e8e8e8",
+          "cardTop": "#e9e9e9",
+          "cardBottom": "#dedede",
+          "line": "#828282"
+        }
+      ],
+      "noteFill": "#e9e9e9",
+      "noteStroke": "#a8a8a8"
     },
     "roleTexture": {
       "ink": "#4d4d4d",

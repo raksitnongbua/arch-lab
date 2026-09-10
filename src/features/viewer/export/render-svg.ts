@@ -76,6 +76,12 @@ import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The sheet the drawing sits on — the margin between the picture and the
+ * edge of the file. Overridable per export, because `trim` means exactly
+ * "this number is zero": see `lib/diagram-framing.ts` for why removing the
+ * margin is the one part of framing a renderer has to do itself.
+ */
 const PADDING = 56;
 /** Vertical room above the diagram for the title block. */
 const HEADER_HEIGHT = 64;
@@ -980,6 +986,13 @@ export interface RenderDiagramOptions {
    * make the choice rather than inherit a wrong one.
    */
   embedIcon: EmbedIcon;
+  /**
+   * The outer margin, when the caller wants one other than {@link PADDING}.
+   * `framingPadding()` is what produces it; passing the number rather than
+   * the framing name keeps this renderer ignorant of the aspect presets,
+   * which are applied to its output rather than computed inside it.
+   */
+  padding?: number;
 }
 
 /**
@@ -1042,13 +1055,25 @@ export function renderDiagramSvg(
       ? diagramWidth
       : Math.max(diagramWidth, legend.minContentWidth);
 
-  const width = Math.ceil(contentWidth + PADDING * 2);
+  /* The margin, which `trim` shrinks. Everything below measures from it
+     rather than from the constant, so one number moves the whole sheet. */
+  const pad = options.padding ?? PADDING;
+  const width = Math.ceil(contentWidth + pad * 2);
   const height = Math.ceil(
-    maxY - minY + PADDING * 2 + HEADER_HEIGHT + (legend?.height ?? 0),
+    maxY - minY + pad * 2 + HEADER_HEIGHT + (legend?.height ?? 0),
   );
-  const translateX = PADDING - minX;
-  const translateY = PADDING + HEADER_HEIGHT - minY;
-  const legendTop = PADDING + HEADER_HEIGHT + (maxY - minY) + LEGEND_GAP_ABOVE;
+  const translateX = pad - minX;
+  const translateY = pad + HEADER_HEIGHT - minY;
+  const legendTop = pad + HEADER_HEIGHT + (maxY - minY) + LEGEND_GAP_ABOVE;
+  /* THE TITLE BLOCK HANGS ABOVE THE DRAWING, INSIDE THE TOP MARGIN — its two
+     baselines were written as `PADDING - 22` and `PADDING - 2` back when the
+     margin was a constant, which puts them at NEGATIVE y the moment the
+     margin shrinks: a trimmed export lost its heading off the top edge
+     entirely. The floors are what the `HEADER_HEIGHT` band has room for, so
+     at the ordinary margin these still evaluate to 34 and 54 and every
+     existing export is byte-identical. */
+  const headingY = Math.max(pad - 22, 16);
+  const subtitleY = Math.max(pad - 2, 36);
 
   // The root diagram's title usually IS the model title — don't say it twice.
   const heading =
@@ -1175,12 +1200,12 @@ export function renderDiagramSvg(
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
     /* THE GROUND THE DRAWING WAS READ ON. Directly after the backdrop and
        before the heading, so it is under everything including the title block;
-       full-bleed over `PADDING`, because a sheet does not stop where the
+       full-bleed over the margin, because a sheet does not stop where the
        drawing stops. `export/ground.ts` records why this reverses an earlier
        decision to keep the ground out of every file. */
     ground.layers(0, 0, width, height) +
-    `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
-    `<text x="${PADDING}" y="${PADDING - 2}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
+    `<text x="${pad}" y="${headingY}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
+    `<text x="${pad}" y="${subtitleY}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
     `<g transform="translate(${fmt(translateX)} ${fmt(translateY)})">` +
     framesMarkup +
     edgeMarkup(diagram, theme, markerId) +
@@ -1190,7 +1215,7 @@ export function renderDiagramSvg(
     `</g>` +
     // Page furniture, not model space: emitted outside the transform so the
     // key keeps its own scale and left margin whatever the diagram's origin.
-    (legend !== null ? legendMarkup(legend, PADDING, legendTop, theme) : "") +
+    (legend !== null ? legendMarkup(legend, pad, legendTop, theme) : "") +
     `</svg>`;
 
   return { svg, width, height };

@@ -151,10 +151,15 @@ export function Header(): React.JSX.Element {
         menuButtonRef.current?.focus();
       }
     };
-    window.addEventListener("pointerdown", onPointerDown);
+    /* CAPTURED. A menu over the C4 canvas otherwise never hears the press
+       that should dismiss it: the canvas stops propagation on the
+       pointerdown that begins a pan or a marquee, so a bubble-phase
+       listener misses a click on empty canvas — the commonest dismissal
+       gesture there is. `ui/menu-dismissal.ts` carries the full note. */
+    window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [menuOpen]);

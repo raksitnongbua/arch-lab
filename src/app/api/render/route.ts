@@ -59,6 +59,7 @@ import {
 import { exportPaletteFor } from "@/features/viewer/export/palette.generated";
 import { DEFAULT_THEME_BY_SCHEME, THEMES, type Theme } from "@/lib/constants";
 import { DEFAULT_ICON_STYLE, type IconStyle } from "@/lib/icon-style";
+import { parseDiagramFraming } from "@/lib/diagram-framing";
 
 export const runtime = "nodejs";
 
@@ -88,11 +89,12 @@ function themeFrom(raw: string | null): Theme {
 /**
  * `?i=` — one ink or two, the canvas's own switch.
  *
- * IT WAS LEFT OUT WHILE C4 WAS REFUSED, because C4 is the only notation whose
- * drawing carries stack icons: accepting the parameter then would have meant
- * accepting it and ignoring it, which is worse than absent — a caller sets it,
- * sees no change, and cannot tell whether the style or the route was at fault.
- * C4 draws now, so the parameter means something and is read.
+ * IT WAS LEFT OUT WHILE C4 WAS REFUSED, because C4 was then the only notation
+ * whose drawing carried stack icons: accepting the parameter then would have
+ * meant accepting it and ignoring it, which is worse than absent — a caller
+ * sets it, sees no change, and cannot tell whether the style or the route was
+ * at fault. C4 draws now, and so does the sequence notation, whose
+ * participants wear marks from the same registry.
  *
  * An unknown value takes the default rather than refusing. The reader's own
  * preference is not in the document and not in the link (`lib/icon-style.ts`
@@ -200,6 +202,19 @@ export async function GET(request: Request): Promise<Response> {
     diagramId: decoded.diagramId,
     theme,
     iconStyle: iconStyleFrom(url.searchParams.get("i")),
+    /* `?f=` — how much sheet around the drawing: `fit` (the default, and
+       what a URL naming nothing gets), `trim`, or one of the fixed
+       rectangles `16x9`, `4x3`, `1x1`. Parsed by the vocabulary's own
+       parser rather than re-spelled here, and an unknown value takes the
+       default, the same rule the theme and the icon style follow above.
+
+       IT IS THE ONE PARAMETER THAT DOES LESS FOR SOME NOTATIONS, said out
+       loud rather than hidden: `trim` removes a renderer's outer MARGIN, and
+       only C4 has one that is a margin rather than layout, so `f=trim` draws
+       the ordinary frame for the other eight. The ratios apply to all nine.
+       Refusing the parameter outside C4 was the alternative, and it turns a
+       harmless request into a card where a picture should be. */
+    framing: parseDiagramFraming(url.searchParams.get("f")),
   });
 
   if (outcome.status === "error") {
