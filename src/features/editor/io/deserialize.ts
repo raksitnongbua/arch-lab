@@ -17,7 +17,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import { markPlacedByHand } from "@/types";
+import { markDiagramsPlacedByHand } from "@/types";
 import type { C4Diagram } from "@/types";
 import { describeError } from "@/lib/errors";
 import type { EditorModel } from "../state";
@@ -57,8 +57,12 @@ export function deserializeModel(text: string): EditorModel {
        `.alab` line does by omitting its token. So a layout direction cannot
        move anything in this pane until the coordinates are released, and the
        control has to say so. Marked with a symbol, which `serializeModel`
-       cannot see: the round trip above stays byte-identical. */
-    for (const node of diagram.nodes) markPlacedByHand(node);
+       cannot see: the round trip above stays byte-identical.
+
+       The same rule is re-applied on the client side of `/live/[modelId]`'s
+       server→client boundary, which a symbol does not survive — see
+       `markDiagramsPlacedByHand`. */
+    markDiagramsPlacedByHand([diagram]);
     diagrams[diagram.id] = diagram;
   }
 

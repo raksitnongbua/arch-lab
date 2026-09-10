@@ -652,3 +652,63 @@ export function markPlacedByHand<T extends object>(node: T): T {
   (node as Record<symbol, unknown>)[AUTHORED_GEOMETRY] = true;
   return node;
 }
+
+/**
+ * Every element of every one of these diagrams marked as carrying the
+ * source's own coordinates — the rule a JSON document obeys by construction,
+ * since `position` is required there and `validate.ts` refuses a node without
+ * one.
+ *
+ * TWO CALLERS, AND THE SECOND IS THE REASON THIS IS A FUNCTION. The JSON
+ * deserializer marks nodes as it assembles them. Then `/live/[modelId]` hands
+ * the finished model from a SERVER component to a client one — and a symbol
+ * key does not survive that crossing. React drops it (loudly, as "Objects
+ * with symbol properties like archlab.authoredGeometry are not supported"),
+ * so the client received nodes whose `placedByHand` was false and every
+ * bundled model's detail panel withheld the coordinates and the release row
+ * it should have offered. The invisibility that keeps this symbol off disk is
+ * the same invisibility that loses it here.
+ *
+ * SO THE CLIENT RE-DERIVES RATHER THAN THE SERVER SMUGGLING. The fact is
+ * derived at read time by design, and an RSC boundary is another read; the
+ * alternative — encoding it as a real field for the trip — would put it back
+ * in reach of the `!` escape and the JSON writer, which is what the symbol
+ * exists to avoid. `check:layout-reset` pins both halves.
+ */
+/**
+ * The same diagrams with plain elements — no `AUTHORED_GEOMETRY` on any node.
+ *
+ * FOR ONE CALLER: the server side of `/live/[modelId]`, which hands a model
+ * to a client component. React refuses to serialise an object carrying symbol
+ * keys and says so in the console; the fact is derived at read time anyway,
+ * so it is dropped on the way out and `markDiagramsPlacedByHand` re-derives
+ * it on the way in. Copying rather than deleting in place because the model
+ * this copies from is memoised and shared with `generateMetadata` and the MCP
+ * reader, neither of which asked for it to be stripped.
+ *
+ * A SPREAD IS NOT ENOUGH, which is the trap here: object spread copies
+ * enumerable own SYMBOL properties along with the string ones, so `{...node}`
+ * carries `AUTHORED_GEOMETRY` across untouched and the warning stays.
+ */
+export function withoutAuthoredGeometry(
+  diagrams: Readonly<Record<string, C4Diagram>>,
+): Record<string, C4Diagram> {
+  const out: Record<string, C4Diagram> = {};
+  for (const [id, diagram] of Object.entries(diagrams)) {
+    out[id] = {
+      ...diagram,
+      nodes: diagram.nodes.map((node) => {
+        const plain = { ...node };
+        delete plain[AUTHORED_GEOMETRY];
+        return plain;
+      }),
+    };
+  }
+  return out;
+}
+
+export function markDiagramsPlacedByHand(diagrams: Iterable<C4Diagram>): void {
+  for (const diagram of diagrams) {
+    for (const node of diagram.nodes) markPlacedByHand(node);
+  }
+}

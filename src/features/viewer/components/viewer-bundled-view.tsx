@@ -26,7 +26,9 @@
  * hydration correctness, and immersive arrives on the same frame.
  */
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+
+import { markDiagramsPlacedByHand } from "@/types";
 
 import type { ViewerModel } from "../lib/model";
 import { diagramIdFromHash, pathFromHash } from "../share/codec";
@@ -60,6 +62,20 @@ export function ViewerBundledView({
 }: {
   model: ViewerModel;
 }): React.JSX.Element {
+  /* THE SYMBOL DID NOT SURVIVE THE CROSSING. `deserializeModel` marks every
+     JSON element as carrying the source's own coordinates, and React drops
+     symbol-keyed properties when a server component hands an object to a
+     client one — so the model arrived here with `placedByHand` false on every
+     node, and the detail panel withheld the coordinates and the release row
+     for every bundled model. Re-derived rather than smuggled across as a
+     field: see `markDiagramsPlacedByHand` for why the fact stays a symbol.
+
+     Memoised on `model` for tidiness only. It is idempotent and the objects
+     are this request's own, so a repeated pass would cost nothing but a walk. */
+  useMemo(() => {
+    markDiagramsPlacedByHand(Object.values(model.diagrams));
+  }, [model]);
+
   const hash = useSyncExternalStore(subscribeToHash, readHash, readEmpty);
   const search = useSyncExternalStore(subscribeToHash, readSearch, readEmpty);
 

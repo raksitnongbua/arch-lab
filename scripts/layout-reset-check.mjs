@@ -186,7 +186,8 @@ const { parseViewSource } = await load(
   "src/features/playground/input/parse.ts",
 );
 const { resetLayerLabel } = await load("src/lib/prose.ts");
-const { placedByHand } = await load("src/types/c4.ts");
+const { placedByHand, markDiagramsPlacedByHand, withoutAuthoredGeometry } =
+  await load("src/types/c4.ts");
 const { deserializeModel } = await load(
   "src/features/editor/io/deserialize.ts",
 );
@@ -1618,6 +1619,118 @@ console.log("\nA coordinate that equals the default is still a coordinate");
     (menu.match(/scope === "layer" &&\s*\n?\s*placement !== null/g) ?? [])
       .length === 1,
     "a file-wide release row, or none at all",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 5. The mark survives the server → client boundary                        */
+/* ----------------------------------------------------------------------- */
+
+/* THE BUG THIS BOUGHT. `/live/[modelId]` loads a bundled model in a SERVER
+   component and hands it to a client one. React does not serialise
+   symbol-keyed properties across that boundary — it drops them and says so in
+   the console — so every node arrived on the client with `placedByHand`
+   false, and `viewer-canvas.tsx` built `placedAt: null` for all of them. The
+   detail panel then withheld the coordinates and the release row on every
+   bundled model, while the JSON those models are written in REQUIRES a
+   position on every element. Reported as a console error; the console error
+   was the smaller half.
+
+   The invisibility that keeps this annotation off disk (section 3) is the
+   same invisibility that loses it here, which is why both halves are pinned
+   in one file: a future change that makes the mark a plain field to "fix"
+   this would pass here and fail three assertions up. */
+
+console.log("\nThe placed-by-hand mark survives the server → client boundary");
+
+/* The boundary, simulated the way React does it: structured serialisation
+   drops symbol keys. Driven from the registry DIRECTORY rather than a
+   hand-named list, so a bundled model added later is covered without
+   anybody remembering to add it here — `codebase.md` §4. (Read off disk
+   rather than through `model-service.ts`, which imports its documents with
+   a bundler-only JSON import Node cannot follow.) */
+const crossBoundary = (model) => JSON.parse(JSON.stringify(model));
+
+const MODEL_DIR = "src/features/viewer/service/data";
+const modelFiles = readdirSync(path.join(ROOT, MODEL_DIR))
+  .filter((name) => name.endsWith(".archlab.json"))
+  .sort();
+
+check(
+  "the bundled-model registry directory is not empty",
+  modelFiles.length > 0,
+  "nothing below is being exercised",
+);
+
+for (const file of modelFiles) {
+  const id = file.replace(/\.archlab\.json$/, "");
+  /* Through the same reader the service uses, so what is measured is what
+     the route serves. */
+  const parsed = deserializeModel(read(`${MODEL_DIR}/${file}`));
+  const model = {
+    rootDiagramId: parsed.rootDiagramId,
+    diagrams: withoutAuthoredGeometry(parsed.diagrams),
+  };
+  const diagrams = Object.values(model.diagrams);
+  const nodes = diagrams.flatMap((diagram) => diagram.nodes);
+
+  /* The reader marked them; the stripper is what the assertion below is
+     actually about, so prove the mark was there to lose. */
+  check(
+    `${id}: the reader marks every element before the strip`,
+    Object.values(parsed.diagrams)
+      .flatMap((diagram) => diagram.nodes)
+      .every((node) => placedByHand(node)),
+    "deserializeModel stopped marking, so the strip proves nothing",
+  );
+
+  /* The server side must hand over PLAIN objects, or React logs
+     "Objects with symbol properties … are not supported" on every visit. */
+  check(
+    `${id}: the model the server passes carries no symbol keys`,
+    nodes.length > 0 &&
+      nodes.every((node) => Object.getOwnPropertySymbols(node).length === 0),
+    "a symbol-keyed property would make the model unserialisable",
+  );
+
+  /* And the client side must put the fact back, or the panel goes quiet. */
+  const arrived = crossBoundary(model);
+  const arrivedDiagrams = Object.values(arrived.diagrams);
+  check(
+    `${id}: nothing is placed by hand until the client re-derives`,
+    arrivedDiagrams.flatMap((d) => d.nodes).every((n) => !placedByHand(n)),
+    "the fixture is not exercising the drop this section exists for",
+  );
+  markDiagramsPlacedByHand(arrivedDiagrams);
+  const after = arrivedDiagrams.flatMap((d) => d.nodes);
+  check(
+    `${id}: every element is placed by hand once the client re-derives`,
+    after.length === nodes.length && after.every((node) => placedByHand(node)),
+    `${after.filter((node) => !placedByHand(node)).length} of ${after.length} unmarked`,
+  );
+}
+
+/* The two sides are one rule, so neither may be dropped on its own. A source
+   scan, because the wiring is the half the arithmetic above cannot see. */
+{
+  const service = read("src/features/viewer/service/model-service.ts");
+  const boundary = read(
+    "src/features/viewer/components/viewer-bundled-view.tsx",
+  );
+  check(
+    "the viewer service strips the mark before the model crosses",
+    /withoutAuthoredGeometry\(parsed\.diagrams\)/.test(service),
+    "model-service hands `parsed.diagrams` over with its symbols on",
+  );
+  check(
+    "the client boundary re-derives it on arrival",
+    /markDiagramsPlacedByHand\(/.test(boundary),
+    "viewer-bundled-view no longer restores the fact React dropped",
+  );
+  check(
+    "the stripper does not rely on a spread, which copies symbols",
+    /delete plain\[AUTHORED_GEOMETRY\]/.test(read("src/types/c4.ts")),
+    "object spread carries own symbol properties across",
   );
 }
 
