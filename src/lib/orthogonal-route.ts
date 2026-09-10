@@ -64,6 +64,32 @@ import type { PolylinePoint } from "./polyline-path";
  */
 export const EDGE_STUB = 20;
 
+/**
+ * How far an attachment may slide along its own side to avoid drawing a jog.
+ *
+ * THE DEFECT THIS EXISTS FOR, and it was on the front page. A person element
+ * is 160 wide and a system 176, so two of them centre-aligned — which is what
+ * every default layout produces — have their attachments 8 units apart. The
+ * router drew that honestly: a run, an 8-unit jog, and another run. Eight
+ * shipped documents had one, including the seed document `/live` opens with,
+ * and a kink that small reads as a rendering fault rather than as geometry.
+ * The curve this replaced hid it by sloping imperceptibly; a right angle
+ * cannot, so the misalignment has to be absorbed instead.
+ *
+ * ABSORBED BY MOVING THE ENDS, NOT BY SLOPING THE LINE. An attachment is a
+ * position on a side, not a fixed point — `edge-fan` picks it — so nudging it
+ * by a few units costs nothing a reader can name, while a segment that is
+ * almost-but-not-quite axis-aligned costs the whole visual language.
+ *
+ * 12 BECAUSE THAT IS `MIN_FAN_SPACING`: the closest two attachments on one
+ * side are ever allowed to sit. A slide wider than that could carry a
+ * connector past where a neighbour is entitled to be, and this is only ever
+ * offered to a connector that HAS no neighbour on either side — see
+ * `FloatingAnchors.anchorSlack`. Both ends move half the gap each, so neither
+ * travels more than 6.
+ */
+export const MAX_ANCHOR_SLIDE = 12;
+
 export interface OrthogonalRouteInput {
   sourceX: number;
   sourceY: number;
@@ -100,6 +126,12 @@ export interface OrthogonalRouteInput {
   corridorOffset?: number;
   /** Overrides `EDGE_STUB`. */
   stub?: number;
+  /**
+   * How far the two attachments may slide toward each other, along their own
+   * sides, rather than be joined by a jog. 0 — the default — draws whatever
+   * misalignment it is given. See `MAX_ANCHOR_SLIDE`.
+   */
+  slack?: number;
 }
 
 /** The outward unit normal of a side. */
@@ -212,10 +244,29 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
   const stub = input.stub ?? EDGE_STUB;
   const offset = input.corridorOffset ?? 0;
 
-  const start = { x: input.sourceX, y: input.sourceY };
-  const end = { x: input.targetX, y: input.targetY };
   const out = outward(input.sourceSide);
   const into = outward(input.targetSide);
+
+  const start = { x: input.sourceX, y: input.sourceY };
+  const end = { x: input.targetX, y: input.targetY };
+
+  /* THE SLIDE, AND IT HAPPENS BEFORE ANYTHING ELSE, so every measurement
+     below — the stubs, the corridor, the label's arc length — is taken on the
+     geometry actually drawn. Only for two ends travelling on the same axis:
+     an L has nowhere to slide to. */
+  const slack = input.slack ?? 0;
+  if (
+    slack > 0 &&
+    isHorizontal(input.sourceSide) === isHorizontal(input.targetSide)
+  ) {
+    const axis: "x" | "y" = isHorizontal(input.sourceSide) ? "y" : "x";
+    const gap = end[axis] - start[axis];
+    if (gap !== 0 && Math.abs(gap) <= slack) {
+      const meeting = start[axis] + gap / 2;
+      start[axis] = meeting;
+      end[axis] = meeting;
+    }
+  }
 
   const afterStub = { x: start.x + out.x * stub, y: start.y + out.y * stub };
   const beforeEnd = { x: end.x + into.x * stub, y: end.y + into.y * stub };

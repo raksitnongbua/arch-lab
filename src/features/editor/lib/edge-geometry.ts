@@ -20,7 +20,7 @@
 
 import type { Position } from "@xyflow/react";
 
-import { orthogonalRoute } from "@/lib/orthogonal-route";
+import { MAX_ANCHOR_SLIDE, orthogonalRoute } from "@/lib/orthogonal-route";
 import {
   pointAlongPolyline,
   polylineLength,
@@ -59,6 +59,24 @@ export interface FloatingAnchors {
   targetY: number;
   sourcePosition: Position;
   targetPosition: Position;
+  /**
+   * How far the route may slide these two points along their sides to meet,
+   * rather than joining them with a jog (`MAX_ANCHOR_SLIDE`).
+   *
+   * DECIDED HERE BECAUSE THIS IS WHERE THE FAN IS KNOWN, and it is only ever
+   * granted to a connector that is ALONE on both of its sides. A slot on a
+   * shared side is spaced against its neighbours; sliding it would eat into
+   * a gap `edge-fan` measured, and two connectors that drift together are a
+   * worse defect than the jog this avoids. A lone connector has nothing to
+   * collide with, and its attachment is the side's midpoint — a default, not
+   * a decision.
+   *
+   * Carried on the anchors rather than passed separately so every caller
+   * gets it from the spread it already writes: five surfaces route C4
+   * connectors, and a fix that needed five call-site edits would be one
+   * revert away from being four.
+   */
+  anchorSlack: number;
 }
 
 /**
@@ -133,10 +151,14 @@ export function getFloatingAnchors(
   const sourceSide = facingSide(source, dx, dy);
   const targetSide = facingSide(target, -dx, -dy);
   const alone: FanSlot = { index: 0, count: 1 };
-  const sourcePoint = attachPoint(source, sourceSide, slots?.source ?? alone);
-  const targetPoint = attachPoint(target, targetSide, slots?.target ?? alone);
+  const sourceSlot = slots?.source ?? alone;
+  const targetSlot = slots?.target ?? alone;
+  const sourcePoint = attachPoint(source, sourceSide, sourceSlot);
+  const targetPoint = attachPoint(target, targetSide, targetSlot);
 
   return {
+    anchorSlack:
+      sourceSlot.count === 1 && targetSlot.count === 1 ? MAX_ANCHOR_SLIDE : 0,
     sourceX: sourcePoint.x,
     sourceY: sourcePoint.y,
     targetX: targetPoint.x,
@@ -210,6 +232,8 @@ export interface ParallelEdgePathInput {
   parallelCount: number;
   /** From `labelBiasByEdgeId`. Omitted ⇒ 0 ⇒ label at the midpoint. */
   labelBias?: LabelBias;
+  /** From `getFloatingAnchors`. Omitted ⇒ 0 ⇒ any misalignment is drawn as a jog. */
+  anchorSlack?: number;
 }
 
 export interface EdgePathGeometry {
@@ -264,6 +288,7 @@ export function getParallelEdgePath(
     targetY: input.targetY,
     targetSide: sideOf(input.targetPosition),
     corridorOffset: parallelOffset(input.parallelIndex, input.parallelCount),
+    slack: input.anchorSlack,
   });
 
   const length = polylineLength(points);

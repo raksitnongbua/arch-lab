@@ -39,6 +39,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A relationship between two elements of different sizes no longer draws a
+  tiny kink.** Centre-aligned elements of different widths have their
+  connection points a few units apart — a person is narrower than a system —
+  and a right-angled line drew that as a run, a jog and another run. It now
+  closes gaps of up to 12 units by meeting in the middle, which is invisible,
+  instead of drawing a step that reads as a rendering fault. Eight
+  relationships across the bundled examples had one, including the document
+  the page opens with. A wider misalignment is still drawn as it is: it is
+  real, and it is the author's to fix — by dragging, which now snaps.
 - **An element on a bundled example page showed no coordinates and no way to
   release them.** Every element in one of those models states its own
   position — the format requires it — but the fact was being lost on the way

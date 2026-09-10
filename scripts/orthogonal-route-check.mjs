@@ -64,7 +64,7 @@ registerHooks({
 const load = (rel) => import(pathToFileURL(join(root, rel)).href);
 const read = (rel) => readFileSync(join(root, rel), "utf8");
 
-const { orthogonalRoute, EDGE_STUB } = await load(
+const { orthogonalRoute, EDGE_STUB, MAX_ANCHOR_SLIDE } = await load(
   "src/lib/orthogonal-route.ts",
 );
 const {
@@ -73,9 +73,22 @@ const {
   pointAlongPolyline,
   CORNER_RADIUS,
 } = await load("src/lib/polyline-path.ts");
-const { facingSide, fanOffset, pointOnSide, sideLength } = await load(
-  "src/lib/edge-fan.ts",
+const {
+  assignFanSlots,
+  facingSide,
+  fanOffset,
+  MIN_FAN_SPACING,
+  parallelEdgeGroups,
+  pointOnSide,
+  sideLength,
+} = await load("src/lib/edge-fan.ts");
+const { getFloatingAnchors, getParallelEdgePath } = await load(
+  "src/features/editor/lib/edge-geometry.ts",
 );
+const { deserializeModel } = await load(
+  "src/features/editor/io/deserialize.ts",
+);
+const { SEED_MODEL } = await load("src/features/viewer/input/sync.ts");
 
 let assertions = 0;
 let failures = 0;
@@ -575,7 +588,7 @@ const hub = read("src/features/editor/lib/edge-geometry.ts");
 check("the hub routes rather than curving", () => {
   assert.match(
     hub,
-    /import \{ orthogonalRoute \} from "@\/lib\/orthogonal-route"/,
+    /import \{[^}]*orthogonalRoute[^}]*\} from "@\/lib\/orthogonal-route"/,
   );
   assert.ok(
     !/bezierPath|clearingOffset/.test(hub),
@@ -663,6 +676,177 @@ check("the geometry modules stay pure", () => {
       );
     }
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* 8. A near-miss is absorbed, not drawn as a jog                              */
+/* -------------------------------------------------------------------------- */
+
+/* THE DEFECT, and it was on the front page. A person element is 160 wide and
+   a system 176, so two of them centre-aligned — every default layout — have
+   their attachments 8 units apart, and a right angle draws that honestly as a
+   run, an 8-unit jog, and another run. Eight shipped documents had one,
+   including the seed `/live` opens with. The curve this replaced hid it by
+   sloping imperceptibly. `purpose.md`: correct and ugly is a bug here. */
+
+check(
+  "the slide is bounded by the closest two attachments may ever sit",
+  () => {
+    /* Not a free constant: the justification for the number IS this equality,
+     so a change to either has to face the other. */
+    assert.equal(MAX_ANCHOR_SLIDE, MIN_FAN_SPACING);
+  },
+);
+
+check("a near-miss inside the slack draws one straight run", () => {
+  for (const gap of [1, 4, 8, MAX_ANCHOR_SLIDE]) {
+    const points = orthogonalRoute({
+      sourceX: 300,
+      sourceY: 200,
+      sourceSide: "bottom",
+      targetX: 300 + gap,
+      targetY: 600,
+      targetSide: "top",
+      slack: MAX_ANCHOR_SLIDE,
+    });
+    assert.equal(
+      points.length,
+      2,
+      `a ${gap}-unit misalignment still drew ${points.length} points`,
+    );
+  }
+});
+
+check("and neither end travels more than half the gap", () => {
+  const gap = MAX_ANCHOR_SLIDE;
+  const points = orthogonalRoute({
+    sourceX: 300,
+    sourceY: 200,
+    sourceSide: "bottom",
+    targetX: 300 + gap,
+    targetY: 600,
+    targetSide: "top",
+    slack: MAX_ANCHOR_SLIDE,
+  });
+  assert.ok(
+    Math.abs(points[0].x - 300) <= gap / 2 + 1e-9 &&
+      Math.abs(points[points.length - 1].x - (300 + gap)) <= gap / 2 + 1e-9,
+    "one end absorbed the whole misalignment instead of meeting in the middle",
+  );
+});
+
+check("past the slack it is still drawn as a jog", () => {
+  /* A slide that reached further would move an attachment past where a
+     neighbour is entitled to sit, and would start hiding real misalignment
+     the author can see and fix. */
+  const points = orthogonalRoute({
+    sourceX: 300,
+    sourceY: 200,
+    sourceSide: "bottom",
+    targetX: 300 + MAX_ANCHOR_SLIDE + 1,
+    targetY: 600,
+    targetSide: "top",
+    slack: MAX_ANCHOR_SLIDE,
+  });
+  assert.ok(points.length > 2, "the slide reached past its own bound");
+});
+
+check("no slack, no slide — the default is to draw what it is given", () => {
+  const points = orthogonalRoute({
+    sourceX: 300,
+    sourceY: 200,
+    sourceSide: "bottom",
+    targetX: 308,
+    targetY: 600,
+    targetSide: "top",
+  });
+  assert.ok(points.length > 2, "a route slid without being granted slack");
+});
+
+check("slack is granted only to a connector alone on both of its sides", () => {
+  const hub = { x: 0, y: 0, width: 480, height: 128 };
+  const one = { x: 100, y: 400, width: 160, height: 80 };
+  const lone = getFloatingAnchors(hub, one);
+  assert.equal(
+    lone.anchorSlack,
+    MAX_ANCHOR_SLIDE,
+    "a lone connector was refused the slide",
+  );
+  const shared = getFloatingAnchors(hub, one, {
+    source: { index: 0, count: 3 },
+    target: { index: 0, count: 1 },
+  });
+  assert.equal(
+    shared.anchorSlack,
+    0,
+    "a connector sharing a side was allowed to slide into its neighbour's gap",
+  );
+});
+
+/* THE REGRESSION ITSELF, measured on every document the product ships rather
+   than on a fixture — `codebase.md` §4: a check written from a hand-listed
+   set cannot notice the thing it has never heard of. */
+check("no shipped document draws a small kink on a lone connector", () => {
+  const documents = [["seed", (SEED_MODEL.file ?? SEED_MODEL).diagrams]];
+  const dir = "src/features/viewer/service/data";
+  for (const name of readdirSync(join(root, dir)).sort()) {
+    if (!name.endsWith(".archlab.json")) continue;
+    documents.push([
+      name,
+      Object.values(deserializeModel(read(`${dir}/${name}`)).diagrams),
+    ]);
+  }
+  assert.ok(documents.length > 1, "no documents were scanned");
+
+  const offenders = [];
+  let lone = 0;
+  for (const [label, diagrams] of documents) {
+    for (const diagram of diagrams) {
+      const rectById = new Map(
+        diagram.nodes.map((node) => [
+          node.id,
+          {
+            x: node.position.x,
+            y: node.position.y,
+            width: node.size.width,
+            height: node.size.height,
+          },
+        ]),
+      );
+      const fans = assignFanSlots(diagram.edges, rectById);
+      const groups = parallelEdgeGroups(diagram.edges);
+      for (const edge of diagram.edges) {
+        const source = rectById.get(edge.source);
+        const target = rectById.get(edge.target);
+        if (source === undefined || target === undefined) continue;
+        const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
+        if (anchors.anchorSlack === 0) continue;
+        lone += 1;
+        const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+        const laid = getParallelEdgePath({
+          ...anchors,
+          parallelIndex: group.index,
+          parallelCount: group.count,
+        });
+        const vertical =
+          anchors.sourcePosition === "top" ||
+          anchors.sourcePosition === "bottom";
+        const off = vertical
+          ? Math.abs(anchors.targetX - anchors.sourceX)
+          : Math.abs(anchors.targetY - anchors.sourceY);
+        if (laid.points.length > 2 && off > 0 && off <= MAX_ANCHOR_SLIDE) {
+          offenders.push(
+            `${label}/${diagram.id} ${edge.source}->${edge.target} (${off})`,
+          );
+        }
+      }
+    }
+  }
+  assert.ok(
+    lone > 0,
+    "no lone connector was scanned — the sweep proves nothing",
+  );
+  assert.deepEqual(offenders, []);
 });
 
 if (failures > 0) {
