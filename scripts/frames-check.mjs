@@ -597,6 +597,114 @@ const innerId = store().createFrame({
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* A frame keeps the padding no stranger could take                            */
+/* -------------------------------------------------------------------------- */
+
+/* THE DEFECT, reported as "the frame doesn't look centred". `clamp` gives a
+   side's padding up to an element standing in it, which is right — but it
+   asked only whether the element was BEYOND on that axis, never whether it
+   was beside the side at all. An element 120 units to the left of a frame and
+   16 below it took the frame's whole bottom padding: 28 on three sides and 0
+   underneath, which is exactly what lopsided looks like.
+
+   Driven through `placeFrames` itself rather than by reading the source, so
+   the numbers below are the ones a diagram is drawn with. */
+
+console.log("\nA frame gives up padding only to a stranger beside it");
+
+{
+  const node = (id, x, y, frameId) => ({
+    id,
+    type: "container",
+    name: id,
+    position: { x, y },
+    size: { width: 200, height: 100 },
+    ...(frameId === undefined ? {} : { frameId }),
+  });
+  const padding = (nodes) => {
+    const [frame] = placeFrames({
+      id: "d",
+      level: "container",
+      name: "d",
+      nodes,
+      edges: [],
+      frames: [{ id: "F", label: "F" }],
+    });
+    const members = nodes.filter((n) => n.frameId === "F");
+    const box = {
+      minX: Math.min(...members.map((n) => n.position.x)),
+      minY: Math.min(...members.map((n) => n.position.y)),
+      maxX: Math.max(...members.map((n) => n.position.x + n.size.width)),
+      maxY: Math.max(...members.map((n) => n.position.y + n.size.height)),
+    };
+    return {
+      left: box.minX - frame.x,
+      right: frame.x + frame.width - box.maxX,
+      top: box.minY - frame.y,
+      bottom: frame.y + frame.height - box.maxY,
+    };
+  };
+
+  const members = [node("a", 448, -96, "F"), node("b", 752, -96, "F")];
+  const alone = padding(members);
+  if (alone.left === alone.right && alone.bottom === alone.left) {
+    ok(`an unobstructed frame pads every side alike (${alone.left})`);
+  } else {
+    fail("an unobstructed frame pads every side alike", JSON.stringify(alone));
+  }
+
+  /* The one that must still take padding: genuinely underneath, close enough
+     to collide. Losing this case would trade a lopsided frame for one that
+     overlaps its neighbour. */
+  const below = padding([...members, node("s", 448, 40)]);
+  if (below.bottom < alone.bottom) {
+    ok(`a stranger directly below still takes the bottom (${below.bottom})`);
+  } else {
+    fail(
+      "a stranger directly below still takes the bottom",
+      `bottom stayed ${below.bottom} — the frame now runs into it`,
+    );
+  }
+
+  /* The defect itself, from both sides, because the bug was symmetric. */
+  for (const [where, x] of [
+    ["far left", 100],
+    ["far right", 1100],
+  ]) {
+    const aside = padding([...members, node("s", x, 20)]);
+    if (aside.bottom === alone.bottom) {
+      ok(`a stranger ${where} and lower leaves the bottom padding alone`);
+    } else {
+      fail(
+        `a stranger ${where} and lower leaves the bottom padding alone`,
+        `bottom is ${aside.bottom}, unobstructed is ${alone.bottom} — a frame ` +
+          "gave up a side to an element that could never reach it",
+      );
+    }
+  }
+
+  /* And the same question on the other axis, so a future change cannot fix
+     one pair of sides and leave the other. */
+  const aboveRight = padding([
+    node("a", 448, 200, "F"),
+    node("b", 448, 400, "F"),
+    node("s", 1100, 200),
+  ]);
+  const bareVertical = padding([
+    node("a", 448, 200, "F"),
+    node("b", 448, 400, "F"),
+  ]);
+  if (aboveRight.right === bareVertical.right) {
+    ok("a stranger beside but not alongside leaves the right padding alone");
+  } else {
+    fail(
+      "a stranger beside but not alongside leaves the right padding alone",
+      `right is ${aboveRight.right}, unobstructed is ${bareVertical.right}`,
+    );
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${checks} frame check(s) FAILED`);
   process.exit(1);

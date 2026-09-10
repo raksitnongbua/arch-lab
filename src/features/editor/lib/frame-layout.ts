@@ -181,15 +181,34 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
    * choosing a side by coin toss. And no side is ever pulled inside the
    * members themselves: a border cutting through what it encloses would trade
    * one wrong picture for another.
+   *
+   * AND IT MUST BE BESIDE THE SIDE IT MOVES, which is the condition that was
+   * missing. "Beyond on this axis" alone says nothing about whether the two
+   * could ever meet: on the reported diagram an element 120 units to the LEFT
+   * of a frame, and 16 below it, took the frame's entire bottom padding —
+   * 28 everywhere else, 0 underneath — because it happened to sit lower. The
+   * frame then read as lopsided, which is what was reported. A side gives up
+   * its padding to a stranger it could actually collide with, so the span
+   * test on the perpendicular axis is part of the question, not a detail.
    */
   const clamp = (box: Box, core: Box, foreign: readonly C4Node[]): Box => {
     let { minX, minY, maxX, maxY } = box;
     for (const node of foreign) {
       const it = boxOfNode(node);
-      if (it.minX >= core.maxX) maxX = Math.min(maxX, it.minX - MIN_CLEARANCE);
-      if (it.maxX <= core.minX) minX = Math.max(minX, it.maxX + MIN_CLEARANCE);
-      if (it.minY >= core.maxY) maxY = Math.min(maxY, it.minY - MIN_CLEARANCE);
-      if (it.maxY <= core.minY) minY = Math.max(minY, it.maxY + MIN_CLEARANCE);
+      const alongsideX = it.maxX > core.minX && it.minX < core.maxX;
+      const alongsideY = it.maxY > core.minY && it.minY < core.maxY;
+      if (alongsideY && it.minX >= core.maxX) {
+        maxX = Math.min(maxX, it.minX - MIN_CLEARANCE);
+      }
+      if (alongsideY && it.maxX <= core.minX) {
+        minX = Math.max(minX, it.maxX + MIN_CLEARANCE);
+      }
+      if (alongsideX && it.minY >= core.maxY) {
+        maxY = Math.min(maxY, it.minY - MIN_CLEARANCE);
+      }
+      if (alongsideX && it.maxY <= core.minY) {
+        minY = Math.max(minY, it.maxY + MIN_CLEARANCE);
+      }
     }
     return {
       minX: Math.min(minX, core.minX),
