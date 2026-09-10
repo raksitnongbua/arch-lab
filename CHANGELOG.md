@@ -7,6 +7,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Dragging an element snaps it into line.** Move an element near an
+  alignment and it settles onto it, with a hairline showing what it lined up
+  with — the edges and centres of the elements around it, and, more usefully,
+  the position that makes one of its own relationships draw as a single
+  straight line instead of a run-jog-run. Hold `Alt` while dragging to place
+  an element freely. The stop that straightens a relationship is measured
+  where the line actually leaves the element, not at the element's centre:
+  those are different points whenever several relationships share a side, and
+  lining the centres up would leave the line just as bent.
+
 ### Changed
 
 - **C4 connectors are drawn with right angles instead of curves.** A

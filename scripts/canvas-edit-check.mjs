@@ -317,6 +317,12 @@ const { createNodeProjectionCache, projectViewerNodes } = await load(
 const { diagramWithDragOverlay, dragOverlayAfter, NO_DRAG_OVERLAY } =
   await load("src/features/viewer/lib/drag-overlay.ts");
 const { placeFrames } = await load("src/features/editor/lib/frame-layout.ts");
+const { snapDraggedNode, ALIGNMENT_THRESHOLD } = await load(
+  "src/lib/align-snap.ts",
+);
+const { orthogonalRoute } = await load("src/lib/orthogonal-route.ts");
+const { assignFanSlots, facingSide, fanOffset, pointOnSide, sideLength } =
+  await load("src/lib/edge-fan.ts");
 
 /* ----------------------------------------------------------------------- */
 /* Harness — same shape as the sibling check scripts                        */
@@ -2684,7 +2690,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
     "a change batch about anything else costs no render",
     dragOverlayAfter(NO_DRAG_OVERLAY, [
       { id: "any", type: "dimensions", dimensions: { width: 1, height: 1 } },
-    ]) === NO_DRAG_OVERLAY,
+    ]).overlay === NO_DRAG_OVERLAY,
     "the overlay allocated for a change it does not read — a ResizeObserver " +
       "dimensions change would re-project the whole diagram",
   );
@@ -2729,7 +2735,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
   for (const position of framePositions) {
     overlay = dragOverlayAfter(overlay, [
       { id: dragged.id, type: "position", position, dragging: true },
-    ]);
+    ]).overlay;
     const previous = inFlight;
     inFlight = projectDragged(diagramWithDragOverlay(rootDiagram, overlay));
     perFrameReplacements.push(
@@ -2762,7 +2768,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
   const landed = framePositions.at(-1);
   const released = dragOverlayAfter(overlay, [
     { id: dragged.id, type: "position", position: landed, dragging: false },
-  ]);
+  ]).overlay;
   check(
     "the press boundary clears the overlay, whether or not a commit follows",
     released.size === 0,
@@ -8338,6 +8344,263 @@ console.log("\nEvery flowchart gesture is reachable from the canvas it edits");
     /event\.clientX - nodeDrag\.from\.clientX/.test(viewer),
     "the threshold is back in user units, so it is a hair-trigger whenever " +
       "the chart is scaled below 1:1 — which is the default",
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+/* 15. Alignment snapping, and the promise it makes                           */
+/* ------------------------------------------------------------------------- */
+
+/* WHAT THIS IS FOR. Since connectors became right angles
+   (`lib/orthogonal-route.ts`), two elements a few units out of line no longer
+   draw a sloping line — they draw a run, a jog, and another run. The snap
+   exists so a reader can nudge that kink out, and the promise it makes is
+   specific: land on the stop and the connector draws as ONE straight run.
+   That is checkable, so it is checked here rather than described.
+
+   THE TRAP THIS SECTION GUARDS is the obvious wrong implementation. A snap
+   that lines up node CENTRES looks right and does not deliver, because a
+   connector leaves from its fan slot at `L·k/(N+1)` and not from the middle
+   of the side. The assertions below drive a FANNED element, where the two are
+   different numbers, so an implementation that snapped centres would fail. */
+
+console.log("\nAlignment snapping straightens the connector it promises to");
+
+{
+  const routeOf = (rects, edges, edgeId) => {
+    const byId = new Map(rects.map((rect) => [rect.id, rect]));
+    const fans = assignFanSlots(edges, byId);
+    const edge = edges.find((candidate) => candidate.id === edgeId);
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    const dx = target.x + target.width / 2 - (source.x + source.width / 2);
+    const dy = target.y + target.height / 2 - (source.y + source.height / 2);
+    const sourceSide = facingSide(source, dx, dy);
+    const targetSide = facingSide(target, -dx, -dy);
+    const slot = fans.get(edge.id) ?? {
+      source: { index: 0, count: 1 },
+      target: { index: 0, count: 1 },
+    };
+    const from = pointOnSide(
+      source,
+      sourceSide,
+      fanOffset(
+        slot.source.index,
+        slot.source.count,
+        sideLength(source, sourceSide),
+      ),
+    );
+    const to = pointOnSide(
+      target,
+      targetSide,
+      fanOffset(
+        slot.target.index,
+        slot.target.count,
+        sideLength(target, targetSide),
+      ),
+    );
+    return orthogonalRoute({
+      sourceX: from.x,
+      sourceY: from.y,
+      sourceSide,
+      targetX: to.x,
+      targetY: to.y,
+      targetSide,
+    });
+  };
+
+  /* A WIDE HUB WITH TWO CONNECTORS LEAVING ITS UNDERSIDE, so neither departs
+     from the hub's centre — the whole point of the fixture, and the reason
+     it is two and not three: with THREE slots the middle one sits exactly on
+     the centre (`L·2/4`), and a centre-snapping implementation would pass.
+     `three` is the element being dragged. */
+  const hub = { id: "hub", x: 0, y: 0, width: 480, height: 128 };
+  const rects = [
+    hub,
+    { id: "two", x: 540, y: 400, width: 160, height: 80 },
+    { id: "three", x: 100, y: 400, width: 100, height: 80 },
+  ];
+  const edges = [
+    { id: "e2", source: "hub", target: "two" },
+    { id: "e3", source: "hub", target: "three" },
+  ];
+  const moving = rects.find((rect) => rect.id === "three");
+
+  const hubAnchorX = (() => {
+    const byId = new Map(rects.map((rect) => [rect.id, rect]));
+    const fans = assignFanSlots(edges, byId);
+    const slot = fans.get("e3").source;
+    return pointOnSide(
+      hub,
+      "bottom",
+      fanOffset(slot.index, slot.count, hub.width),
+    ).x;
+  })();
+
+  check(
+    "the fixture's departure point is NOT the hub's centre",
+    Math.abs(hubAnchorX - (hub.x + hub.width / 2)) > ALIGNMENT_THRESHOLD,
+    `the fanned anchor (${hubAnchorX}) coincides with the centre — this ` +
+      "fixture would pass with a centre-snapping implementation and prove nothing",
+  );
+
+  /* The position that straightens `e3`: the dragged element's own anchor is
+     its top-side midpoint, so its x must put that midpoint under the hub's. */
+  const straightX = hubAnchorX - moving.width / 2;
+
+  const nudged = { x: straightX + 4, y: moving.y };
+  const outcome = snapDraggedNode({
+    movingId: "three",
+    proposed: nudged,
+    width: moving.width,
+    height: moving.height,
+    rects,
+    edges,
+  });
+  /* AND NO SIBLING STOP MAY GIVE THE SAME ANSWER, or the assertion below
+     passes with the connector stops deleted — which is exactly what an
+     earlier version of this fixture did. */
+  check(
+    "no sibling edge or centre coincides with the straightening stop",
+    !rects
+      .filter((rect) => rect.id !== "three")
+      .some((other) =>
+        [other.x, other.x + other.width / 2, other.x + other.width].some(
+          (stop) =>
+            [
+              straightX,
+              straightX + moving.width / 2,
+              straightX + moving.width,
+            ].some((own) => Math.abs(stop - own) <= ALIGNMENT_THRESHOLD),
+        ),
+      ),
+    "a sibling stop lands on the same position, so this section would pass " +
+      "with the connector stops removed",
+  );
+
+  check(
+    "a drag within the threshold is pulled onto the straightening stop",
+    outcome.position.x === straightX,
+    `snapped to ${outcome.position.x}, wanted ${straightX}`,
+  );
+
+  const after = rects.map((rect) =>
+    rect.id === "three"
+      ? { ...rect, x: outcome.position.x, y: outcome.position.y }
+      : rect,
+  );
+  check(
+    "and the connector then draws as one straight run",
+    routeOf(after, edges, "e3").length === 2,
+    `the route still has ${routeOf(after, edges, "e3").length} points — the ` +
+      "snap moved the element without delivering what it moved it for",
+  );
+  check(
+    "the unsnapped position really was kinked, so the check means something",
+    routeOf(
+      rects.map((rect) =>
+        rect.id === "three" ? { ...rect, x: nudged.x } : rect,
+      ),
+      edges,
+      "e3",
+    ).length > 2,
+    "the fixture draws straight without snapping — it proves nothing",
+  );
+
+  check(
+    "a snap that took hold says why, with a guide",
+    outcome.guides.some((guide) => guide.orientation === "vertical"),
+    "an element stopped following the pointer with nothing on screen to " +
+      "explain it, which reads as a dropped frame",
+  );
+
+  /* OUT OF RANGE MUST BE LEFT ALONE. A snap that reaches too far is worse
+     than none: the reader cannot place an element where they meant to, and
+     nothing on screen says why it keeps sliding. */
+  const far = { x: straightX + ALIGNMENT_THRESHOLD + 4, y: moving.y };
+  check(
+    "a drag beyond the threshold keeps the position it was given",
+    snapDraggedNode({
+      movingId: "three",
+      proposed: far,
+      width: moving.width,
+      height: moving.height,
+      rects,
+      edges,
+    }).position.x === far.x,
+    "the snap reached past its threshold, so an element cannot be placed " +
+      "off-alignment on purpose",
+  );
+
+  /* IDEMPOTENT, which is what makes the two sides of the handover safe: the
+     drag-stop handler runs the settled position through the same snap the
+     overlay already applied, and a snap that moved it again would commit a
+     different number from the one the last frame drew. */
+  const again = snapDraggedNode({
+    movingId: "three",
+    proposed: outcome.position,
+    width: moving.width,
+    height: moving.height,
+    rects,
+    edges,
+  });
+  check(
+    "re-snapping a settled position changes nothing",
+    again.position.x === outcome.position.x &&
+      again.position.y === outcome.position.y,
+    `${JSON.stringify(outcome.position)} became ${JSON.stringify(again.position)} ` +
+      "— the commit would write a different number from the last frame drawn",
+  );
+
+  /* NO ASSERTION FOR THE L CASE, deliberately. `connectorStops` declines a
+     connector whose two ends leave on different axes, because no position
+     makes an L straight — and that guard is correct. But it cannot be caught
+     failing: the two ends of an L are far apart on the axis a stop would
+     move, always, since that separation is what made the router choose an L
+     in the first place. Every fixture that produces a genuine L is out of
+     threshold, so removing the guard changes no result. `codebase.md` says an
+     assertion that cannot fail catches nothing, so the guard is documented in
+     the module and not restated here as a passing test. */
+}
+
+/* The wiring: the snap has to reach BOTH sides of the handover, or the
+   element springs back on release — the failure `canvas-editing.md` names by
+   that name. Arithmetic cannot see this half. */
+{
+  const viewer = read("src/features/viewer/components/viewer-canvas.tsx");
+  check(
+    "the in-flight overlay is folded through the snap",
+    /dragOverlayAfter\([^)]*snapFor\)/s.test(viewer),
+    "the overlay ignores the snap, so guides would appear and the element " +
+      "would not move onto them",
+  );
+  check(
+    "and the commit runs the same snap over the library's own position",
+    /snapFor\(node\.id, node\.position\)/.test(viewer),
+    "the drag-stop handler commits React Flow's unsnapped position — the " +
+      "element springs back off its guide the instant the text re-parses",
+  );
+  check(
+    "there is exactly one snap function, so the two cannot diverge",
+    (viewer.match(/const snapFor = useCallback/g) ?? []).length === 1,
+    "a second snap implementation appeared beside the first",
+  );
+  check(
+    "the guides are drawn by the shared overlay, not a private copy",
+    /<AlignmentGuides guides=\{snapGuides\}/.test(viewer) &&
+      /@\/components\/ui\/alignment-guides/.test(viewer),
+    "the viewer draws its own guide lines, which is how two canvases end up " +
+      "with two house styles for one hairline",
+  );
+  check(
+    "the editor canvas snaps through the same shared module",
+    /snapDraggedNode\(/.test(
+      read("src/features/editor/components/canvas.tsx"),
+    ) &&
+      !/function alignToSiblings/.test(
+        read("src/features/editor/components/canvas.tsx"),
+      ),
+    "the editor kept its own copy of the alignment maths",
   );
 }
 

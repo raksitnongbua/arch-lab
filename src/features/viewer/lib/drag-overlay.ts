@@ -39,10 +39,23 @@
  * zero re-adopts at the handover and nothing settles twice.
  * `check:canvas-edit` measures that as object identity, because "no flicker"
  * is otherwise only observable in a browser.
+ *
+ * THE SNAP RIDES ALONG FOR THE SAME REASON. Alignment snapping corrects the
+ * position React Flow proposes, and a correction applied here and NOT at the
+ * commit is the exact shape of "a node that springs back with no explanation"
+ * — the failure `canvas-editing.md` names. So the snap is a function passed
+ * in, both this and the drag-stop handler call it, and the check drives the
+ * same gesture through both and requires one number.
  */
 
 import type { Node, NodeChange } from "@xyflow/react";
 
+import {
+  NO_GUIDES,
+  type AlignmentGuide,
+  type Point,
+  type SnapOutcome,
+} from "@/lib/align-snap";
 import type { C4Diagram } from "@/types";
 
 /**
@@ -76,27 +89,43 @@ export const NO_DRAG_OVERLAY: DragOverlay = new Map();
  * leave an aborted press showing a position the document never received, with
  * nothing left to correct it.
  */
+export interface DragOverlayStep {
+  /** `current` itself when nothing moved, so the projection memos re-run for nothing. */
+  overlay: DragOverlay;
+  /** What the snap took hold of this frame; `NO_GUIDES` when nothing did. */
+  guides: readonly AlignmentGuide[];
+}
+
 export function dragOverlayAfter<NodeType extends Node>(
   current: DragOverlay,
   changes: readonly NodeChange<NodeType>[],
-): DragOverlay {
+  /**
+   * The alignment snap, or omitted for a canvas that does not snap. Must be
+   * the SAME function the drag-stop handler calls — see the header.
+   */
+  snap?: (id: string, proposed: Point) => SnapOutcome,
+): DragOverlayStep {
   let next: Map<string, { x: number; y: number }> | null = null;
+  let guides: readonly AlignmentGuide[] = NO_GUIDES;
   const target = () => (next ??= new Map(current));
   for (const change of changes) {
     if (change.type !== "position") continue;
     if (change.dragging === true) {
       if (!change.position) continue;
+      const snapped = snap?.(change.id, change.position);
+      if (snapped !== undefined) guides = snapped.guides;
+      const at = snapped?.position ?? change.position;
       // Rounded HERE so the value the reader sees mid-press is the value the
       // commit writes — see the handover note in the file header.
       target().set(change.id, {
-        x: Math.round(change.position.x),
-        y: Math.round(change.position.y),
+        x: Math.round(at.x),
+        y: Math.round(at.y),
       });
     } else if (current.has(change.id)) {
       target().delete(change.id);
     }
   }
-  return next ?? current;
+  return { overlay: next ?? current, guides };
 }
 
 /**

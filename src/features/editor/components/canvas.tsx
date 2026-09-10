@@ -67,7 +67,6 @@ import {
   type ShortcutBinding,
 } from "../hooks/use-keyboard-shortcuts";
 import {
-  ALIGNMENT_THRESHOLD,
   CONNECT_SNAP_RADIUS,
   DEFAULT_NODE_SIZE,
   FIT_VIEW_PADDING_PX,
@@ -87,7 +86,6 @@ import {
   AlignmentGuides,
   clearAlignmentGuides,
   setAlignmentGuides,
-  type AlignmentGuide,
 } from "./overlays/alignment-guides";
 import { DeleteConfirmDialog } from "./overlays/delete-confirm-dialog";
 import { LevelTransition } from "./overlays/level-transition";
@@ -103,6 +101,7 @@ import { CanvasMinimap } from "@/components/ui/canvas-minimap";
 import { useMinimap } from "@/components/ui/use-minimap";
 
 import { ZoomIndicator } from "./zoom-indicator";
+import { snapDraggedNode } from "@/lib/align-snap";
 
 /* -------------------------------------------------------------------------- */
 /* Canvas interaction store — the seam later tickets consume                   */
@@ -195,107 +194,6 @@ function readPaletteDrag(dt: DataTransfer): PaletteDragPayload | null {
 /* -------------------------------------------------------------------------- */
 /* Geometry helpers                                                            */
 /* -------------------------------------------------------------------------- */
-
-interface AxisSnap {
-  delta: number;
-  guide: AlignmentGuide;
-}
-
-function bestAxisSnap(
-  ownStops: readonly number[],
-  otherStops: readonly number[],
-  buildGuide: (alignedAt: number) => AlignmentGuide,
-): AxisSnap | null {
-  let best: AxisSnap | null = null;
-  for (const own of ownStops) {
-    for (const other of otherStops) {
-      const delta = other - own;
-      if (Math.abs(delta) > ALIGNMENT_THRESHOLD) continue;
-      if (best !== null && Math.abs(delta) >= Math.abs(best.delta)) continue;
-      best = { delta, guide: buildGuide(other) };
-    }
-  }
-  return best;
-}
-
-/**
- * Snap `proposed` to sibling edges/centres within ALIGNMENT_THRESHOLD.
- * Returns the adjusted position and the guides to show — guides exist only
- * when an axis genuinely snapped.
- */
-function alignToSiblings(
-  nodeId: string,
-  proposed: Point,
-  allNodes: readonly C4FlowNode[],
-  excludeIds: ReadonlySet<string>,
-): { position: Point; guides: AlignmentGuide[] } {
-  const moving = allNodes.find((node) => node.id === nodeId);
-  const width = moving?.width ?? DEFAULT_NODE_SIZE.width;
-  const height = moving?.height ?? DEFAULT_NODE_SIZE.height;
-
-  let bestX: AxisSnap | null = null;
-  let bestY: AxisSnap | null = null;
-
-  for (const other of allNodes) {
-    if (other.id === nodeId || excludeIds.has(other.id)) continue;
-    const ow = other.width ?? DEFAULT_NODE_SIZE.width;
-    const oh = other.height ?? DEFAULT_NODE_SIZE.height;
-    const ox = other.position.x;
-    const oy = other.position.y;
-
-    const verticalSpanFrom = Math.min(proposed.y, oy) - 24;
-    const verticalSpanTo = Math.max(proposed.y + height, oy + oh) + 24;
-    const candidateX = bestAxisSnap(
-      [proposed.x, proposed.x + width / 2, proposed.x + width],
-      [ox, ox + ow / 2, ox + ow],
-      (alignedAt) => ({
-        id: `v-${alignedAt}`,
-        orientation: "vertical",
-        position: alignedAt,
-        from: verticalSpanFrom,
-        to: verticalSpanTo,
-      }),
-    );
-    if (
-      candidateX !== null &&
-      (bestX === null || Math.abs(candidateX.delta) < Math.abs(bestX.delta))
-    ) {
-      bestX = candidateX;
-    }
-
-    const horizontalSpanFrom = Math.min(proposed.x, ox) - 24;
-    const horizontalSpanTo = Math.max(proposed.x + width, ox + ow) + 24;
-    const candidateY = bestAxisSnap(
-      [proposed.y, proposed.y + height / 2, proposed.y + height],
-      [oy, oy + oh / 2, oy + oh],
-      (alignedAt) => ({
-        id: `h-${alignedAt}`,
-        orientation: "horizontal",
-        position: alignedAt,
-        from: horizontalSpanFrom,
-        to: horizontalSpanTo,
-      }),
-    );
-    if (
-      candidateY !== null &&
-      (bestY === null || Math.abs(candidateY.delta) < Math.abs(bestY.delta))
-    ) {
-      bestY = candidateY;
-    }
-  }
-
-  const guides: AlignmentGuide[] = [];
-  const position = { ...proposed };
-  if (bestX !== null) {
-    position.x += bestX.delta;
-    guides.push(bestX.guide);
-  }
-  if (bestY !== null) {
-    position.y += bestY.delta;
-    guides.push(bestY.guide);
-  }
-  return { position, guides };
-}
 
 function sameIdSets(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
@@ -471,12 +369,26 @@ function CanvasInner(): React.JSX.Element {
         clearAlignmentGuides();
         return { ...change, position: quantised };
       }
-      const { position, guides } = alignToSiblings(
-        change.id,
-        quantised,
-        nodesRef.current,
-        draggingIdsRef.current,
-      );
+      /* THE SHARED SNAP (`lib/align-snap`), which is also the `/live` C4
+         canvas's. No `edges` here: this canvas hands the snapper nodes only,
+         so it offers sibling stops and not the connector stops that
+         straighten a relationship — the difference is stated rather than
+         silently inherited. */
+      const moving = nodesRef.current.find((node) => node.id === change.id);
+      const { position, guides } = snapDraggedNode({
+        movingId: change.id,
+        proposed: quantised,
+        width: moving?.width ?? DEFAULT_NODE_SIZE.width,
+        height: moving?.height ?? DEFAULT_NODE_SIZE.height,
+        rects: nodesRef.current.map((node) => ({
+          id: node.id,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.width ?? DEFAULT_NODE_SIZE.width,
+          height: node.height ?? DEFAULT_NODE_SIZE.height,
+        })),
+        exclude: draggingIdsRef.current,
+      });
       setAlignmentGuides(guides);
       return { ...change, position };
     },
