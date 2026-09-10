@@ -9,8 +9,7 @@
  * diagram was still unreadable, because a reader following one line back cannot
  * say which of six it was. `lib/edge-fan.ts` spreads them at `L·k/(N+1)`.
  *
- * THE ASSERTIONS INCLUDE THE LIMIT, in the manner `check:curve-clearance`
- * established: a side too short to give every connector `MIN_FAN_SPACING` is
+ * THE ASSERTIONS INCLUDE THE LIMIT: a side too short to give every connector `MIN_FAN_SPACING` is
  * REPORTED as crowded rather than having the gap squeezed until the arrows
  * touch, and the assertion pins the report rather than pretending the fan is
  * total. A check that only tested the case that works would claim a capability
@@ -249,8 +248,7 @@ check("a side too short for the floor is reported as crowded", () => {
 check("crowding is reported rather than repaired", () => {
   /* The gap is NOT clamped up to the floor when it will not fit: doing that
      would push attachments past the corners and hide a too-dense diagram
-     behind arrows that merely look placed. `curve-clearance` declines a
-     centred obstruction for the same reason. */
+     behind arrows that merely look placed. */
   const side = 176;
   const many = 40;
   assert.ok(isCrowded(many, side));

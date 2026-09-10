@@ -3,6 +3,7 @@ import { ICONS } from "@/features/editor/lib/icons/registry";
 import type { CSSProperties, SVGProps } from "react";
 
 import { groundFieldCss } from "@/lib/canvas-ground";
+import { roundedPolylinePath } from "@/lib/polyline-path";
 import { cn } from "@/lib/utils";
 
 /* The hero borrows the registry's own artwork rather than importing icon
@@ -2259,15 +2260,69 @@ function MiniNode({
  * The four connectors, in the same fixed 350×336 space as the nodes so they
  * meet node edges exactly at every rendering (the card never scales).
  *
+ * RIGHT ANGLES, AND THROUGH THE REAL CORNER-ROUNDER. These were hand-fitted
+ * cubic curves for as long as the C4 canvas drew curves; when it moved to
+ * `lib/orthogonal-route.ts` they became the only C4 connectors in the product
+ * still bending, which is exactly the drift the two panels either side of
+ * this one already claimed not to have. The corners come from
+ * `roundedPolylinePath` — the same function the canvas and every exporter
+ * call — so the hero cannot acquire a house style of its own.
+ *
+ * THE CORNERS ARE STILL HAND-PLACED, and that is the panel's standing
+ * compromise rather than a shortcut here: every miniature on this page sets
+ * its own geometry because the real layout solves for a canvas several times
+ * this width. What is shared is how a corner is DRAWN, not where it falls.
+ *
  * `flowMs` staggers the ambient current so the four packets never set off in
  * lockstep, which would read as a progress bar rather than as traffic.
  */
-const EDGES: readonly { id: string; d: string; flowMs: number }[] = [
-  { id: "customer-web", d: "M 276 22 C 232 28 192 42 152 64", flowMs: 0 },
-  { id: "web-api", d: "M 72 102 C 72 138 130 150 176 153", flowMs: 700 },
-  { id: "api-db", d: "M 212 188 C 212 220 182 244 152 250", flowMs: 1400 },
-  { id: "api-cache", d: "M 276 188 L 276 244", flowMs: 2100 },
+const EDGES: readonly {
+  id: string;
+  points: readonly { x: number; y: number }[];
+  flowMs: number;
+}[] = [
+  {
+    id: "customer-web",
+    points: [
+      { x: 276, y: 22 },
+      { x: 152, y: 22 },
+      { x: 152, y: 64 },
+    ],
+    flowMs: 0,
+  },
+  {
+    id: "web-api",
+    points: [
+      { x: 72, y: 102 },
+      { x: 72, y: 153 },
+      { x: 176, y: 153 },
+    ],
+    flowMs: 700,
+  },
+  {
+    id: "api-db",
+    points: [
+      { x: 212, y: 188 },
+      { x: 212, y: 219 },
+      { x: 152, y: 219 },
+      { x: 152, y: 250 },
+    ],
+    flowMs: 1400,
+  },
+  {
+    id: "api-cache",
+    points: [
+      { x: 276, y: 188 },
+      { x: 276, y: 244 },
+    ],
+    flowMs: 2100,
+  },
 ];
+
+/** Each connector's `d`, rounded once so the two passes below cannot differ. */
+const EDGE_PATHS: ReadonlyMap<string, string> = new Map(
+  EDGES.map((edge) => [edge.id, roundedPolylinePath(edge.points)]),
+);
 
 /**
  * The comet, one entry per pass over the curve, painted in this order.
@@ -2323,7 +2378,7 @@ function Edges(props: SVGProps<SVGSVGElement>) {
           y2="336"
         >
           {/* The stops sit at 25% and 60% rather than at the ends because the
-              four curves only occupy that slice of the axis — projected onto
+              four routes only occupy that slice of the axis — projected onto
               it they land at t = 0.27, 0.42, 0.53 and 0.56. Ramping across the
               full 0→100% put every edge in the first quarter and painted the
               whole diagram one colour; ramping across the band they actually
@@ -2369,14 +2424,14 @@ function Edges(props: SVGProps<SVGSVGElement>) {
             key={edge.id}
             className="af-hero-edge"
             style={delay(BEAT.edges[index])}
-            d={edge.d}
+            d={EDGE_PATHS.get(edge.id)}
             pathLength={1}
             markerEnd={`url(#hero-edge-head-${edge.id})`}
           />
         ))}
       </g>
 
-      {/* The current: each curve drawn several times over, one pass per layer
+      {/* The current: each route drawn several times over, one pass per layer
           of the comet. See TRAIL for how the taper is built. */}
       {TRAIL.map((layer) => (
         <g
@@ -2395,7 +2450,7 @@ function Edges(props: SVGProps<SVGSVGElement>) {
               /* The lag is what separates this layer from the head: same
                  speed, started later, so it rides a fixed distance behind. */
               style={delay(BEAT.flow + edge.flowMs + layer.lagMs)}
-              d={edge.d}
+              d={EDGE_PATHS.get(edge.id)}
               pathLength={1}
             />
           ))}

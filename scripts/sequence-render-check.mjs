@@ -10,7 +10,7 @@
  * (`sequence/export/render-svg.ts` argues it). `/api/render` has no canvas
  * to clone, so a from-model builder went in beside the clone — and the
  * argument that was true about drift is still true. This is what buys it
- * down, in the manner of `check:bezier-path` and `check:icon-markup`: the
+ * down, in the manner of `check:orthogonal-route` and `check:icon-markup`: the
  * two things a second renderer can get wrong are WHERE and WHAT COLOUR, so
  * every coordinate is asserted against `layoutSequence` and every colour
  * against the export palette, element by element.

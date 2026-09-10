@@ -29,8 +29,8 @@
  * PURE, AND THAT IS LOAD-BEARING. `editor/lib/edge-geometry.ts` imports
  * `@xyflow/react`, and Node's type stripping cannot follow an import into
  * React, so nothing there can be loaded by a check script — the same reason
- * `lib/curve-clearance.ts` exists here rather than beside the curve maths.
- * This module is geometry, and `codebase.md` says to prove geometry by
+ * `lib/orthogonal-route.ts` holds the route rather than the module that draws
+ * it. This module is geometry, and `codebase.md` says to prove geometry by
  * computing it. No imports, no DOM, no React.
  */
 
@@ -164,10 +164,9 @@ export function fanSpacing(count: number, length: number): number {
 /**
  * Whether a side is carrying more connectors than it can separate.
  *
- * REPORTED, NOT REPAIRED, and that is the same call `curve-clearance.ts` makes
- * when a box sits dead centre of a line: the honest answer is that the layout
- * has failed, and the remedies — split the diagram, or move a connector to
- * another node — belong to the author. Squeezing the gap below the floor would
+ * REPORTED, NOT REPAIRED: the honest answer is that the layout has failed,
+ * and the remedies — split the diagram, or move a connector to another node —
+ * belong to the author. Squeezing the gap below the floor would
  * hide a too-dense diagram behind arrows that merely look placed.
  */
 export function isCrowded(count: number, length: number): boolean {

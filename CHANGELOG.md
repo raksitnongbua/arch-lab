@@ -7,6 +7,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **C4 connectors are drawn with right angles instead of curves.** A
+  relationship leaves its element, runs straight, and turns a rounded corner
+  where it has to — the same treatment the flowchart, ER and gantt canvases
+  have always used, so a C4 diagram now reads in the same visual language as
+  the rest of them. Every existing document draws the same relationships
+  between the same elements; what moved is the shape of the line between
+  them, on screen, in every SVG and PNG export, and at `/api/render`. A
+  diagram in an old deck will not match a freshly exported one.
+- **A second relationship between the same pair separates along its whole
+  length**, rather than only at its ends. The two lines used to fan apart at
+  the elements and meet again in the middle.
+- **A relationship's label follows the line it names.** Its position used to
+  be measured against the straight line between the two elements, which was
+  close enough for a gentle curve and wrong for a corner — a chip could sit
+  on the far side of the turn from the line it belonged to.
+
 ### Fixed
 
 - **A relationship line can be reworded.** Clicking one opened its detail

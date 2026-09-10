@@ -82,10 +82,10 @@ import {
   arrowHeadPath,
   focusRingGeometry,
   FLOW_SHAPE_TOKENS,
-  roundedPolylinePath,
   shapeGeometry,
   TEXTURE_BY_SHAPE,
 } from "../lib/shapes";
+import { roundedPolylinePath } from "@/lib/polyline-path";
 import { keyActivate } from "@/lib/key-activate";
 
 /* -------------------------------------------------------------------------- */

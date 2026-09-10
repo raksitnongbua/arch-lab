@@ -38,10 +38,10 @@
  *
  *   - **C4** took its connector geometry from `getBezierPath`, a client-only
  *     export of `@xyflow/react`, so `edge-geometry.ts` threw the moment it
- *     was reached from a route; the curve is now `lib/bezier-path.ts`, the
- *     same arithmetic pinned to React Flow's by `check:bezier-path`. Its
- *     icons needed a React renderer and now come from the generated table
- *     above.
+ *     was reached from a route. The connector is now a right-angle route from
+ *     `lib/orthogonal-route.ts`, pure arithmetic with no package behind it,
+ *     proved by `check:orthogonal-route`. Its icons needed a React renderer
+ *     and now come from the generated table above.
  *   - **Sequence** had no model-to-string builder at all: `renderSequenceSvg`
  *     takes a live `SVGSVGElement` and clones the canvas, by explicit design
  *     in its own header. It still does, for the download. The route calls

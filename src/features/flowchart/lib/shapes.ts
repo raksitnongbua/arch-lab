@@ -92,8 +92,6 @@ export const TEXTURE_BY_SHAPE: Record<FlowchartNodeShape, RoleTexture> = {
 
 /** Corner radius of a `step`/`call` box. */
 export const STEP_RADIUS = 8;
-/** Rounding of an orthogonal edge's corners. */
-export const EDGE_CORNER_RADIUS = 8;
 /** Arrowhead length and half-width, matched to the sequence arrow's weight. */
 export const ARROW_LENGTH = 9;
 export const ARROW_HALF_WIDTH = 4.5;
@@ -183,41 +181,6 @@ export function shapeGeometry(
     default:
       return { rect: { rx: STEP_RADIUS } };
   }
-}
-
-/**
- * An orthogonal polyline as a path with rounded corners. The radius shrinks
- * to half the shorter adjoining segment so a tight jog never overshoots —
- * the failure mode of a fixed radius is a little loop drawn at every corner
- * two lanes apart.
- */
-export function roundedPolylinePath(
-  points: readonly FlowPoint[],
-  radius: number = EDGE_CORNER_RADIUS,
-): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
-  let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const prev = points[i - 1];
-    const corner = points[i];
-    const next = points[i + 1];
-    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
-    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
-    const r = Math.min(radius, inLen / 2, outLen / 2);
-    if (r < 0.5) {
-      d += ` L ${fmt(corner.x)} ${fmt(corner.y)}`;
-      continue;
-    }
-    const inX = corner.x - ((corner.x - prev.x) / inLen) * r;
-    const inY = corner.y - ((corner.y - prev.y) / inLen) * r;
-    const outX = corner.x + ((next.x - corner.x) / outLen) * r;
-    const outY = corner.y + ((next.y - corner.y) / outLen) * r;
-    d += ` L ${fmt(inX)} ${fmt(inY)} Q ${fmt(corner.x)} ${fmt(corner.y)} ${fmt(outX)} ${fmt(outY)}`;
-  }
-  const last = points[points.length - 1];
-  d += ` L ${fmt(last.x)} ${fmt(last.y)}`;
-  return d;
 }
 
 /**
