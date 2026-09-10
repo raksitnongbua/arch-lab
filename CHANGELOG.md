@@ -27,6 +27,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **An element on a bundled example page showed no coordinates and no way to
+  release them.** Every element in one of those models states its own
+  position — the format requires it — but the fact was being lost on the way
+  from the server to the browser, so the detail panel on `/live/atlas-shop`,
+  `/live/order-shop` and `/live/shopflow` stayed silent about it. It also put
+  an error in the browser console on every visit.
 - **A relationship line can be reworded.** Clicking one opened its detail
   panel with nothing to edit in it; the verb on the join — the `: places` in
   `customer ||--o{ order : places` — is editable there now. The cardinalities
