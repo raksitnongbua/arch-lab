@@ -1,19 +1,32 @@
 /**
- * Edge geometry. Owns the parallel-edge offset curve ('s
+ * Edge geometry. Owns the parallel-edge corridor separation ('s
  * "second A→B edge stays readable") and the label anchor point.
  *
+ * THE ROUTE ITSELF IS NOT HERE. Side selection lives in `lib/edge-fan.ts` and
+ * the right-angle path in `lib/orthogonal-route.ts`, both pure, because this
+ * module imports `@xyflow/react` and Node's type stripping cannot follow an
+ * import into React — so nothing reachable from here can be loaded by a check
+ * script, and geometry is proved by computing it. What is left here is the
+ * boundary: React Flow's `Position` mapped onto `FanSide`, and the two
+ * decisions that need the whole edge SET rather than one edge (the parallel
+ * corridor offset and the label fan bias).
+ *
  * `selectParallelEdgeGroups` (state) groups edges by UNORDERED endpoint pair,
- * so an A→B and a B→A edge share a group. The perpendicular normal used for
- * the offset is therefore made canonical — derived from the line's
- * orientation, not the edge's direction — so mirrored edges in one group
- * never collapse onto the same curve.
+ * so an A→B and a B→A edge share a group. The corridor offset is an ABSOLUTE
+ * shift of a canvas coordinate rather than one measured along the edge's own
+ * direction, so mirrored edges in one group stay on opposite sides of the
+ * midline instead of collapsing onto one run.
  */
 
 import type { Position } from "@xyflow/react";
 
-import { bezierPath } from "@/lib/bezier-path";
-
-import { clearingOffset } from "@/lib/curve-clearance";
+import { MAX_ANCHOR_SLIDE, orthogonalRoute } from "@/lib/orthogonal-route";
+import {
+  pointAlongPolyline,
+  polylineLength,
+  roundedPolylinePath,
+  type PolylinePoint,
+} from "@/lib/polyline-path";
 import {
   facingSide,
   fanOffset,
@@ -26,7 +39,7 @@ import {
 export { assignFanSlots, parallelEdgeGroups } from "@/lib/edge-fan";
 export type { EdgeFanSlots, FanSlot } from "@/lib/edge-fan";
 
-/** Control-point spacing between adjacent parallel edges, in flow units. */
+/** Corridor spacing between adjacent parallel edges, in flow units. */
 export const PARALLEL_EDGE_SPACING = 48;
 
 /* ---- Floating anchors ------------------------------------------------------ */
@@ -46,6 +59,24 @@ export interface FloatingAnchors {
   targetY: number;
   sourcePosition: Position;
   targetPosition: Position;
+  /**
+   * How far the route may slide these two points along their sides to meet,
+   * rather than joining them with a jog (`MAX_ANCHOR_SLIDE`).
+   *
+   * DECIDED HERE BECAUSE THIS IS WHERE THE FAN IS KNOWN, and it is only ever
+   * granted to a connector that is ALONE on both of its sides. A slot on a
+   * shared side is spaced against its neighbours; sliding it would eat into
+   * a gap `edge-fan` measured, and two connectors that drift together are a
+   * worse defect than the jog this avoids. A lone connector has nothing to
+   * collide with, and its attachment is the side's midpoint — a default, not
+   * a decision.
+   *
+   * Carried on the anchors rather than passed separately so every caller
+   * gets it from the spread it already writes: five surfaces route C4
+   * connectors, and a fix that needed five call-site edits would be one
+   * revert away from being four.
+   */
+  anchorSlack: number;
 }
 
 /**
@@ -60,9 +91,9 @@ export interface FloatingAnchors {
  *
  * The enum's four members ARE the four strings `FanSide` lists — that is why
  * the map this replaces was an identity — so the cast below renames a value
- * rather than reinterpreting one. `check:bezier-path` is what keeps that true:
- * it drives the curve from React Flow's own enum members and from these
- * strings and requires identical paths.
+ * rather than reinterpreting one. `check:orthogonal-route` is what keeps that
+ * true: it drives a route from React Flow's own enum members and from these
+ * strings and requires identical polylines.
  */
 const sideOf = (position: Position): FanSide => position as unknown as FanSide;
 
@@ -120,10 +151,14 @@ export function getFloatingAnchors(
   const sourceSide = facingSide(source, dx, dy);
   const targetSide = facingSide(target, -dx, -dy);
   const alone: FanSlot = { index: 0, count: 1 };
-  const sourcePoint = attachPoint(source, sourceSide, slots?.source ?? alone);
-  const targetPoint = attachPoint(target, targetSide, slots?.target ?? alone);
+  const sourceSlot = slots?.source ?? alone;
+  const targetSlot = slots?.target ?? alone;
+  const sourcePoint = attachPoint(source, sourceSide, sourceSlot);
+  const targetPoint = attachPoint(target, targetSide, targetSlot);
 
   return {
+    anchorSlack:
+      sourceSlot.count === 1 && targetSlot.count === 1 ? MAX_ANCHOR_SLIDE : 0,
     sourceX: sourcePoint.x,
     sourceY: sourcePoint.y,
     targetX: targetPoint.x,
@@ -193,29 +228,38 @@ export interface ParallelEdgePathInput {
   targetPosition: Position;
   /** 0-based position within the edge's parallel group. */
   parallelIndex: number;
-  /** Size of that group. 1 ⇒ default bezier; >1 ⇒ symmetric offsets. */
+  /** Size of that group. 1 ⇒ the plain route; >1 ⇒ symmetric corridors. */
   parallelCount: number;
   /** From `labelBiasByEdgeId`. Omitted ⇒ 0 ⇒ label at the midpoint. */
   labelBias?: LabelBias;
-  /**
-   * Boxes the curve must not pass through — every node on the diagram EXCEPT
-   * this edge's own two endpoints. Omitted, the curve is drawn exactly as it
-   * always was, which is what keeps the editor canvas and every existing
-   * fixture unchanged until a caller opts in.
-   */
-  obstacles?: readonly NodeRect[];
+  /** From `getFloatingAnchors`. Omitted ⇒ 0 ⇒ any misalignment is drawn as a jog. */
+  anchorSlack?: number;
 }
 
 export interface EdgePathGeometry {
   /** SVG path `d` for the edge line. */
   path: string;
-  /** Label anchor — the curve's midpoint, slid along the line by `labelBias`. */
+  /** The route's corners, before rounding — for anything that needs to
+   *  measure the line rather than draw it. */
+  points: readonly PolylinePoint[];
+  /** Label anchor — halfway along the route, slid by `labelBias`. */
   labelX: number;
   labelY: number;
+  /**
+   * The direction of the SEGMENT the anchor landed on.
+   *
+   * A label that wants to sit "beside the line" takes the perpendicular of
+   * this. It used to take the perpendicular of one global source→target
+   * vector, which was within a couple of pixels of the truth on a gentle
+   * curve and is simply wrong on an elbow: that vector points through the
+   * corner, so "beside" comes out in the wrong quadrant on at least one leg.
+   */
+  labelDirX: number;
+  labelDirY: number;
 }
 
 /**
- * Symmetric control-point offset for edge `index` of `count` parallels:
+ * Symmetric corridor offset for edge `index` of `count` parallels:
  * count 1 ⇒ 0; count 2 ⇒ ±24; count 3 ⇒ −48/0/+48 …
  */
 export function parallelOffset(index: number, count: number): number {
@@ -223,92 +267,44 @@ export function parallelOffset(index: number, count: number): number {
 }
 
 /**
- * Slides a midpoint label along the source→target direction by the edge's fan
- * bias (see `labelBiasByEdgeId`). Deliberately along the straight line, not
- * along the curve: at these curvatures the two are within a couple of pixels
- * of each other, and this needs no assumption about how React Flow places the
- * control points of its bezier.
- */
-function slideAlongLine(
-  input: ParallelEdgePathInput,
-  x: number,
-  y: number,
-): { labelX: number; labelY: number } {
-  const bias = input.labelBias ?? 0;
-  if (bias === 0) return { labelX: x, labelY: y };
-  const dx = input.targetX - input.sourceX;
-  const dy = input.targetY - input.sourceY;
-  const length = Math.hypot(dx, dy);
-  if (length === 0) return { labelX: x, labelY: y };
-  const shift = Math.min(LABEL_FAN_SHIFT, length * LABEL_FAN_FRACTION) * bias;
-  return {
-    labelX: x + (dx / length) * shift,
-    labelY: y + (dy / length) * shift,
-  };
-}
-
-/**
- * The edge path plus its label anchor. A lone edge uses React Flow's default
- * bezier; parallels become quadratic curves whose control point is pushed
- * along the canonical perpendicular of the source→target line.
+ * The edge path, its corners, and its label anchor.
+ *
+ * ALONG THE ROUTE, NOT ALONG THE STRAIGHT LINE BETWEEN THE ENDS. The curve
+ * this replaced put its anchor at the cubic's t = 0.5 and then slid it along
+ * the straight source→target line, justified by the two being "within a
+ * couple of pixels of each other at these curvatures". An L-shaped route has
+ * no such luxury — the straight line between its ends is the diagonal it
+ * exists to avoid — so both the anchor and the fan slide are measured by arc
+ * length along the polyline itself.
  */
 export function getParallelEdgePath(
   input: ParallelEdgePathInput,
 ): EdgePathGeometry {
-  const base = parallelOffset(input.parallelIndex, input.parallelCount);
-
-  const dx = input.targetX - input.sourceX;
-  const dy = input.targetY - input.sourceY;
-  const length = Math.hypot(dx, dy) || 1;
-
-  // Canonical perpendicular: flip so it depends only on the line, not on
-  // which endpoint happens to be the source (see header comment).
-  let nx = -dy / length;
-  let ny = dx / length;
-  if (dx < 0 || (dx === 0 && dy < 0)) {
-    nx = -nx;
-    ny = -ny;
-  }
-
-  const offset = clearingOffset({
+  const points = orthogonalRoute({
     sourceX: input.sourceX,
     sourceY: input.sourceY,
+    sourceSide: sideOf(input.sourcePosition),
     targetX: input.targetX,
     targetY: input.targetY,
-    base,
-    normalX: nx,
-    normalY: ny,
-    obstacles: input.obstacles,
+    targetSide: sideOf(input.targetPosition),
+    corridorOffset: parallelOffset(input.parallelIndex, input.parallelCount),
+    slack: input.anchorSlack,
   });
 
-  /* The cubic bezier ONLY while the edge is genuinely straight — a lone
-   * connector with nothing in its way. The moment an offset is wanted, for a
-   * parallel group or to get past a box, the curve becomes the quadratic below,
-   * whose control point is the thing being moved. Keeping the default bezier
-   * for the unobstructed case is what leaves every existing diagram drawing
-   * exactly as it did — and `lib/bezier-path.ts` is React Flow's own
-   * arithmetic, pinned to it by `check:bezier-path`, so "as it did" survived
-   * the move off the package. */
-  if (offset === 0) {
-    const { path, labelX, labelY } = bezierPath({
-      sourceX: input.sourceX,
-      sourceY: input.sourceY,
-      sourcePosition: sideOf(input.sourcePosition),
-      targetX: input.targetX,
-      targetY: input.targetY,
-      targetPosition: sideOf(input.targetPosition),
-    });
-    return { path, ...slideAlongLine(input, labelX, labelY) };
-  }
+  const length = polylineLength(points);
+  const bias = input.labelBias ?? 0;
+  const shift =
+    bias === 0
+      ? 0
+      : Math.min(LABEL_FAN_SHIFT, length * LABEL_FAN_FRACTION) * bias;
+  const anchor = pointAlongPolyline(points, length / 2 + shift);
 
-  const controlX = (input.sourceX + input.targetX) / 2 + nx * offset;
-  const controlY = (input.sourceY + input.targetY) / 2 + ny * offset;
-
-  const path = `M ${input.sourceX},${input.sourceY} Q ${controlX},${controlY} ${input.targetX},${input.targetY}`;
-
-  // Quadratic bezier at t = 0.5: B(0.5) = 0.25·P0 + 0.5·C + 0.25·P1.
-  const midX = 0.25 * input.sourceX + 0.5 * controlX + 0.25 * input.targetX;
-  const midY = 0.25 * input.sourceY + 0.5 * controlY + 0.25 * input.targetY;
-
-  return { path, ...slideAlongLine(input, midX, midY) };
+  return {
+    path: roundedPolylinePath(points),
+    points,
+    labelX: anchor.x,
+    labelY: anchor.y,
+    labelDirX: anchor.dx,
+    labelDirY: anchor.dy,
+  };
 }

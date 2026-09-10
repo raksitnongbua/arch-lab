@@ -2,7 +2,7 @@
 
 /**
  * Read-only edge: the editor's floating-anchor geometry (edges re-anchor to
- * whichever sides face each other) and parallel-offset curves, minus label
+ * whichever sides face each other) and its right-angle route, minus label
  * editing and shortcuts — plus the ONE interaction the viewer adds on top:
  * click a connector to select it and inspect the relationship.
  *
@@ -14,11 +14,15 @@
  * The flow treatment (selected edge only — a selected NODE animates its own
  * outline instead, see viewer-node.tsx, and its touching edges stay static):
  * a `userSpaceOnUse` linear gradient oriented along this edge's own anchors
- * paints THREE overlay paths that reuse the exact bezier `d`.
+ * paints THREE overlay paths that reuse the exact routed `d`.
  * `pathLength={100}` normalises dash arithmetic, so each overlay is a dash
- * "band" whose leading edge travels source → target along the true curve
+ * "band" whose leading edge travels source → target along the true route
  * (never a straight-line approximation) while the fixed gradient recolours it
- * in flight. Stacked bands of decreasing length build the comet falloff; a
+ * in flight. The gradient's axis is still the straight line between the two
+ * ends, which stays correct for an elbow — both of its legs advance along
+ * that diagonal, so the colour progresses once — but NOT for a route that
+ * doubles back, where the colour reverses with it. Back-edges are the case
+ * to look at first if the comet ever reads wrong. Stacked bands of decreasing length build the comet falloff; a
  * wide blurred one underneath is the glow. The arrowhead joins in via a
  * private pulsing <marker> swapped in only while the flow is showing.
  * All ids come from useId, so several live instances can never collide.
@@ -73,7 +77,7 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   edge: C4Edge;
   /** 0-based position within the set of edges sharing this endpoint pair. */
   parallelIndex: number;
-  /** Size of that set. 1 ⇒ straight bezier; >1 ⇒ offset curves. */
+  /** Size of that set. 1 ⇒ the plain route; >1 ⇒ separated corridors. */
   parallelCount: number;
   /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
   labelBias: LabelBias;
@@ -81,9 +85,9 @@ export interface ViewerEdgeData extends Record<string, unknown> {
    * Where this connector attaches on each of its two node sides, among the
    * connectors sharing that side (`lib/edge-fan`).
    *
-   * Handed down for the reason `obstacles` is: an edge would have to know
-   * every OTHER edge on both of its nodes to work its own slot out, and the
-   * answer only changes with the model. The canvas computes it once per
+   * Handed down rather than derived here: an edge would have to know every
+   * OTHER edge on both of its nodes to work its own slot out, and the answer
+   * only changes with the model. The canvas computes it once per
    * diagram from the model rects, which is the same input the exporter uses —
    * so a connector meets its node in the same place in the PNG as on screen.
    */
@@ -97,13 +101,6 @@ export interface ViewerEdgeData extends Record<string, unknown> {
    * edges have labels.
    */
   labelPlacement: { x: number; y: number; crowded: boolean } | null;
-  /**
-   * Boxes this connector must not cross — every element except its own two.
-   * Handed down rather than read from React Flow's store here: an edge would
-   * have to subscribe to every node's measured rect to work it out, which is
-   * one subscription per edge for a list that only changes with the model.
-   */
-  obstacles: readonly { x: number; y: number; width: number; height: number }[];
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -178,7 +175,6 @@ function ViewerEdgeInner({
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
     labelBias: data?.labelBias ?? 0,
-    obstacles: data?.obstacles,
   });
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe
@@ -296,7 +292,7 @@ function ViewerEdgeInner({
       ) : null}
       {showFlow ? (
         // The flow overlay: one fixed gradient along this edge's anchors,
-        // painted onto three dash bands that ride the exact same bezier
+        // painted onto three dash bands that ride the exact same route
         // (pathLength normalises all dash maths to 0–100). Glow → tail →
         // head share one leading edge, so they read as a single comet whose
         // colour shifts primary → accent as it approaches the arrowhead.

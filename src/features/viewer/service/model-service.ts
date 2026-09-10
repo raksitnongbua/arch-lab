@@ -19,6 +19,7 @@
 import type { C4Level } from "@/types";
 
 import { deserializeModel } from "@/features/editor/io/deserialize";
+import { withoutAuthoredGeometry } from "@/types";
 import {
   FileValidationError,
   type ValidationIssue,
@@ -103,7 +104,11 @@ function parseSource(source: ModelSource): ViewerModelResult {
         title: parsed.metadata.title,
         description: parsed.metadata.description ?? "",
         rootDiagramId: parsed.rootDiagramId,
-        diagrams: parsed.diagrams,
+        /* PLAIN ELEMENTS, because this model is handed from a server
+           component to a client one and React will not serialise a symbol
+           key. `ViewerBundledView` re-derives the fact on arrival — see
+           `withoutAuthoredGeometry`. */
+        diagrams: withoutAuthoredGeometry(parsed.diagrams),
         file: {
           version: parsed.version,
           metadata: parsed.metadata,

@@ -57,12 +57,9 @@ import { resolveExportGround } from "@/features/viewer/export/ground";
 
 import type { LaidFlowNode } from "../lib/layout";
 import { FLOW, layoutFlowchart } from "../lib/layout";
-import {
-  arrowHeadPath,
-  roundedPolylinePath,
-  shapeGeometry,
-  TEXTURE_BY_SHAPE,
-} from "../lib/shapes";
+import { roundedPolylinePath } from "@/lib/polyline-path";
+
+import { arrowHeadPath, shapeGeometry, TEXTURE_BY_SHAPE } from "../lib/shapes";
 
 const FONT_SANS =
   "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";

@@ -7,8 +7,53 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Dragging an element snaps it into line.** Move an element near an
+  alignment and it settles onto it, with a hairline showing what it lined up
+  with — the edges and centres of the elements around it, and, more usefully,
+  the position that makes one of its own relationships draw as a single
+  straight line instead of a run-jog-run. Hold `Alt` while dragging to place
+  an element freely. The stop that straightens a relationship is measured
+  where the line actually leaves the element, not at the element's centre:
+  those are different points whenever several relationships share a side, and
+  lining the centres up would leave the line just as bent.
+
+### Changed
+
+- **C4 connectors are drawn with right angles instead of curves.** A
+  relationship leaves its element, runs straight, and turns a rounded corner
+  where it has to — the same treatment the flowchart, ER and gantt canvases
+  have always used, so a C4 diagram now reads in the same visual language as
+  the rest of them. Every existing document draws the same relationships
+  between the same elements; what moved is the shape of the line between
+  them, on screen, in every SVG and PNG export, and at `/api/render`. A
+  diagram in an old deck will not match a freshly exported one.
+- **A second relationship between the same pair separates along its whole
+  length**, rather than only at its ends. The two lines used to fan apart at
+  the elements and meet again in the middle.
+- **A relationship's label follows the line it names.** Its position used to
+  be measured against the straight line between the two elements, which was
+  close enough for a gentle curve and wrong for a corner — a chip could sit
+  on the far side of the turn from the line it belonged to.
+
 ### Fixed
 
+- **A relationship between two elements of different sizes no longer draws a
+  tiny kink.** Centre-aligned elements of different widths have their
+  connection points a few units apart — a person is narrower than a system —
+  and a right-angled line drew that as a run, a jog and another run. It now
+  closes gaps of up to 12 units by meeting in the middle, which is invisible,
+  instead of drawing a step that reads as a rendering fault. Eight
+  relationships across the bundled examples had one, including the document
+  the page opens with. A wider misalignment is still drawn as it is: it is
+  real, and it is the author's to fix — by dragging, which now snaps.
+- **An element on a bundled example page showed no coordinates and no way to
+  release them.** Every element in one of those models states its own
+  position — the format requires it — but the fact was being lost on the way
+  from the server to the browser, so the detail panel on `/live/atlas-shop`,
+  `/live/order-shop` and `/live/shopflow` stayed silent about it. It also put
+  an error in the browser console on every visit.
 - **A relationship line can be reworded.** Clicking one opened its detail
   panel with nothing to edit in it; the verb on the join — the `: places` in
   `customer ||--o{ order : places` — is editable there now. The cardinalities

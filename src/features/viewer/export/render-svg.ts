@@ -496,25 +496,6 @@ function nodeRectOf(node: C4Node): NodeRect {
   };
 }
 
-/**
- * Every node except this edge's own two endpoints — what the curve has to get
- * past. A connector is allowed to touch the boxes it connects, and only those.
- */
-function obstaclesFor(
-  edge: { source: string; target: string },
-  rectById: ReadonlyMap<
-    string,
-    { x: number; y: number; width: number; height: number }
-  >,
-): { x: number; y: number; width: number; height: number }[] {
-  const out = [];
-  for (const [id, rect] of rectById) {
-    if (id === edge.source || id === edge.target) continue;
-    out.push(rect);
-  }
-  return out;
-}
-
 function edgeMarkup(
   diagram: C4Diagram,
   theme: ExportTheme,
@@ -542,12 +523,13 @@ function edgeMarkup(
       parallelIndex: group.index,
       parallelCount: group.count,
       labelBias: labelBias.get(edge.id) ?? 0,
-      obstacles: obstaclesFor(edge, rectById),
     });
     return {
       ...laid,
-      dirX: anchors.targetX - anchors.sourceX,
-      dirY: anchors.targetY - anchors.sourceY,
+      /* The direction of the segment the anchor sits on, not the diagonal
+         between the two nodes — see `EdgePathGeometry.labelDirX`. */
+      dirX: laid.labelDirX,
+      dirY: laid.labelDirY,
     };
   };
   const parts: string[] = [];

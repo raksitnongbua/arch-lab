@@ -1,28 +1,26 @@
 "use client";
 
 /**
- * Alignment guides — COMPLETE in Batch 1, owned by for the
- * sprint. `canvas.tsx` computes alignment during a drag and publishes guide
- * lines here; this overlay renders them in flow coordinates inside the React
- * Flow viewport so they pan and zoom with the diagram. Guides appear only
- * while a dragged node is genuinely snapped to a sibling's edge or centre.
+ * The editor canvas's guide STATE. The drawing lives in
+ * `components/ui/alignment-guides`, shared with the `/live` C4 canvas, and
+ * the geometry in `lib/align-snap` — one definition of a snap, one of a
+ * hairline, and this holds only the answer for this canvas.
+ *
+ * A STORE RATHER THAN A PROP because this canvas publishes guides from
+ * imperative drag handlers that do not own the overlay's render. The viewer
+ * canvas holds the same answer in ordinary state; neither is wrong, and
+ * neither can draw a guide the other would draw differently.
  */
 
-import { ViewportPortal, useViewport } from "@xyflow/react";
 import { create } from "zustand";
 
-export interface AlignmentGuide {
-  id: string;
-  orientation: "horizontal" | "vertical";
-  /** Flow-space coordinate of the line: y for horizontal, x for vertical. */
-  position: number;
-  /** Flow-space extent of the line along its own axis. */
-  from: number;
-  to: number;
-}
+import { AlignmentGuides as GuideLines } from "@/components/ui/alignment-guides";
+import type { AlignmentGuide } from "@/lib/align-snap";
+
+export type { AlignmentGuide };
 
 interface AlignmentGuidesState {
-  guides: AlignmentGuide[];
+  guides: readonly AlignmentGuide[];
 }
 
 const useAlignmentGuidesStore = create<AlignmentGuidesState>(() => ({
@@ -30,7 +28,7 @@ const useAlignmentGuidesStore = create<AlignmentGuidesState>(() => ({
 }));
 
 /** Imperative setters for the canvas drag handlers. */
-export function setAlignmentGuides(guides: AlignmentGuide[]): void {
+export function setAlignmentGuides(guides: readonly AlignmentGuide[]): void {
   const current = useAlignmentGuidesStore.getState().guides;
   if (current.length === 0 && guides.length === 0) return;
   useAlignmentGuidesStore.setState({ guides });
@@ -42,37 +40,5 @@ export function clearAlignmentGuides(): void {
 
 export function AlignmentGuides(): React.JSX.Element | null {
   const guides = useAlignmentGuidesStore((s) => s.guides);
-  const { zoom } = useViewport();
-
-  if (guides.length === 0) return null;
-
-  // The guide must read as a hairline at every zoom level.
-  const thickness = 1 / Math.max(zoom, 0.0001);
-
-  return (
-    <ViewportPortal>
-      {guides.map((guide) => (
-        <div
-          key={guide.id}
-          aria-hidden="true"
-          className="pointer-events-none absolute bg-accent"
-          style={
-            guide.orientation === "vertical"
-              ? {
-                  left: guide.position,
-                  top: guide.from,
-                  width: thickness,
-                  height: guide.to - guide.from,
-                }
-              : {
-                  left: guide.from,
-                  top: guide.position,
-                  width: guide.to - guide.from,
-                  height: thickness,
-                }
-          }
-        />
-      ))}
-    </ViewportPortal>
-  );
+  return <GuideLines guides={guides} />;
 }

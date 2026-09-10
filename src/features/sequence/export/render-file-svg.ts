@@ -24,7 +24,7 @@
  *     stylesheet paints with. Nothing here holds a colour recipe either.
  *   - What remains — which shape carries which paint — is what
  *     `scripts/sequence-render-check.mjs` pins, element by element, against
- *     the canvas renderer. That is the same deal `check:bezier-path` and
+ *     the canvas renderer. That is the same deal `check:orthogonal-route` and
  *     `check:icon-markup` struck for the two C4 dependencies this route used
  *     to refuse over.
  *

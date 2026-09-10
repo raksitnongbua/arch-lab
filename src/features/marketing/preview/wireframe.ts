@@ -274,8 +274,14 @@ function c4Wireframe(id: string): Wireframe | null {
   }
 
   /* Centre to centre, through the authored waypoints. The real canvas routes
-     these as splines around the boxes; at preview scale the difference is
-     under a pixel, and a straight run keeps the module free of a router. */
+     these as right angles between node EDGES (`lib/orthogonal-route.ts`), so
+     this is an approximation and no longer the sub-pixel one it was against
+     the old splines: a route that turns is visibly not the diagonal drawn
+     here. It stays a straight run because a preview thumbnail is read at a
+     glance for its SHAPE — which boxes, roughly where, joined to which — and
+     pulling the router in would make this module a second consumer of node
+     side selection for a difference nobody can see at this size. Revisit it
+     if the preview ever grows big enough to read a corner in. */
   const edges: WireShape[] = [];
   for (const edge of diagram.edges) {
     const from = centres.get(edge.source);

@@ -121,6 +121,13 @@ import {
   type DragOverlay,
 } from "../lib/drag-overlay";
 import { verdictFor } from "@/features/editor/lib/connect-verdict";
+import { AlignmentGuides } from "@/components/ui/alignment-guides";
+import {
+  NO_GUIDES,
+  snapDraggedNode,
+  type AlignmentGuide,
+  type SnapOutcome,
+} from "@/lib/align-snap";
 
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
@@ -1382,11 +1389,71 @@ function ViewerCanvasInner({
    * which is what makes the last frame of the press and the committed frame
    * the same position — and, through the projection cache, the same object. */
   const [dragOverlay, setDragOverlay] = useState<DragOverlay>(NO_DRAG_OVERLAY);
+  /* Mirrored in a ref so the change handler can fold a frame OUTSIDE the
+     state updater. It has to: the fold produces guides as well as a position,
+     and a `setState` updater that also wrote guides would be a side effect in
+     a function React is allowed to call twice. */
+  const dragOverlayRef = useRef<DragOverlay>(NO_DRAG_OVERLAY);
+
+  /* THE ONLY PER-FRAME STATE BESIDE THE MARQUEE AND THE OVERLAY, and it keeps
+     that shape deliberately: consumed by one overlay component and read by no
+     projection memo, so the `nodes` prop holds its identity for the whole
+     gesture (4fa7c36 — see the marquee note). */
+  const [snapGuides, setSnapGuides] =
+    useState<readonly AlignmentGuide[]>(NO_GUIDES);
+
+  /* The geometry the snap measures against, as a ref rather than a dependency:
+     the change handler is deliberately identity-stable for the life of the
+     canvas, and taking `diagram` as a dep would rebuild it on every keystroke
+     in the source pane. */
+  const diagramRef = useRef(diagram);
+  useEffect(() => {
+    diagramRef.current = diagram;
+  }, [diagram]);
+  /* Alt suspends the snap for one gesture, the same modifier and the same
+     meaning as the editor canvas — `canvas-editing.md`: a gesture the
+     neighbouring canvas already has must work the same way. */
+  const snapSuspendedRef = useRef(false);
+
+  const snapFor = useCallback(
+    (nodeId: string, proposed: { x: number; y: number }): SnapOutcome => {
+      const model = diagramRef.current;
+      const moving = model.nodes.find((node) => node.id === nodeId);
+      if (moving === undefined || snapSuspendedRef.current) {
+        return { position: proposed, guides: NO_GUIDES };
+      }
+      return snapDraggedNode({
+        movingId: nodeId,
+        proposed,
+        width: moving.size.width,
+        height: moving.size.height,
+        rects: model.nodes.map((node) => ({
+          id: node.id,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.size.width,
+          height: node.size.height,
+        })),
+        edges: model.edges,
+      });
+    },
+    [],
+  );
 
   const handleNodesChange = useCallback<OnNodesChange<ViewerFlowNode>>(
-    (changes) =>
-      setDragOverlay((current) => dragOverlayAfter(current, changes)),
-    [],
+    (changes) => {
+      const step = dragOverlayAfter(dragOverlayRef.current, changes, snapFor);
+      if (step.overlay !== dragOverlayRef.current) {
+        dragOverlayRef.current = step.overlay;
+        setDragOverlay(step.overlay);
+      }
+      setSnapGuides((current) =>
+        current.length === 0 && step.guides.length === 0
+          ? current
+          : step.guides,
+      );
+    },
+    [snapFor],
   );
 
   const handleNodeDragStop = useCallback<OnNodeDrag<ViewerFlowNode>>(
@@ -1396,12 +1463,19 @@ function ViewerCanvasInner({
          change also arrives on an ABORTED drag (a second finger, or the node
          deleted mid-press), where this handler never runs at all. One clearing
          path, on the library's own press boundary; see `drag-overlay.ts`. */
+      setSnapGuides(NO_GUIDES);
+      /* THROUGH THE SAME SNAP THE OVERLAY USED. React Flow reports the
+         position IT holds — it mutates a throwaway drag item the overlay
+         never touched — so committing `node.position` raw would write the
+         unsnapped number and the element would spring back off its guide the
+         instant the text re-parsed. */
+      const settled = snapFor(node.id, node.position).position;
       edit?.onNodeMove(diagramIdRef.current, node.id, {
-        x: Math.round(node.position.x),
-        y: Math.round(node.position.y),
+        x: Math.round(settled.x),
+        y: Math.round(settled.y),
       });
     },
-    [edit],
+    [edit, snapFor],
   );
 
   /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
@@ -2411,18 +2485,21 @@ function ViewerCanvasInner({
       if (source === undefined || target === undefined) continue;
       const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-      const { path, labelX, labelY } = getParallelEdgePath({
-        ...anchors,
-        parallelIndex: group.index,
-        parallelCount: group.count,
-        labelBias: labelBias.get(edge.id) ?? 0,
-      });
+      const { path, labelX, labelY, labelDirX, labelDirY } =
+        getParallelEdgePath({
+          ...anchors,
+          parallelIndex: group.index,
+          parallelCount: group.count,
+          labelBias: labelBias.get(edge.id) ?? 0,
+        });
       geometry.set(edge.id, {
         path,
         labelX,
         labelY,
-        dirX: anchors.targetX - anchors.sourceX,
-        dirY: anchors.targetY - anchors.sourceY,
+        /* The direction of the segment the anchor sits on, not the diagonal
+           between the two nodes — see `EdgePathGeometry.labelDirX`. */
+        dirX: labelDirX,
+        dirY: labelDirY,
       });
     }
 
@@ -2505,15 +2582,6 @@ function ViewerCanvasInner({
           fanSlots: fans.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
-          /* Every element except this connector's own two, so the curve can
-           * bow around what it does not connect. From the model's rects, like
-           * the label placement above and for the same reason: it is what lets
-           * the exporter reach the same path from the same helper. */
-          obstacles: modelRects.filter(
-            (_rect, index) =>
-              diagram.nodes[index].id !== edge.source &&
-              diagram.nodes[index].id !== edge.target,
-          ),
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,
@@ -3196,6 +3264,25 @@ function ViewerCanvasInner({
              overlay exists for a reader who cannot drag. */
           onNodesChange={editable ? handleNodesChange : undefined}
           onNodeDragStop={editable ? handleNodeDragStop : undefined}
+          /* Alt suspends the snap, read off the drag event rather than from a
+             window key listener: this canvas counts its window listeners (see
+             the marquee note) and React Flow already hands the modifier over
+             on the gesture that needs it. Read at press AND per frame, so
+             holding Alt part-way through a drag releases the element. */
+          onNodeDragStart={
+            editable
+              ? (event) => {
+                  snapSuspendedRef.current = event.altKey;
+                }
+              : undefined
+          }
+          onNodeDrag={
+            editable
+              ? (event) => {
+                  snapSuspendedRef.current = event.altKey;
+                }
+              : undefined
+          }
           /* React Flow does the snapping DURING the gesture, so the node the
              reader is dragging is on the grid the whole way rather than jumping
              to it on release. `EDIT_GRID` is the format's own 8 — see its
@@ -3241,6 +3328,11 @@ function ViewerCanvasInner({
               itself, which is why the field pans and zooms with the drawing
               here rather than needing the in-SVG pattern the others use. */}
           <CanvasGroundLayers />
+          {/* The hairlines that say why a dragged element stopped where it
+              did. Reads `snapGuides` and nothing else reads it, which is what
+              keeps this off the projection memos' dependency lists — the
+              per-frame-state shape the marquee note describes. */}
+          <AlignmentGuides guides={snapGuides} />
           {/* Before every Panel so frames sit behind the nodes and the chrome. */}
           {/* `draggedDiagram`, not `diagram`: a frame's box is the bounding
               box of its members' positions (`placeFrames`), so feeding it the
