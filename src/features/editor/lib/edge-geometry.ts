@@ -246,6 +246,17 @@ export interface EdgePathGeometry {
   labelX: number;
   labelY: number;
   /**
+   * How far along the route the anchor sits, in flow units.
+   *
+   * Handed out so a chip can be moved ALONG its own line rather than only
+   * away from it: the placement pass needs somewhere to start measuring from,
+   * and recomputing it there would be the same arithmetic done twice with two
+   * chances to disagree.
+   */
+  labelArc: number;
+  /** The route's total length, so a slide can be clamped to it. */
+  routeLength: number;
+  /**
    * The direction of the SEGMENT the anchor landed on.
    *
    * A label that wants to sit "beside the line" takes the perpendicular of
@@ -299,11 +310,15 @@ export function getParallelEdgePath(
       : Math.min(LABEL_FAN_SHIFT, length * LABEL_FAN_FRACTION) * bias;
   const anchor = pointAlongPolyline(points, length / 2 + shift);
 
+  const labelArc = Math.min(Math.max(length / 2 + shift, 0), length);
+
   return {
     path: roundedPolylinePath(points),
     points,
     labelX: anchor.x,
     labelY: anchor.y,
+    labelArc,
+    routeLength: length,
     labelDirX: anchor.dx,
     labelDirY: anchor.dy,
   };

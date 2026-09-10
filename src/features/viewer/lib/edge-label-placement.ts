@@ -43,6 +43,10 @@
  * "two halves, each self-consistent" failure with extra steps.
  */
 
+import {
+  pointAlongPolyline,
+  type PolylinePoint,
+} from "@/lib/polyline-path";
 import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
 /** A rectangle in flow units, top-left anchored. */
@@ -123,14 +127,29 @@ export function edgeChipSize(
 /** One relationship's chip, as the placement pass sees it. */
 export interface LabelToPlace {
   id: string;
-  /** The curve midpoint, already slid by the fan bias. */
+  /** The route's midpoint, already slid by the fan bias. */
   anchorX: number;
   anchorY: number;
-  /** Unit vector along source → target. Decides which way "beside" is. */
+  /**
+   * Unit vector along the SEGMENT the anchor sits on. Decides which way
+   * "beside" is — see `EdgePathGeometry.labelDirX` for why it is the
+   * segment's direction and not the diagonal between the two elements.
+   */
   dirX: number;
   dirY: number;
   width: number;
   height: number;
+  /**
+   * The connector's own route, so a chip can move ALONG the line it names
+   * before it gives up and moves away from it.
+   *
+   * Optional because a caller with no polyline to offer — a notation whose
+   * connectors are not routed this way — still gets the walk. Supplied with
+   * `arc`, where on that route the anchor started.
+   */
+  route?: readonly PolylinePoint[];
+  arc?: number;
+  routeLength?: number;
 }
 
 export interface PlacedLabel {
@@ -139,6 +158,24 @@ export interface PlacedLabel {
   /** True when every candidate collided and the anchor was used regardless. */
   crowded: boolean;
 }
+
+/**
+ * How far along its own line a chip will slide, looking for a clear stretch,
+ * before it gives up and walks away from the line.
+ *
+ * TRIED IN ORDER AND BEFORE ANY OF `WALK_RUNGS`, because a chip that has slid
+ * is still ON the thing it names — the reader follows the line and finds the
+ * label on it. A chip that has walked is beside the line and has to be
+ * associated back to it by eye, which is the failure the walk's own bound
+ * exists to limit. Sliding first is strictly better whenever the line has a
+ * clear stretch anywhere along it, and costs nothing when it has not.
+ *
+ * THE REACH IS LONGER THAN THE WALK'S, and deliberately: 80 units sideways
+ * puts a chip in open canvas where nothing says which connector it belongs
+ * to, while 160 units along a connector is still unambiguously that
+ * connector's label. The two bounds answer different questions.
+ */
+const SLIDE_RUNGS = [24, 48, 72, 96, 120, 160] as const;
 
 /**
  * How far off the anchor a chip is willing to walk, in flow units.
@@ -213,11 +250,25 @@ export function placeEdgeLabels(
     const py = ux;
 
     const candidates: { x: number; y: number }[] = [];
-    for (const rung of WALK_RUNGS) {
-      if (rung === 0) {
-        candidates.push({ x: label.anchorX, y: label.anchorY });
-        continue;
+    candidates.push({ x: label.anchorX, y: label.anchorY });
+
+    /* ALONG THE LINE FIRST. Both directions at each rung, nearest first, and
+       clamped to the route's own ends — a chip slid past the last point would
+       sit on the element the connector arrives at. */
+    const route = label.route;
+    const total = label.routeLength;
+    if (route !== undefined && total !== undefined && label.arc !== undefined) {
+      for (const rung of SLIDE_RUNGS) {
+        for (const at of [label.arc + rung, label.arc - rung]) {
+          if (at < 0 || at > total) continue;
+          const station = pointAlongPolyline(route, at);
+          candidates.push({ x: station.x, y: station.y });
+        }
       }
+    }
+
+    for (const rung of WALK_RUNGS) {
+      if (rung === 0) continue;
       candidates.push(
         { x: label.anchorX + px * rung, y: label.anchorY + py * rung },
         { x: label.anchorX - px * rung, y: label.anchorY - py * rung },

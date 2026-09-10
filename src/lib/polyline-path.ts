@@ -129,3 +129,53 @@ export function pointAlongPolyline(
   const last = points[points.length - 1];
   return { ...last, dx: 1, dy: 0 };
 }
+
+/**
+ * The point on the polyline closest to `p`, and how far away that is.
+ *
+ * FOR THE LEADER, and that is the only caller. A relationship's chip is
+ * placed away from its line whenever the line has no clear stretch wide
+ * enough to hold it — a short connector between two elements 100 units apart
+ * cannot carry a 170-unit label anywhere along its length. The chip is then
+ * legible and unattributable, which is the complaint: the reader can read it
+ * and cannot tell which relationship it names. Drawing a hairline back to
+ * this point is what re-attaches it, and it needs the nearest point rather
+ * than an endpoint so the leader crosses nothing on its way.
+ */
+export function nearestPointOnPolyline(
+  points: readonly PolylinePoint[],
+  p: PolylinePoint,
+): PolylineStation & { distance: number } {
+  let best = { x: 0, y: 0, dx: 1, dy: 0, distance: Infinity };
+  for (let i = 1; i < points.length; i += 1) {
+    const from = points[i - 1];
+    const to = points[i];
+    const vx = to.x - from.x;
+    const vy = to.y - from.y;
+    const square = vx * vx + vy * vy;
+    const t =
+      square === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((p.x - from.x) * vx + (p.y - from.y) * vy) / square));
+    const x = from.x + t * vx;
+    const y = from.y + t * vy;
+    const distance = Math.hypot(p.x - x, p.y - y);
+    if (distance < best.distance) {
+      const length = Math.hypot(vx, vy) || 1;
+      best = { x, y, dx: vx / length, dy: vy / length, distance };
+    }
+  }
+  if (best.distance === Infinity && points.length === 1) {
+    return { ...points[0], dx: 1, dy: 0, distance: Math.hypot(p.x - points[0].x, p.y - points[0].y) };
+  }
+  return best;
+}
+
+/**
+ * How far a chip may sit from its line before it needs a leader drawn to it.
+ *
+ * 24 because below it the chip's own rounded corner is within a few units of
+ * the stroke and the two read as touching; above it there is canvas between
+ * them and the association has to be made by eye.
+ */
+export const LEADER_THRESHOLD = 24;

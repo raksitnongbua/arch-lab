@@ -2477,6 +2477,9 @@ function ViewerCanvasInner({
         labelY: number;
         dirX: number;
         dirY: number;
+        points: readonly { x: number; y: number }[];
+        labelArc: number;
+        routeLength: number;
       }
     >();
     for (const edge of diagram.edges) {
@@ -2485,8 +2488,16 @@ function ViewerCanvasInner({
       if (source === undefined || target === undefined) continue;
       const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-      const { path, labelX, labelY, labelDirX, labelDirY } =
-        getParallelEdgePath({
+      const {
+        path,
+        labelX,
+        labelY,
+        labelDirX,
+        labelDirY,
+        points,
+        labelArc,
+        routeLength,
+      } = getParallelEdgePath({
           ...anchors,
           parallelIndex: group.index,
           parallelCount: group.count,
@@ -2496,6 +2507,9 @@ function ViewerCanvasInner({
         path,
         labelX,
         labelY,
+        points,
+        labelArc,
+        routeLength,
         /* The direction of the segment the anchor sits on, not the diagonal
            between the two nodes — see `EdgePathGeometry.labelDirX`. */
         dirX: labelDirX,
@@ -2512,6 +2526,9 @@ function ViewerCanvasInner({
         return [
           {
             id: edge.id,
+            route: laid.points,
+            arc: laid.labelArc,
+            routeLength: laid.routeLength,
             anchorX: laid.labelX,
             anchorY: laid.labelY,
             dirX: laid.dirX,
