@@ -38,8 +38,75 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   from a newer format version lost that line when its label was edited, and a
   flowchart step you had dragged lost its position.
 
+### Fixed
+
+- **A floating panel now closes when you click the diagram behind it.** Export
+  menus, the Share panel, the paths pill, the node context menu, the
+  breadcrumb overflow and the theme and navigation menus all listened for the
+  dismissing press on the bubble phase — and the C4 canvas stops that press to
+  begin its pan, so clicking empty canvas panned the diagram and left the menu
+  open. Every one of them now hears it.
+
 ### Added
 
+- **Copy markdown, in the Share panel.** One press puts
+  `[![title](image)](share link)` on your clipboard — an image of the diagram
+  for a README, a ticket or a Notion page, wrapped in a link back to the live
+  one. The image is drawn in the theme and icon style you were looking at.
+  Every notation offers it; a model that ships with the app does not, because
+  its share link is the page address and there is no payload to draw from.
+- **The Export menu is one screen shorter.** Its three axes — Framing,
+  Sharpness, Smoothness — are one compact list rather than three stacked
+  fields, so Framing stops truncating its own longest option, and the
+  paragraph explaining which axis touches which format folds into a
+  disclosure. The scope note above them is one line naming the diagram
+  instead of three restating the control above it.
+- **The Share panel is one screen shorter.** The link, its length, the two
+  choices and the buttons; Copy link is the one filled button and the rest are
+  quiet beside it. The paragraphs that used to stand above them — what a share
+  link is, what Copy markdown costs, who can read a link — are one disclosure
+  at the foot. The two sentences that change what you should do next stay on
+  screen: a link too long for plain-text email, and a Copy markdown that will
+  not press.
+- **Choose the frame a C4 export is drawn in.** A Framing select in the
+  Export menu, applied to every format it offers — Copy PNG, the SVG and PNG
+  downloads, the GIF and the archives. **Fit** is the frame every export had
+  before and stays the default; **Trim** takes the margin down to a hairline;
+  **16:9**, **4:3** and **1:1** letterbox the drawing onto the theme's own
+  sheet — not just its canvas colour: the `blueprint` ruling, the `paper`
+  grain and the `glass` sheen run right to the edge of the wider frame, so a
+  slide no longer puts a white band around a dark diagram, and a blueprint
+  does not stop being ruled where the drawing stops.
+  **Copy markdown offers the same choice**, as a `frame` control sitting
+  against the button itself in the Share panel — so a README picture can be
+  letterboxed without hand-editing the URL — and a render URL takes it
+  directly as `&f=16x9` (or `trim`, `4x3`, `1x1`). The ratios work for all nine notations; `trim` reaches C4
+  only, because the other eight bake their margins into layout rather than
+  into a margin.
+- **A diagram can be an image at a URL.** `/api/render?m=…` draws a document
+  on the server and answers with SVG, so a diagram can sit in a README, a
+  Notion page or a ticket looking the way arch-lab draws it — themes, role
+  colours and stack icons included — rather than the way whatever tool the page
+  belongs to would draw it. **All nine notations render**, in any of the nine
+  themes — sequence diagrams included, which needed a second renderer written
+  from the model rather than from the canvas the download clones.
+- **A server-drawn image keeps the author's `tagcolor`.** A tag fill is the
+  author's hue at the theme's own pinned lightness, so the same colour lands
+  legibly on `light` and on `blueprint`; the border stays the colour that was
+  written. A colour the grammar accepts but the app itself never writes — a
+  CSS keyword, say — falls back to the plain role palette rather than failing.
+- **A render URL's payload does reach the server**, and that is the one thing
+  to know before using one: it travels in the query string, so it is in the
+  request log and it travels again every time anybody opens the page holding
+  the image. A share link is unchanged — it still carries its model in the `#`
+  fragment, which no browser ever sends anywhere — and no render URL is minted
+  unless you press Copy markdown. The site's own "nothing is uploaded" wording
+  now names this exception everywhere it appears, and the FAQ answers it
+  directly.
+- **A render URL that cannot be drawn answers with a picture that says why**,
+  not a broken image: a truncated payload, an expired link or a document that
+  will not parse each come back as a legible card. The status code still tells
+  the truth for anything reading it.
 - **The use-case, ER and dictionary canvases can be edited by pointing at the
   picture.** Drag a use-case actor or an ER entity and it stays where you put
   it; the position is written into the source text as an `(x,y)` on that

@@ -9,7 +9,9 @@
  * never collapse onto the same curve.
  */
 
-import { getBezierPath, Position } from "@xyflow/react";
+import type { Position } from "@xyflow/react";
+
+import { bezierPath } from "@/lib/bezier-path";
 
 import { clearingOffset } from "@/lib/curve-clearance";
 import {
@@ -47,17 +49,28 @@ export interface FloatingAnchors {
 }
 
 /**
- * `@xyflow/react`'s enum for one of `lib/edge-fan`'s plain side names.
+ * `Position` is imported as a TYPE ONLY, and that is what lets this module be
+ * reached from a route handler.
  *
- * The two are the same four strings; the mapping exists so the fan geometry can
- * stay loadable by a check script (React cannot be followed by Node's type
- * stripping) while React Flow still receives the member it expects.
+ * The interfaces below still speak React Flow's `Position` because React
+ * Flow's own edge components hand it to them, and a type import is erased at
+ * build time — so nothing here pulls the package into the bundle. What used to
+ * pull it in was the VALUE side: `Position.Left` in the map that stood here,
+ * and `getBezierPath` in the curve. Both are gone.
+ *
+ * The enum's four members ARE the four strings `FanSide` lists — that is why
+ * the map this replaces was an identity — so the cast below renames a value
+ * rather than reinterpreting one. `check:bezier-path` is what keeps that true:
+ * it drives the curve from React Flow's own enum members and from these
+ * strings and requires identical paths.
  */
+const sideOf = (position: Position): FanSide => position as unknown as FanSide;
+
 const POSITION_BY_SIDE: Record<FanSide, Position> = {
-  left: Position.Left,
-  right: Position.Right,
-  top: Position.Top,
-  bottom: Position.Bottom,
+  left: "left" as unknown as Position,
+  right: "right" as unknown as Position,
+  top: "top" as unknown as Position,
+  bottom: "bottom" as unknown as Position,
 };
 
 /** Where one connector attaches on the side it leaves, fanned when it shares. */
@@ -268,22 +281,24 @@ export function getParallelEdgePath(
     obstacles: input.obstacles,
   });
 
-  /* React Flow's own bezier ONLY while the edge is genuinely straight — a lone
+  /* The cubic bezier ONLY while the edge is genuinely straight — a lone
    * connector with nothing in its way. The moment an offset is wanted, for a
    * parallel group or to get past a box, the curve becomes the quadratic below,
    * whose control point is the thing being moved. Keeping the default bezier
    * for the unobstructed case is what leaves every existing diagram drawing
-   * exactly as it did. */
+   * exactly as it did — and `lib/bezier-path.ts` is React Flow's own
+   * arithmetic, pinned to it by `check:bezier-path`, so "as it did" survived
+   * the move off the package. */
   if (offset === 0) {
-    const [path, midX, midY] = getBezierPath({
+    const { path, labelX, labelY } = bezierPath({
       sourceX: input.sourceX,
       sourceY: input.sourceY,
-      sourcePosition: input.sourcePosition,
+      sourcePosition: sideOf(input.sourcePosition),
       targetX: input.targetX,
       targetY: input.targetY,
-      targetPosition: input.targetPosition,
+      targetPosition: sideOf(input.targetPosition),
     });
-    return { path, ...slideAlongLine(input, midX, midY) };
+    return { path, ...slideAlongLine(input, labelX, labelY) };
   }
 
   const controlX = (input.sourceX + input.targetX) / 2 + nx * offset;

@@ -30,7 +30,7 @@
  * implementation would pass forever.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -672,6 +672,81 @@ check(
     "overriding it lets the `-1` material layer escape) and `position` must " +
     "not have it; they are two rules for that reason",
 );
+
+/* SECTION 8 — A MENU OVER THE CANVAS MUST HEAR THE PRESS THAT DISMISSES IT.
+   The C4 canvas calls `stopPropagation()` on the pointerdown that begins a pan
+   or a marquee (`viewer-canvas.tsx`), so a dismissal listener on the BUBBLE
+   phase never fires for a click on empty canvas — which is the commonest way
+   anyone closes a floating panel. Every export menu and the Share panel
+   carried that bug at once, each with its own hand-rolled copy of the same
+   effect, and it was reported from outside rather than caught here.
+
+   DERIVED FROM THE FILESYSTEM, not from a list of the menus we remember: a
+   hardcoded set cannot notice the menu it has never heard of, which is exactly
+   how nine copies of one bug survived (`codebase.md`, habit 4). Every
+   document/window `pointerdown`/`mousedown` listener in `src/` is found and
+   required to be captured; the exemptions below are for listeners that are not
+   dismissals at all, and each says why. */
+const sourceFiles = (() => {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(path.join(ROOT, dir), {
+      withFileTypes: true,
+    })) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(rel);
+      else if (/\.tsx?$/.test(entry.name)) out.push(rel);
+    }
+  };
+  walk("src");
+  return out;
+})();
+
+/** Listeners that are not dismissals, and why each may bubble. */
+const BUBBLE_EXEMPT = {
+  "src/features/marketing/dot-grid.tsx":
+    "a hero effect sampling the pointer, not a menu — it dismisses nothing",
+};
+
+const bubbling = [];
+for (const file of sourceFiles) {
+  if (file in BUBBLE_EXEMPT) continue;
+  const source = readFileSync(path.join(ROOT, file), "utf8");
+  for (const match of source.matchAll(
+    /(document|window)\.addEventListener\(\s*"(pointerdown|mousedown)"\s*,\s*([^)]*)\)/g,
+  )) {
+    /* `true` or an options object saying so. A listener that passes options
+       WITHOUT capture is still bubbling and still fails. */
+    const rest = match[3];
+    if (/,\s*true\s*$/.test(rest) || /capture\s*:\s*true/.test(rest)) continue;
+    bubbling.push(`${file} — ${match[1]}.addEventListener("${match[2]}", …)`);
+  }
+}
+
+check(
+  "every dismissal listener is on the capture phase",
+  bubbling.length === 0,
+  "these fire on the BUBBLE phase, so a press on the C4 canvas — which stops " +
+    "propagation to begin its pan — never reaches them and the menu stays " +
+    "open:\n      " +
+    bubbling.join("\n      "),
+);
+
+/* And the two panels that hand-rolled it should not do so again: the shared
+   hook is where the fix lives, so a fourth copy would go stale the next time
+   the contract changes. */
+for (const panel of [
+  "src/features/viewer/export/export-button.tsx",
+  "src/features/viewer/share/share-button.tsx",
+]) {
+  const source = readFileSync(path.join(ROOT, panel), "utf8");
+  check(
+    `${path.basename(panel)} takes its dismissal from the shared hook`,
+    source.includes("useMenuDismissal("),
+    "it hand-rolls the outside-press/Escape pair again — `ui/menu-dismissal.ts` " +
+      "is the one definition, and the capture-phase fix lives there",
+  );
+}
 
 if (failures > 0) {
   console.error(`\ncanvas-chrome-check: ${failures} problem(s).`);

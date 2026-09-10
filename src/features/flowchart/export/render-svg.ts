@@ -83,7 +83,11 @@ export interface RenderedFlowchartSvg {
 export function renderFlowchartSvg(
   file: FlowchartLabFile,
   theme: ExportTheme,
+  options: RenderFlowchartOptions = {},
 ): RenderedFlowchartSvg {
+  const paintForTagColor =
+    options.paintForTagColor ??
+    ((tagColor: string) => resolveTagPaint(tagColor, theme));
   const layout = layoutFlowchart(file);
   const parts: string[] = [];
   const push = (part: string): void => {
@@ -205,7 +209,12 @@ export function renderFlowchartSvg(
     nodeParts.push(
       `<g class="af-export-flow-node" data-flow-rank="${node.rank}">`,
     );
-    const paint = nodePaint(node, file.metadata.tagColors, theme);
+    const paint = nodePaint(
+      node,
+      file.metadata.tagColors,
+      theme,
+      paintForTagColor,
+    );
     // The surface wash rides every shape, mirroring the screen renderer's
     // per-node gradient — a flat export beside a washed canvas would fail
     // the "the file matches the screen" contract.
@@ -292,16 +301,31 @@ export function renderFlowchartSvg(
  * beats the shape's token pair — identical precedence to the screen renderer
  * and to C4's `nodeColorStyle`.
  */
+export interface RenderFlowchartOptions {
+  /**
+   * How an author's `tagcolor` becomes a concrete pair.
+   *
+   * Defaults to `resolveTagPaint`, which asks the browser to evaluate the same
+   * relative-colour expression the canvas paints — exact, and impossible without
+   * a document. `/api/render` passes `lib/tag-paint.ts`'s arithmetic instead.
+   * A seam rather than a branch inside the renderer, because only the caller
+   * knows which environment it is in, and the browser path must stay
+   * byte-for-byte what it was.
+   */
+  paintForTagColor?: (tagColor: string) => { fill: string; stroke: string };
+}
+
 function nodePaint(
   node: LaidFlowNode,
   tagColors: Readonly<Record<string, string>> | undefined,
   theme: ExportTheme,
+  paintForTagColor: (tagColor: string) => { fill: string; stroke: string },
 ): { fill: string; stroke: string } {
   const tagColor = resolveTagColor(
     { tags: node.tags === undefined ? undefined : [...node.tags] },
     tagColors,
   );
-  if (tagColor !== null) return resolveTagPaint(tagColor, theme);
+  if (tagColor !== null) return paintForTagColor(tagColor);
   const shape = theme.flowShapes[node.shape];
   return { fill: shape.fill, stroke: shape.border };
 }

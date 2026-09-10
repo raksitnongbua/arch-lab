@@ -96,10 +96,15 @@ export function SvgExportButton({
     const escape = (event: KeyboardEvent): void => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", close);
+    /* CAPTURED. A menu over the C4 canvas otherwise never hears the press
+       that should dismiss it: the canvas stops propagation on the
+       pointerdown that begins a pan or a marquee, so a bubble-phase
+       listener misses a click on empty canvas — the commonest dismissal
+       gesture there is. `ui/menu-dismissal.ts` carries the full note. */
+    document.addEventListener("mousedown", close, true);
     document.addEventListener("keydown", escape);
     return () => {
-      document.removeEventListener("mousedown", close);
+      document.removeEventListener("mousedown", close, true);
       document.removeEventListener("keydown", escape);
     };
   }, [open]);

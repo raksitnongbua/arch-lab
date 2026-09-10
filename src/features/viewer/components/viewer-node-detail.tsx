@@ -86,7 +86,7 @@ import {
   ROLE_COLOR_VARS,
   tagFillCss,
 } from "@/features/editor/lib/node-colors";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 
 import {
   C4_ABSTRACTION,

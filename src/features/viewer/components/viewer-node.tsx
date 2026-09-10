@@ -31,7 +31,7 @@ import type { C4Level, C4Node, C4NodeType } from "@/types";
 
 import { RefBadge } from "@/features/editor/components/nodes/ref-badge";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 import {
   colorRoleForNode,
   EXTERNAL_DIM_CLASS,

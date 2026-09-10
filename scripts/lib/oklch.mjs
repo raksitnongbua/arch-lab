@@ -145,3 +145,23 @@ export function washMixLinear(fillLinear, strokeLinear, fraction) {
     ),
   );
 }
+
+/**
+ * A LINEAR sRGB triple as the byte-exact colour a browser would report.
+ *
+ * `#rrggbb` when opaque, `rgba(…)` when not — the two shapes
+ * `resolveExportTheme` produces in the browser, because the export renderers
+ * consume this string verbatim and a rasteriser outside the browser will
+ * refuse anything more modern. Gamma-encoded through the same pair of
+ * functions `parseHex` decodes with, so a round trip is stable.
+ */
+export function toSrgbCss(linear, alpha = 1) {
+  const byte = (c) =>
+    Math.round(Math.min(1, Math.max(0, gammaEncode(c))) * 255);
+  const [r, g, b] = linear.map(byte);
+  if (alpha >= 1) {
+    const hex = (n) => n.toString(16).padStart(2, "0");
+    return `#${hex(r)}${hex(g)}${hex(b)}`;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${Math.round(alpha * 1000) / 1000})`;
+}

@@ -370,6 +370,25 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "by accident, or leak.",
       },
       {
+        /* ADDED WITH THE RENDER ROUTE, and phrased as the question a reader
+           actually arrives with — they have just read "nothing is uploaded"
+           somewhere else on the site and are looking at a button that
+           contradicts it. Answering the contradiction directly is the only
+           honest shape for this entry. */
+        question:
+          "If nothing is uploaded, how does Copy markdown put a picture in my README?",
+        answer:
+          "It cannot do it the way a share link does, and that is the trade. A share link keeps " +
+          "the model after the #, which browsers never send anywhere — but a README shows a " +
+          "picture through an image tag, and an image tag is a request. So the markdown you copy " +
+          "points at /api/render with the model in the query string, and that URL does reach our " +
+          "server: once when you test it, and again every time anyone opens the page holding the " +
+          "image. We store none of it — the URL is the only copy, exactly as with a link — but it " +
+          "does travel, it appears in request logs, and an expiring link's image expires with it. " +
+          "Nothing mints such a URL unless you press the button, and if you would rather not, " +
+          "copy the link instead: it shows the diagram live, with its motion and its paths.",
+      },
+      {
         question: "Do share links expire?",
         answer:
           "Only if you ask for it. Expiry is opt-in: choose a lifetime when you create the link " +

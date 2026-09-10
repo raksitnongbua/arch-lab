@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { C4_ABSTRACTION, SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { goToOriginal } from "../../lib/goto-original";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 
 import { resolveIcon } from "../../lib/icons/registry";
 import { colorRoleForNode, EXTERNAL_DIM_CLASS } from "../../lib/node-colors";

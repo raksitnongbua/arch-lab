@@ -1,8 +1,16 @@
-"use client";
-
 /**
  * THE GROUND, IN AN EXPORTED FILE — the sheet the drawing was read on, carried
  * into the download.
+ *
+ * THERE IS NO `"use client"` HERE, AND PUTTING ONE BACK BREAKS THE RENDER
+ * ROUTE. This module is a string builder that reads the live computed styles
+ * when there are any and returns {@link EMPTY} when there are not — the guard
+ * in `resolveExportGround` is the whole environment story. The directive it
+ * used to carry was a habit rather than a requirement, and it made the module
+ * a client reference: all nine SVG builders import it, so `/api/render`
+ * importing any of them threw before it could draw a single node. The guard
+ * makes the module safe in both places; the directive made it legal in only
+ * one.
  *
  * THIS REVERSES A DECISION THIS BRANCH RECORDED, and the reversal is written
  * down rather than edited in quietly. The ground used to be kept OUT of every

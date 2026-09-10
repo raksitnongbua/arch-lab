@@ -20,10 +20,15 @@
  * mentions diagrams. Expiry/TTL, the length tiers, Web Share, the download
  * fallback and the announcements all apply and all come through.
  *
- * NOTHING IS UPLOADED. The payload lives in the URL fragment, which browsers
- * never send to a server — the copy in the link is the only copy. Expiring
- * links send a SHA-256 digest to the signing endpoint, never the flow (see
- * `viewer/share/signature.ts`).
+ * NOTHING IS UPLOADED BY A LINK. The payload lives in the URL fragment, which
+ * browsers never send to a server — the copy in the link is the only copy.
+ * Expiring links send a SHA-256 digest to the signing endpoint, never the flow
+ * (see `viewer/share/signature.ts`). COPY MARKDOWN IS THE EXCEPTION, and it
+ * applies here like everywhere else: this wrapper used to pass a refusal,
+ * because `/api/render` could not draw a sequence document at all. It can
+ * now (`sequence/export/render-file-svg.ts`), so the prop is gone rather
+ * than left passing an empty string — a refusal nobody can trigger is a
+ * sentence that will one day be wrong.
  */
 
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";

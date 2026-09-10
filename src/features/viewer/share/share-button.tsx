@@ -41,6 +41,17 @@
  * says exactly why, and offers the text-file download instead. Browsers
  * without `CompressionStream` get the same honest fallback.
  *
+ * WHAT THE PANEL SHOWS WITHOUT BEING ASKED. It is a control, not a page
+ * about sharing: the link, its length, the two choices, and the buttons. The
+ * standing prose that used to sit above the buttons — the privacy promise,
+ * what Copy markdown costs, who can read a link — is one disclosure at the
+ * foot, because a reader opening this panel has already decided to share and
+ * four paragraphs between them and Copy link is a worse answer than a
+ * summary they can open. TWO SENTENCES ARE EXEMPT and stay on screen: a
+ * length that plain-text email will break, and a Copy markdown that will not
+ * press. Both change what the sharer should do NEXT, which is the line: a
+ * fact about this link stays out; an explanation of the feature folds away.
+ *
  * Keyboard/a11y: normal trigger button (`aria-expanded`/`aria-haspopup`),
  * panel is a labelled non-modal dialog that receives focus on open, Escape
  * closes it (capture phase — it never reaches the canvas's Escape ladder)
@@ -49,9 +60,25 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Check, Copy, Download, Share2 } from "lucide-react";
+import { useTheme } from "next-themes";
+
+import { THEMES, DEFAULT_THEME_BY_SCHEME, type Theme } from "@/lib/constants";
+import { useIconStyle } from "@/lib/icon-style-store";
+import {
+  DEFAULT_DIAGRAM_FRAMING,
+  DIAGRAM_FRAMINGS,
+  DIAGRAM_FRAMING_LABEL,
+  type DiagramFraming,
+} from "@/lib/diagram-framing";
+
+import {
+  BUNDLED_MARKDOWN_REFUSAL,
+  buildRenderMarkdown,
+} from "./render-markdown";
+import { Check, Copy, Download, FileCode2, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 import type { C4Diagram } from "@/types";
@@ -92,6 +119,12 @@ type LinkState =
   | {
       status: "ready";
       url: string;
+      /**
+       * The fragment body this link was built from, kept so Copy Markdown can
+       * put the SAME payload — same diagram, same expiry — in a query string
+       * without re-encoding it. Absent for a bundled link, which has none.
+       */
+      fragment?: string;
       expiresAt: number | null;
       expiryNote?: string;
       /**
@@ -216,6 +249,22 @@ export function ShareButton({
 }: ShareButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+  /* The theme and icon style go INTO the render URL, so the image in someone
+     else's page matches the screen this was copied from. Neither travels in a
+     share link — the reader at the other end sees their own preferences — so a
+     render URL is the only place either choice can be expressed at all. */
+  const { theme: activeTheme } = useTheme();
+  const [iconStyle] = useIconStyle();
+  /* THE ONE SETTING HERE THAT IS NOT ABOUT THE LINK. The theme and the icon
+     style are read off the screen because the image should match what the
+     sharer was looking at; a framing has no on-screen counterpart to read,
+     so it is asked for. Local state rather than remembered, matching the
+     Export menu's own Framing: it is a property of the image you are making
+     now, not a way you like to see diagrams. */
+  const [framing, setFraming] = useState<DiagramFraming>(
+    DEFAULT_DIAGRAM_FRAMING,
+  );
   const [link, setLink] = useState<LinkState>({ status: "building" });
   /** Seconds; null = never expires, which stays the default (opt-in). */
   const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
@@ -372,6 +421,7 @@ export function ShareButton({
             : {
                 status: "ready",
                 url,
+                fragment,
                 expiresAt: expiry?.expiresAt ?? null,
                 expiryNote,
                 overSafeLength: url.length > SHARE_URL_SAFE_LENGTH,
@@ -451,33 +501,25 @@ export function ShareButton({
 
   /* ---- open/close mechanics (same contract as the export menu) ------------ */
 
+  /* THE DISMISSAL CONTRACT, from the shared hook rather than a fourth copy
+     of it. This panel hand-rolled the pair for a release and carried the bug
+     the hook's header now records: its outside-`pointerdown` was on the
+     BUBBLE phase, and the C4 canvas stops propagation on the press that
+     begins a pan — so clicking the empty canvas, which is what anyone does
+     to dismiss a panel, panned the diagram and left the panel open. */
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+  useMenuDismissal(open, dismiss, rootRef);
+
+  /* FOCUS INTO THE PANEL when it opens — the one clause the shared contract
+     deliberately leaves to each menu, since where focus should land is a
+     property of what the menu holds. This is a labelled dialog, so it takes
+     focus itself. */
   useEffect(() => {
     if (!open) return;
     panelRef.current?.focus();
-    const onPointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (
-        root !== null &&
-        event.target instanceof Node &&
-        !root.contains(event.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    // Capture phase: this Escape must never reach the canvas's climb ladder.
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown, true);
-    };
   }, [open]);
 
   /* ---- actions -------------------------------------------------------------- */
@@ -499,6 +541,52 @@ export function ShareButton({
     },
     [onAnnounce],
   );
+
+  const handleCopyMarkdown = useCallback(
+    (url: string, fragment: string) => {
+      const markdown = buildRenderMarkdown({
+        origin: window.location.origin,
+        fragment,
+        shareUrl: url,
+        /* Validated against `THEMES` rather than trusted: next-themes hands
+           back whatever is stored, including `undefined` on the first paint
+           and a stale name after a theme is removed. The route would fall back
+           to the same default, but a URL naming a theme that does not exist is
+           a URL nobody can debug. */
+        theme: THEMES.includes(activeTheme as Theme)
+          ? (activeTheme as Theme)
+          : DEFAULT_THEME_BY_SCHEME.light,
+        iconStyle,
+        framing,
+        title: documentTitle,
+      });
+      navigator.clipboard
+        .writeText(markdown)
+        .then(() => {
+          setCopiedMarkdown(true);
+          onAnnounce(
+            "Markdown copied to clipboard — an image of this diagram, linked to the share link.",
+          );
+          window.setTimeout(() => setCopiedMarkdown(false), 2_000);
+        })
+        .catch(() => {
+          onAnnounce(
+            "Copying was blocked by the browser — copy the share link instead and use it by hand.",
+          );
+        });
+    },
+    [activeTheme, iconStyle, framing, documentTitle, onAnnounce],
+  );
+
+  /* THE ONE REMAINING REFUSAL. A per-notation `markdownRefusal` prop stood
+     here while `/api/render` could not draw a sequence document; every
+     notation draws now, so the prop is gone rather than left with no caller.
+     A bundled model still refuses, and for a different reason entirely — it
+     has no payload to put in a query string, not a drawing nobody can make.
+     The control is DISABLED with the sentence on it rather than hidden: a
+     reader looking for the button should find out why it is not for them. */
+  const markdownUnavailable =
+    share.kind === "bundled" ? BUNDLED_MARKDOWN_REFUSAL : undefined;
 
   const canWebShare =
     typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -558,22 +646,6 @@ export function ShareButton({
             Share this {noun}
           </h2>
 
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            {share.kind === "bundled"
-              ? `This ${noun} ships with arch-lab, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it.`
-              : `Nothing is uploaded: the ${noun} travels inside the link itself, compressed into the part after # — which browsers never send to any server.`}
-          </p>
-
-          {includeDiagram && diagram !== undefined ? (
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              The link opens on the diagram you are viewing:{" "}
-              <span className="font-medium text-foreground">
-                {diagram.title}
-              </span>
-              .
-            </p>
-          ) : null}
-
           {link.status === "building" ? (
             <p role="status" className="mt-3 text-sm text-muted-foreground">
               Building the link…
@@ -597,40 +669,60 @@ export function ShareButton({
                   rebuilding && "opacity-50",
                 )}
               />
-              {share.kind === "payload" ? (
-                link.overSafeLength ? (
-                  /* The middle tier: a working link with an honest caveat,
-                     not a refusal — browsers and chat apps carry links this
-                     long without trouble; plain-text email is the one carrier
-                     that reliably cannot (RFC 5322 wraps lines at 998 octets,
-                     so no document-carrying link is truly email-proof). */
-                  <p className="mt-1.5 text-xs leading-relaxed text-warning">
-                    {link.url.length.toLocaleString("en-US")} characters — fine
-                    in browsers and chat apps, but plain-text email can wrap and
-                    break a link this long. For email, download the{" "}
-                    {downloadExtension} file below and send that instead.
-                  </p>
+
+              {/* ONE LINE OF METADATA UNDER THE FIELD, not two paragraphs
+                  beside it. The length and which diagram the link opens on are
+                  both facts about the URL above, so they read as its caption;
+                  everything that is an EXPLANATION rather than a fact about
+                  this link now lives in the disclosure at the bottom. */}
+              <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                {share.kind === "payload" ? (
+                  <span className={link.overSafeLength ? "text-warning" : ""}>
+                    {link.url.length.toLocaleString("en-US")} characters
+                  </span>
                 ) : (
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {link.url.length.toLocaleString("en-US")} characters — short
-                    enough to stay intact in essentially any app.
-                  </p>
-                )
+                  <span>The page&rsquo;s own address</span>
+                )}
+                {includeDiagram && diagram !== undefined ? (
+                  <span className="min-w-0 truncate">
+                    Opens on{" "}
+                    <span className="font-medium text-foreground">
+                      {diagram.title}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+
+              {/* The one length caveat that carries an INSTRUCTION stays on
+                  screen rather than folding away: a sharer about to email a
+                  link this long needs to know before they press, not after. */}
+              {share.kind === "payload" && link.overSafeLength ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                  Fine in browsers and chat apps, but plain-text email can wrap
+                  and break a link this long — for email, download the{" "}
+                  {downloadExtension} file and send that instead.
+                </p>
               ) : null}
 
-              {/* HOW THE LINK OPENS, offered for both share kinds: immersive
-                  describes the arrival, not the payload, so a bundled model's
-                  plain page address takes it too (`?i=1` — five characters).
-                  A NATIVE checkbox in a label, matching the native select
-                  below rather than inventing a switch beside it.
-                  Off by default. A link that hides the rest of the site is a
-                  decision the sharer makes for a presentation; inheriting it
-                  is how `/live/[modelId]` used to strand readers with no
-                  visible way back, which is why that default was removed. */}
-              <div className="mt-3 flex flex-col gap-1.5">
+              {/* THE TWO CHOICES ABOUT THE LINK, IN ONE GROUP. A bordered,
+                  divided list rather than two loose rows: giving them one
+                  visible container is what stops the panel reading as an
+                  undifferentiated column of text. Both stay NATIVE controls —
+                  a checkbox and a select — for the same reason as before.
+                  THE IMAGE FRAME IS NOT ONE OF THEM and sat here for a
+                  release: it changes nothing about the link, only about the
+                  picture Copy markdown mints, so a reader adjusting it here
+                  was adjusting a control two rows above the only button it
+                  affects. It now rides that button instead.
+                  Immersive is off by default and offered for both share kinds:
+                  it describes the arrival, not the payload. Expiry is offered
+                  only for payload links and only where the deployment can
+                  verify — without a public key the RECIPIENT could not check
+                  it, so minting one would produce a link nobody can open. */}
+              <div className="mt-3 divide-y divide-border/60 rounded-md border border-border/60">
                 <label
                   htmlFor={`${panelId}-immersive`}
-                  className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                  className="flex cursor-pointer items-center justify-between gap-2 px-2.5 py-2 text-xs text-muted-foreground"
                 >
                   <span>Open immersive</span>
                   <input
@@ -643,24 +735,10 @@ export function ShareButton({
                     className="size-3.5 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   />
                 </label>
-                {openImmersive ? (
-                  <p className="text-xs text-muted-foreground">
-                    The {noun} fills the recipient&rsquo;s window with the site
-                    chrome hidden. Escape brings it back — they are not stuck
-                    there.
-                  </p>
-                ) : null}
-              </div>
-
-              {/* Offered only for payload links (a bundled link has no payload
-                  to expire) and only where the deployment can verify — without
-                  a public key the RECIPIENT could not check the expiry, so
-                  minting one would produce a link nobody can open. */}
-              {share.kind === "payload" && canVerifyExpiry() ? (
-                <div className="mt-3 flex flex-col gap-1.5">
+                {share.kind === "payload" && canVerifyExpiry() ? (
                   <label
                     htmlFor={`${panelId}-ttl`}
-                    className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-muted-foreground"
                   >
                     <span>Expires</span>
                     <select
@@ -670,7 +748,7 @@ export function ShareButton({
                         const raw = event.target.value;
                         handleTtlChange(raw === "never" ? null : Number(raw));
                       }}
-                      className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      className="-mr-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       {TTL_CHOICES.map((choice) => (
                         <option
@@ -684,22 +762,38 @@ export function ShareButton({
                       ))}
                     </select>
                   </label>
-                  {link.expiresAt !== null ? (
-                    <p className="text-xs text-muted-foreground">
-                      This link stops working on{" "}
-                      <span className="font-medium text-foreground">
-                        {formatExpiry(link.expiresAt)}
-                      </span>
-                      . It is not a secret — anyone with the link can read the{" "}
-                      {noun} until then.
-                    </p>
-                  ) : null}
-                  {link.expiryNote !== undefined ? (
-                    <p className="text-xs text-warning">{link.expiryNote}</p>
-                  ) : null}
-                </div>
+                ) : null}
+              </div>
+
+              {/* Consequences of the two choices, outside the group so the
+                  group stays two tidy rows. Each appears only once the choice
+                  that makes it true has been made. */}
+              {openImmersive ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  The {noun} fills the recipient&rsquo;s window with the site
+                  chrome hidden. Escape brings it back.
+                </p>
               ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
+              {link.expiresAt !== null ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  Stops working on{" "}
+                  <span className="font-medium text-foreground">
+                    {formatExpiry(link.expiresAt)}
+                  </span>
+                  .
+                </p>
+              ) : null}
+              {link.expiryNote !== undefined ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                  {link.expiryNote}
+                </p>
+              ) : null}
+
+              {/* ONE PRIMARY, THE REST QUIET. Copy link is what almost every
+                  press wants, so it takes the row and the filled variant;
+                  Web Share sits beside it as an icon because its label
+                  duplicates the panel's own heading. */}
+              <div className="mt-3 flex gap-2">
                 <button
                   type="button"
                   onClick={() => handleCopy(link.url)}
@@ -709,6 +803,7 @@ export function ShareButton({
                   disabled={rebuilding}
                   className={cn(
                     buttonClasses({ size: "sm" }),
+                    "flex-1",
                     rebuilding && "cursor-not-allowed opacity-60",
                   )}
                 >
@@ -723,14 +818,80 @@ export function ShareButton({
                   <button
                     type="button"
                     onClick={() => handleWebShare(link.url)}
+                    aria-label="Share with another app"
+                    title="Share with another app"
                     className={buttonClasses({
                       variant: "outline",
                       size: "sm",
+                      className: "px-2.5",
                     })}
                   >
                     <Share2 aria-hidden="true" />
-                    Share…
                   </button>
+                ) : null}
+              </div>
+
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {link.fragment !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMarkdown(link.url, link.fragment as string)
+                    }
+                    // Two reasons to refuse a press. Rebuilding is the same
+                    // guard as Copy link and for a stronger reason: this hands
+                    // over an IMAGE URL as well as a link, so a stale press
+                    // would paste a picture of the previous expiry into
+                    // somebody's README. A notation the route cannot draw is
+                    // the other, and it carries its sentence on the control.
+                    disabled={rebuilding || markdownUnavailable !== undefined}
+                    title={markdownUnavailable}
+                    className={cn(
+                      buttonClasses({ variant: "ghost", size: "sm" }),
+                      (rebuilding || markdownUnavailable !== undefined) &&
+                        "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    {copiedMarkdown ? (
+                      <Check aria-hidden="true" />
+                    ) : (
+                      <FileCode2 aria-hidden="true" />
+                    )}
+                    {copiedMarkdown ? "Copied" : "Copy markdown"}
+                  </button>
+                ) : null}
+                {/* THE FRAME RIDES THE BUTTON IT CHANGES. It is the only
+                    setting in this panel that touches one action rather than
+                    the link, so it sits against that action instead of in
+                    the group above — adjacency IS the explanation, and it is
+                    a cheaper one than the sentence that had to say which
+                    button the row applied to. The word "frame" stays visible
+                    because "Fit" alone, beside a copy button, names nothing.
+                    Same rebuild guard as the button: a frame chosen against
+                    a stale link would be pasted with a stale expiry. */}
+                {markdownUnavailable === undefined &&
+                link.fragment !== undefined ? (
+                  <label
+                    htmlFor={`${panelId}-framing`}
+                    className="mr-auto flex items-center gap-1 pl-0.5 text-xs text-muted-foreground"
+                  >
+                    frame
+                    <select
+                      id={`${panelId}-framing`}
+                      value={framing}
+                      disabled={rebuilding}
+                      onChange={(event) => {
+                        setFraming(event.target.value as DiagramFraming);
+                      }}
+                      className="rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60"
+                    >
+                      {DIAGRAM_FRAMINGS.map((option) => (
+                        <option key={option} value={option}>
+                          {DIAGRAM_FRAMING_LABEL[option].name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 ) : null}
                 {share.kind === "payload" ? (
                   <button
@@ -739,10 +900,61 @@ export function ShareButton({
                     className={buttonClasses({ variant: "ghost", size: "sm" })}
                   >
                     <Download aria-hidden="true" />
-                    Download {downloadExtension}
+                    {downloadExtension}
                   </button>
                 ) : null}
               </div>
+
+              {/* WHERE THE PROSE WENT. Four paragraphs used to stand open
+                  above the buttons — the privacy promise, what Copy markdown
+                  costs, and who can read a link — which is more standing text
+                  than the diagram behind it. None of it is dropped: it is one
+                  click away, and the two sentences that a sharer must not miss
+                  (a length that breaks email, a markdown button that will not
+                  press) stay on screen where they belong. */}
+              <details className="group mt-3 border-t border-border/60 pt-2.5">
+                <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+                  What a share link is, and what it costs
+                </summary>
+                <div className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground">
+                  <p>
+                    {share.kind === "bundled"
+                      ? `This ${noun} ships with arch-lab, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it.`
+                      : `Nothing is uploaded: the ${noun} travels inside the link itself, compressed into the part after # — which browsers never send to any server.`}
+                  </p>
+                  <p>
+                    {markdownUnavailable !== undefined ? (
+                      <>
+                        <span className="font-medium text-foreground">
+                          No markdown for this one —
+                        </span>{" "}
+                        {markdownUnavailable}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-foreground">
+                          Copy markdown
+                        </span>{" "}
+                        gives you an image of this {noun} for a README or a
+                        ticket, linked back to the diagram. Unlike the link, the
+                        image asks our server to draw it — so the {noun} travels
+                        in that URL every time the page is opened. The{" "}
+                        <span className="font-medium text-foreground">
+                          frame
+                        </span>{" "}
+                        beside the button says how much sheet the picture is
+                        drawn on — a ratio letterboxes it onto the theme&rsquo;s
+                        own sheet, for a slide.
+                      </>
+                    )}
+                  </p>
+                  <p>
+                    Anyone with the link can view the {noun} — a link is not a
+                    secret, and sending it through a chat or email service
+                    shares the {noun} with that service too.
+                  </p>
+                </div>
+              </details>
             </>
           ) : null}
 
@@ -795,12 +1007,6 @@ export function ShareButton({
               </div>
             </>
           ) : null}
-
-          <p className="mt-3 border-t border-border/60 pt-2.5 text-xs leading-relaxed text-muted-foreground">
-            Anyone with the link can view the {noun} — a link is not a secret,
-            and sending it through a chat or email service shares the {noun}{" "}
-            with that service too.
-          </p>
         </div>
       ) : null}
     </div>

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useIconStyle } from "@/lib/icon-style";
+import { useIconStyle } from "@/lib/icon-style-store";
 import { cn } from "@/lib/utils";
 import type { C4NodeType } from "@/types";
 

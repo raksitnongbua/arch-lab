@@ -26,7 +26,7 @@
  * outcome ("Exported shopflow-diagrams.zip") is announced politely.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import {
   ClipboardCopy,
   ChevronDown,
@@ -38,13 +38,26 @@ import {
 
 import { useBrowserCapability } from "@/lib/browser-capability";
 import { buttonClasses } from "@/components/ui/button";
-import { MENU_ITEM_CLASSES } from "@/components/ui/menu-item";
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
+import {
+  MENU_ITEM_CLASSES,
+  MENU_ITEM_HINT_CLASSES,
+} from "@/components/ui/menu-item";
 import { toast } from "@/components/ui/toast";
 import { LEVEL_LABEL } from "@/lib/constants";
+import {
+  DEFAULT_DIAGRAM_FRAMING,
+  DIAGRAM_FRAMINGS,
+  DIAGRAM_FRAMING_LABEL,
+  framingPadding,
+  reframeSvg,
+  type DiagramFraming,
+} from "@/lib/diagram-framing";
 import { cn } from "@/lib/utils";
 import type { C4Diagram } from "@/types";
 import { describeError } from "@/lib/errors";
 
+import { resolveExportGround } from "./ground";
 import {
   archiveEntryName,
   canCopyPng,
@@ -64,6 +77,7 @@ import {
   type C4Sharpness,
   type C4Smoothness,
 } from "./frames";
+import { embeddedIconSvg } from "./icon-markup-client";
 import { renderDiagramSvg } from "./render-svg";
 import { resolveExportTheme, resolveTagPaint } from "./theme";
 import { createZip, type ZipEntry } from "./zip";
@@ -147,6 +161,13 @@ export function ViewerExportButton({
   const [smoothness, setSmoothness] = useState<C4Smoothness>(
     DEFAULT_C4_GIF_QUALITY.smoothness,
   );
+  /* THE FRAME, alongside Sharpness rather than remembered: it is a property
+     of the file you are making now (this one goes in a deck, that one in a
+     README), not a way you like to see diagrams. Icon style is the opposite
+     case and is a stored preference for exactly that reason. */
+  const [framing, setFraming] = useState<DiagramFraming>(
+    DEFAULT_DIAGRAM_FRAMING,
+  );
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   /* The menu is shut until someone opens it, so the Copy row never appears
@@ -156,34 +177,19 @@ export function ViewerExportButton({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
-  // Close on click-away and on Escape (returning focus to the trigger).
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (
-        root !== null &&
-        event.target instanceof Node &&
-        !root.contains(event.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    // Capture phase: this Escape must never reach the canvas's climb ladder.
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [open]);
+  /* THE DISMISSAL CONTRACT, from the shared hook rather than a fourth copy
+     of it. This panel hand-rolled the pair for a release and carried the bug
+     the hook's header now records: its outside-`pointerdown` was on the
+     BUBBLE phase, and the C4 canvas stops propagation on the press that
+     begins a pan — so clicking the empty canvas, which is what anyone does
+     to dismiss a panel, panned the diagram and left the panel open. The
+     close callback also returns focus to the trigger, which is the one thing
+     this panel needs beyond the contract. */
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+  useMenuDismissal(open, dismiss, rootRef);
 
   const runExport = useCallback(
     async (kind: "svg" | "png" | "gif" | "copy") => {
@@ -194,11 +200,28 @@ export function ViewerExportButton({
         // Resolved ONCE, outside the loop: reading the live tokens per diagram
         // would let a theme switch mid-export produce a half-light archive.
         const theme = resolveExportTheme();
+        /* Read ONCE beside the theme, and for the same reason: the sheet has
+           to be the one the reader is looking at, and a letterboxed frame
+           needs it painted over the band as well as under the drawing —
+           `reframeSvg` relays it rather than leaving the margin unruled. */
+        const ground = resolveExportGround();
+        /* THE FRAME IS TWO STEPS, and they are not interchangeable. The
+           margin goes INTO the renderer, because only it knows what its
+           margin is and what hangs inside it; the aspect ratio is applied to
+           the finished file, because expanding a viewBox is pure geometry.
+           `lib/diagram-framing.ts` carries the argument. */
         const render = (target: C4Diagram) =>
-          renderDiagramSvg(target, modelTitle, theme, {
-            tagColors,
-            paintForTagColor: (tagColor) => resolveTagPaint(tagColor, theme),
-          });
+          reframeSvg(
+            renderDiagramSvg(target, modelTitle, theme, {
+              embedIcon: embeddedIconSvg,
+              tagColors,
+              paintForTagColor: (tagColor) => resolveTagPaint(tagColor, theme),
+              padding: framingPadding(framing),
+            }),
+            framing,
+            theme.canvas,
+            ground,
+          );
 
         if (scope === "current") {
           const filename = `${stem}-${diagram.level}.${kind}`;
@@ -283,7 +306,16 @@ export function ViewerExportButton({
         setBusy(false);
       }
     },
-    [allDiagrams, diagram, modelTitle, scope, tagColors, sharpness, smoothness],
+    [
+      allDiagrams,
+      diagram,
+      modelTitle,
+      scope,
+      tagColors,
+      framing,
+      sharpness,
+      smoothness,
+    ],
   );
 
   /* Shared with the sequence exporter — see `ui/menu-item.ts` for why. */
@@ -350,23 +382,26 @@ export function ViewerExportButton({
             />
           </div>
 
-          <p className="px-2.5 pb-2 text-xs leading-snug text-muted-foreground">
+          {/* WHAT THE SCOPE MEANS, in one line under the control that sets
+              it. It was three lines of prose repeating the words already on
+              the segmented control above ("Exports the diagram you are
+              viewing…"); what a reader cannot see for themselves is WHICH
+              diagram, and for the archive, that it arrives as one file. */}
+          <p className="truncate px-2.5 pb-2 text-xs text-muted-foreground">
             {scope === "current" ? (
               <>
-                Exports the diagram you are viewing:{" "}
                 <span className="font-medium text-foreground">
                   {diagram.title}
                 </span>{" "}
-                ({LEVEL_LABEL[diagram.level]} view).
+                · {LEVEL_LABEL[diagram.level]} view
               </>
             ) : (
               <>
-                Exports all{" "}
                 <span className="font-medium text-foreground">
                   {allDiagrams.length} diagrams
                 </span>{" "}
-                — every level, in drill order — as one{" "}
-                <span className="font-mono">.zip</span>.
+                · every level, in drill order, as one{" "}
+                <span className="font-mono">.zip</span>
               </>
             )}
           </p>
@@ -390,7 +425,7 @@ export function ViewerExportButton({
               />
               <span>
                 Copy PNG
-                <span className="block text-xs text-muted-foreground">
+                <span className={MENU_ITEM_HINT_CLASSES}>
                   To the clipboard at {PNG_SCALE * C4_SHARPNESS[sharpness]}×
                   resolution
                 </span>
@@ -407,7 +442,7 @@ export function ViewerExportButton({
             <FileCode2 aria-hidden="true" className="size-4 text-primary" />
             <span>
               {scope === "all" ? "Download SVG archive" : "Download SVG"}
-              <span className="block text-xs text-muted-foreground">
+              <span className={MENU_ITEM_HINT_CLASSES}>
                 Vector — crisp at any size
               </span>
             </span>
@@ -422,7 +457,7 @@ export function ViewerExportButton({
             <FileImage aria-hidden="true" className="size-4 text-primary" />
             <span>
               {scope === "all" ? "Download PNG archive" : "Download PNG"}
-              <span className="block text-xs text-muted-foreground">
+              <span className={MENU_ITEM_HINT_CLASSES}>
                 Raster at {PNG_SCALE * C4_SHARPNESS[sharpness]}× resolution
               </span>
             </span>
@@ -443,62 +478,107 @@ export function ViewerExportButton({
               <Film aria-hidden="true" className="size-4 text-primary" />
               <span>
                 Download GIF
-                <span className="block text-xs text-muted-foreground">
+                <span className={MENU_ITEM_HINT_CLASSES}>
                   One loop of the connectors drifting
                 </span>
               </span>
             </button>
           ) : null}
 
-          {/* The two axes, under the formats they modify. Inline rather than
-              behind a second disclosure: this menu is already a disclosure, and
-              nesting one inside another buys tidiness at the cost of a reader
-              finding the setting at all. */}
-          <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
-            <label className="flex flex-col gap-1 px-2.5 text-xs text-muted-foreground">
-              Sharpness
-              <select
-                value={sharpness}
-                disabled={busy}
-                onChange={(event) =>
-                  setSharpness(event.target.value as C4Sharpness)
-                }
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-              >
-                <option value="compact">
-                  Compact · PNG 2× · smallest file
-                </option>
-                <option value="standard">Standard · PNG 3×</option>
-                <option value="sharp">Sharp · PNG 4× · slowest</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 px-2.5 text-xs text-muted-foreground">
-              Smoothness
-              <select
-                value={smoothness}
-                disabled={busy || scope !== "current"}
-                onChange={(event) =>
-                  setSmoothness(event.target.value as C4Smoothness)
-                }
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
-              >
-                <option value="simple">
-                  Simple · {C4_SMOOTHNESS.simple.frames} frames
-                </option>
-                <option value="standard">
-                  Standard · {C4_SMOOTHNESS.standard.frames} frames
-                </option>
-                <option value="smooth">
-                  Smooth · {C4_SMOOTHNESS.smooth.frames} frames
-                </option>
-              </select>
-            </label>
-            <p className="px-2.5 text-[11px] leading-4 text-muted-foreground">
-              Sharpness applies to PNG and GIF; SVG is vector and ignores it.
-              Smoothness is frames per loop, so it reaches the GIF only — the
-              loop stays the same length, so more frames means finer motion
-              rather than slower.
-            </p>
+          {/* THE THREE AXES, AS A LIST RATHER THAN A FORM. Each was a
+              stacked label-above-select, which is three rows tall apiece and
+              pushed the sentence explaining them off the bottom of a menu
+              that already opens upward — and the Framing select, given the
+              full width, still truncated its own longest option to "Fit ·
+              The drawing with its usual ma". Label left, value right, one
+              bordered group: the same shape the Share panel's settings take,
+              and short names that fit.
+
+              Inline rather than behind a second disclosure — this menu is
+              already a disclosure, and nesting one inside another buys
+              tidiness at the cost of a reader finding the setting at all.
+              The SENTENCE about what they do is a different matter and is
+              the disclosure below: it is read once, not on every export. */}
+          <div className="mt-1 border-t border-border pt-1.5">
+            <div className="divide-y divide-border/60 rounded-md border border-border/60">
+              <label className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <span>Framing</span>
+                <select
+                  value={framing}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setFraming(event.target.value as DiagramFraming)
+                  }
+                  className="-mr-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60"
+                >
+                  {DIAGRAM_FRAMINGS.map((option) => (
+                    <option key={option} value={option}>
+                      {DIAGRAM_FRAMING_LABEL[option].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <span>Sharpness</span>
+                <select
+                  value={sharpness}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setSharpness(event.target.value as C4Sharpness)
+                  }
+                  className="-mr-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60"
+                >
+                  <option value="compact">Compact · 2×</option>
+                  <option value="standard">Standard · 3×</option>
+                  <option value="sharp">Sharp · 4×</option>
+                </select>
+              </label>
+              {/* SMOOTHNESS REACHES THE GIF ONLY, and the GIF is offered for
+                  one diagram only — so on the archive scope this row is a
+                  control for a format that is not in the menu. Disabled
+                  rather than hidden: the reader who set it a moment ago
+                  should see it is still set, not wonder where it went. */}
+              <label className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <span>Smoothness</span>
+                <select
+                  value={smoothness}
+                  disabled={busy || scope !== "current"}
+                  onChange={(event) =>
+                    setSmoothness(event.target.value as C4Smoothness)
+                  }
+                  className="-mr-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+                >
+                  <option value="simple">
+                    Simple · {C4_SMOOTHNESS.simple.frames}
+                  </option>
+                  <option value="standard">
+                    Standard · {C4_SMOOTHNESS.standard.frames}
+                  </option>
+                  <option value="smooth">
+                    Smooth · {C4_SMOOTHNESS.smooth.frames}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            {/* WHICH AXIS TOUCHES WHICH FORMAT — six lines of standing text
+                until now, above nothing, read once by anyone who reads it at
+                all. It is not droppable: a reader who sets Sharpness and
+                exports an SVG has to be able to find out why nothing
+                changed. So it folds. */}
+            <details className="group mt-1.5">
+              <summary className="cursor-pointer px-2.5 text-[11px] text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+                What these change
+              </summary>
+              <p className="px-2.5 pt-1.5 text-[11px] leading-4 text-muted-foreground">
+                Framing applies to every format — a ratio letterboxes the
+                drawing onto the theme&rsquo;s own sheet, so a slide does not
+                put a white band around a dark diagram. Sharpness applies to PNG
+                and GIF; SVG is vector and ignores it. Smoothness is frames per
+                loop, so it reaches the GIF only — the loop stays the same
+                length, so more frames means finer motion rather than slower.
+              </p>
+            </details>
           </div>
         </div>
       ) : null}

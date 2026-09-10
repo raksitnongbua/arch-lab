@@ -67,7 +67,7 @@ import {
   shapeAddsInformation,
 } from "../lib/labels";
 import { resolveExportGround } from "./ground";
-import { embeddedIconSvg } from "./icon-markup";
+import type { EmbedIcon } from "./icon-markup";
 import { TextureRegistry } from "./texture-registry";
 import type { ExportTheme } from "./theme";
 import { EDGE_BASE_DASH } from "../lib/canvas-constants";
@@ -76,6 +76,12 @@ import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The sheet the drawing sits on — the margin between the picture and the
+ * edge of the file. Overridable per export, because `trim` means exactly
+ * "this number is zero": see `lib/diagram-framing.ts` for why removing the
+ * margin is the one part of framing a renderer has to do itself.
+ */
 const PADDING = 56;
 /** Vertical room above the diagram for the title block. */
 const HEADER_HEIGHT = 64;
@@ -394,6 +400,7 @@ function nodeContent(
   shape: ShapeResult,
   paint: { fill: string; stroke: string },
   iconStyle: IconStyle,
+  embedIcon: EmbedIcon,
 ): string {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
@@ -442,7 +449,7 @@ function nodeContent(
   const nameCenterX = rowLeft + ICON_SIZE + ICON_GAP + nameBlockWidth / 2;
   const nameBlockHeight = nameLines.length * nameLineHeight;
   parts.push(
-    embeddedIconSvg(
+    embedIcon(
       node,
       rowLeft,
       cursorY + nameBlockHeight / 2 - ICON_SIZE / 2,
@@ -966,6 +973,26 @@ export interface RenderDiagramOptions {
    * (server-side card rendering, tests).
    */
   iconStyle?: IconStyle;
+  /**
+   * How a node's icon becomes markup — REQUIRED, and deliberately not
+   * defaulted.
+   *
+   * A default meant importing one, and the browser embedder imports
+   * `react-dom/client`, which made this whole module client-only: the render
+   * route could not import it. Nor can the right answer be inferred here —
+   * only the caller knows whether it has a document. So the browser passes
+   * `embeddedIconSvg` (`icon-markup-client.ts`) and the route passes
+   * `embeddedIconSvgServer` (`icon-markup-server.ts`), and a new caller has to
+   * make the choice rather than inherit a wrong one.
+   */
+  embedIcon: EmbedIcon;
+  /**
+   * The outer margin, when the caller wants one other than {@link PADDING}.
+   * `framingPadding()` is what produces it; passing the number rather than
+   * the framing name keeps this renderer ignorant of the aspect presets,
+   * which are applied to its output rather than computed inside it.
+   */
+  padding?: number;
 }
 
 /**
@@ -977,7 +1004,7 @@ export function renderDiagramSvg(
   diagram: C4Diagram,
   modelTitle: string,
   theme: ExportTheme,
-  options: RenderDiagramOptions = {},
+  options: RenderDiagramOptions,
 ): RenderedSvg {
   // Bounds over the model geometry (the viewer's own fit logic).
   let minX = Infinity;
@@ -1009,6 +1036,7 @@ export function renderDiagramSvg(
 
   const markerId = "af-arrow";
   const iconStyle = options.iconStyle ?? DEFAULT_ICON_STYLE;
+  const { embedIcon } = options;
 
   // The key is laid out BEFORE the page is sized: it can widen a narrow
   // diagram (a two-node context view is narrower than one legend column) and
@@ -1027,13 +1055,25 @@ export function renderDiagramSvg(
       ? diagramWidth
       : Math.max(diagramWidth, legend.minContentWidth);
 
-  const width = Math.ceil(contentWidth + PADDING * 2);
+  /* The margin, which `trim` shrinks. Everything below measures from it
+     rather than from the constant, so one number moves the whole sheet. */
+  const pad = options.padding ?? PADDING;
+  const width = Math.ceil(contentWidth + pad * 2);
   const height = Math.ceil(
-    maxY - minY + PADDING * 2 + HEADER_HEIGHT + (legend?.height ?? 0),
+    maxY - minY + pad * 2 + HEADER_HEIGHT + (legend?.height ?? 0),
   );
-  const translateX = PADDING - minX;
-  const translateY = PADDING + HEADER_HEIGHT - minY;
-  const legendTop = PADDING + HEADER_HEIGHT + (maxY - minY) + LEGEND_GAP_ABOVE;
+  const translateX = pad - minX;
+  const translateY = pad + HEADER_HEIGHT - minY;
+  const legendTop = pad + HEADER_HEIGHT + (maxY - minY) + LEGEND_GAP_ABOVE;
+  /* THE TITLE BLOCK HANGS ABOVE THE DRAWING, INSIDE THE TOP MARGIN — its two
+     baselines were written as `PADDING - 22` and `PADDING - 2` back when the
+     margin was a constant, which puts them at NEGATIVE y the moment the
+     margin shrinks: a trimmed export lost its heading off the top edge
+     entirely. The floors are what the `HEADER_HEIGHT` band has room for, so
+     at the ordinary margin these still evaluate to 34 and 54 and every
+     existing export is byte-identical. */
+  const headingY = Math.max(pad - 22, 16);
+  const subtitleY = Math.max(pad - 2, 36);
 
   // The root diagram's title usually IS the model title — don't say it twice.
   const heading =
@@ -1113,7 +1153,7 @@ export function renderDiagramSvg(
         : colorRoleForNode(node) === "external"
           ? ` opacity="${EXTERNAL_NODE_OPACITY}"`
           : "";
-      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint, iconStyle)}</g>`;
+      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint, iconStyle, embedIcon)}</g>`;
     })
     .join("");
 
@@ -1160,12 +1200,12 @@ export function renderDiagramSvg(
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
     /* THE GROUND THE DRAWING WAS READ ON. Directly after the backdrop and
        before the heading, so it is under everything including the title block;
-       full-bleed over `PADDING`, because a sheet does not stop where the
+       full-bleed over the margin, because a sheet does not stop where the
        drawing stops. `export/ground.ts` records why this reverses an earlier
        decision to keep the ground out of every file. */
     ground.layers(0, 0, width, height) +
-    `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
-    `<text x="${PADDING}" y="${PADDING - 2}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
+    `<text x="${pad}" y="${headingY}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
+    `<text x="${pad}" y="${subtitleY}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
     `<g transform="translate(${fmt(translateX)} ${fmt(translateY)})">` +
     framesMarkup +
     edgeMarkup(diagram, theme, markerId) +
@@ -1175,7 +1215,7 @@ export function renderDiagramSvg(
     `</g>` +
     // Page furniture, not model space: emitted outside the transform so the
     // key keeps its own scale and left margin whatever the diagram's origin.
-    (legend !== null ? legendMarkup(legend, PADDING, legendTop, theme) : "") +
+    (legend !== null ? legendMarkup(legend, pad, legendTop, theme) : "") +
     `</svg>`;
 
   return { svg, width, height };
