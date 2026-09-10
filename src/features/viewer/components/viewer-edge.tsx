@@ -45,10 +45,7 @@ import {
   type InternalNode,
 } from "@xyflow/react";
 
-import {
-  LEADER_THRESHOLD,
-  nearestPointOnPolyline,
-} from "@/lib/polyline-path";
+import { LEADER_THRESHOLD, nearestPointOnPolyline } from "@/lib/polyline-path";
 import { cn } from "@/lib/utils";
 import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 import { VIEWER_DURATIONS } from "../lib/motion";
@@ -105,6 +102,18 @@ export interface ViewerEdgeData extends Record<string, unknown> {
    * edges have labels.
    */
   labelPlacement: { x: number; y: number; crowded: boolean } | null;
+  /**
+   * Every element except this connector's own two, so its corridor picks a
+   * lane clear of them.
+   *
+   * Handed down rather than read from React Flow's store here: an edge would
+   * have to subscribe to every node's measured rect to work it out, which is
+   * one subscription per edge for a list that only changes with the model.
+   * The canvas computes it once from the model rects — the same input the
+   * exporter and the chip-placement pass use, so the line on screen, the line
+   * in the PNG and the line the chips were placed around are one line.
+   */
+  obstacles: readonly { x: number; y: number; width: number; height: number }[];
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -179,6 +188,7 @@ function ViewerEdgeInner({
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
     labelBias: data?.labelBias ?? 0,
+    obstacles: data?.obstacles,
   });
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe

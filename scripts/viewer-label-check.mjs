@@ -508,7 +508,9 @@ check("the nearest point is on the line, for every segment of a route", () => {
     const near = nearestPointOnPolyline(route, probe);
     const onLine =
       (Math.abs(near.y) < 1e-6 && near.x >= -1e-6 && near.x <= 200 + 1e-6) ||
-      (Math.abs(near.x - 200) < 1e-6 && near.y >= -1e-6 && near.y <= 300 + 1e-6);
+      (Math.abs(near.x - 200) < 1e-6 &&
+        near.y >= -1e-6 &&
+        near.y <= 300 + 1e-6);
     assert.ok(
       onLine,
       `nearest to ${JSON.stringify(probe)} was ${JSON.stringify({ x: near.x, y: near.y })}, which is off the route`,

@@ -43,10 +43,7 @@
  * "two halves, each self-consistent" failure with extra steps.
  */
 
-import {
-  pointAlongPolyline,
-  type PolylinePoint,
-} from "@/lib/polyline-path";
+import { pointAlongPolyline, type PolylinePoint } from "@/lib/polyline-path";
 import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
 /** A rectangle in flow units, top-left anchored. */

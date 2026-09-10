@@ -2498,11 +2498,16 @@ function ViewerCanvasInner({
         labelArc,
         routeLength,
       } = getParallelEdgePath({
-          ...anchors,
-          parallelIndex: group.index,
-          parallelCount: group.count,
-          labelBias: labelBias.get(edge.id) ?? 0,
-        });
+        ...anchors,
+        parallelIndex: group.index,
+        parallelCount: group.count,
+        labelBias: labelBias.get(edge.id) ?? 0,
+        obstacles: modelRects.filter(
+          (_rect, index) =>
+            diagram.nodes[index].id !== edge.source &&
+            diagram.nodes[index].id !== edge.target,
+        ),
+      });
       geometry.set(edge.id, {
         path,
         labelX,
@@ -2599,6 +2604,13 @@ function ViewerCanvasInner({
           fanSlots: fans.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
+          /* The same list the geometry map above and the exporter use — see
+             `obstacles` on the edge's data for why it is handed down. */
+          obstacles: modelRects.filter(
+            (_rect, index) =>
+              diagram.nodes[index].id !== edge.source &&
+              diagram.nodes[index].id !== edge.target,
+          ),
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,

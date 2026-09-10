@@ -156,7 +156,10 @@ export function nearestPointOnPolyline(
     const t =
       square === 0
         ? 0
-        : Math.max(0, Math.min(1, ((p.x - from.x) * vx + (p.y - from.y) * vy) / square));
+        : Math.max(
+            0,
+            Math.min(1, ((p.x - from.x) * vx + (p.y - from.y) * vy) / square),
+          );
     const x = from.x + t * vx;
     const y = from.y + t * vy;
     const distance = Math.hypot(p.x - x, p.y - y);
@@ -166,7 +169,12 @@ export function nearestPointOnPolyline(
     }
   }
   if (best.distance === Infinity && points.length === 1) {
-    return { ...points[0], dx: 1, dy: 0, distance: Math.hypot(p.x - points[0].x, p.y - points[0].y) };
+    return {
+      ...points[0],
+      dx: 1,
+      dy: 0,
+      distance: Math.hypot(p.x - points[0].x, p.y - points[0].y),
+    };
   }
   return best;
 }

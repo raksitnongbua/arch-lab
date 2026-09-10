@@ -7,6 +7,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **A relationship no longer runs through an element it has nothing to do
+  with** — where it can be avoided. The long middle stretch of a connector
+  now picks a lane clear of the elements it passes. What it cannot move is
+  either end, so a connector whose final approach into an element crosses
+  something still does; that needs the line to enter by a different side and
+  is not done here.
+- **A relationship's label stays on the line it names, or points back to
+  it.** A chip now slides along its own connector looking for a clear stretch
+  before it moves away from the line at all. When the line is shorter than
+  the label — which is common between two elements sitting close together —
+  the chip moves off as before and a faint dotted leader ties it back, so it
+  is always clear which relationship a label belongs to.
+- **A boundary is no longer drawn lopsided.** A frame gave up the padding on
+  one of its sides to any element that happened to sit past it on that axis,
+  even one far away in the other direction and unable to touch it — so a
+  frame could have three sides padded and the fourth flush against its
+  contents.
+
 ### Added
 
 - **Dragging an element snaps it into line.** Move an element near an

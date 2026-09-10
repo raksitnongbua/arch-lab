@@ -849,6 +849,197 @@ check("no shipped document draws a small kink on a lone connector", () => {
   assert.deepEqual(offenders, []);
 });
 
+/* -------------------------------------------------------------------------- */
+/* 9. The corridor picks a lane clear of what it passes                        */
+/* -------------------------------------------------------------------------- */
+
+/* WHAT THIS DOES NOT CLAIM. Only the long middle run moves. The two ends are
+   attachment points chosen before the route is built, so a connector whose
+   final approach passes through a box still passes through it — the remedy
+   there is re-choosing which SIDE it arrives by, which is not attempted. The
+   assertions below are written to that boundary rather than to "no connector
+   ever crosses anything", which would be a promise the code does not make. */
+
+const boxAt = (x, y, width = 200, height = 100) => ({ x, y, width, height });
+
+check("a corridor steps aside for a box in its way", () => {
+  /* Source and target level, a box squarely on the midpoint corridor. */
+  const between = boxAt(540, 200, 120, 400);
+  const points = orthogonalRoute({
+    sourceX: 300,
+    sourceY: 250,
+    sourceSide: "right",
+    targetX: 900,
+    targetY: 550,
+    targetSide: "left",
+    obstacles: [between],
+  });
+  const crossing = points.find((p, i) => i > 0 && p.x === points[i - 1].x);
+  assert.ok(crossing !== undefined, "the route had no crossing run to move");
+  assert.ok(
+    crossing.x <= between.x || crossing.x >= between.x + between.width,
+    `the crossing run sits at x=${crossing.x}, inside the box at ` +
+      `${between.x}..${between.x + between.width}`,
+  );
+});
+
+check("and does not move when nothing is in the way", () => {
+  const plain = {
+    sourceX: 300,
+    sourceY: 250,
+    sourceSide: "right",
+    targetX: 900,
+    targetY: 550,
+    targetSide: "left",
+  };
+  assert.deepEqual(
+    orthogonalRoute({ ...plain, obstacles: [boxAt(300, 900)] }),
+    orthogonalRoute(plain),
+    "a box nowhere near the run moved the corridor anyway",
+  );
+});
+
+check("a box it only grazes is not treated as in the way", () => {
+  /* Strict comparisons on purpose: a run along an element's edge touches
+     nothing, and stepping away from it would move connectors for no reason. */
+  const plain = {
+    sourceX: 300,
+    sourceY: 250,
+    sourceSide: "right",
+    targetX: 900,
+    targetY: 550,
+    targetSide: "left",
+  };
+  const bare = orthogonalRoute(plain);
+  const run = bare.find((p, i) => i > 0 && p.x === bare[i - 1].x);
+  assert.deepEqual(
+    orthogonalRoute({
+      ...plain,
+      obstacles: [boxAt(run.x, 200, 120, 400)],
+    }),
+    bare,
+    "a box whose edge the run lies along pushed the corridor aside",
+  );
+});
+
+check("the open-ended search is bounded by its reach", () => {
+  /* TWO ENDS LEAVING THE SAME WAY — both exit right — so the corridor's
+     feasible region has no far edge and only CHANNEL_REACH stops the search.
+     The facing case is bounded by the gap between the two stubs instead, so
+     it cannot exercise this and an earlier version of this section thought
+     it did: the "walled in" assertion below passed with the reach set to
+     100000. Walled for further than the reach, the route must give up and
+     keep its lane rather than run off the diagram. */
+  const plain = {
+    sourceX: 300,
+    sourceY: 200,
+    sourceSide: "right",
+    targetX: 300,
+    targetY: 600,
+    targetSide: "right",
+  };
+  const bare = orthogonalRoute(plain);
+  const lane = bare.find((p, i) => i > 0 && p.x === bare[i - 1].x);
+  const walled = orthogonalRoute({
+    ...plain,
+    obstacles: [boxAt(lane.x - 10, 100, 4000, 600)],
+  });
+  const walledLane = walled.find((p, i) => i > 0 && p.x === walled[i - 1].x);
+  assert.ok(
+    walledLane.x - lane.x <= 480,
+    `the corridor ran ${walledLane.x - lane.x} past its lane looking for a ` +
+      "gap — a connector flung off the diagram is worse than one that crosses",
+  );
+});
+
+check("an unreachable lane leaves the route where it was", () => {
+  /* Walled in on both sides: a connector that crosses a box is bad, and one
+     flung to the far edge of the diagram to avoid it is worse. */
+  const plain = {
+    sourceX: 300,
+    sourceY: 250,
+    sourceSide: "right",
+    targetX: 900,
+    targetY: 550,
+    targetSide: "left",
+  };
+  const wall = boxAt(320, 100, 560, 600);
+  assert.deepEqual(
+    orthogonalRoute({ ...plain, obstacles: [wall] }),
+    orthogonalRoute(plain),
+    "the corridor fled a box it could not get past",
+  );
+});
+
+/* THE MEASURED RESULT ON REAL DOCUMENTS, and the bound it must not exceed.
+   Routes are drawn from every shipped document with the obstacle list the
+   exporter passes, and no point may fall outside the elements' own bounding
+   box. `viewer/export/render-svg.ts` frames from node and frame rects only,
+   so a route that detoured past them would be CLIPPED in every PNG — the
+   corridor's reach is what keeps that from happening, and this is what says
+   so before a reader finds it. */
+check("no routed corridor leaves the elements' bounding box", () => {
+  const documents = [["seed", (SEED_MODEL.file ?? SEED_MODEL).diagrams]];
+  const dir = "src/features/viewer/service/data";
+  for (const name of readdirSync(join(root, dir)).sort()) {
+    if (!name.endsWith(".archlab.json")) continue;
+    documents.push([
+      name,
+      Object.values(deserializeModel(read(`${dir}/${name}`)).diagrams),
+    ]);
+  }
+
+  let routed = 0;
+  for (const [label, diagrams] of documents) {
+    for (const diagram of diagrams) {
+      const rects = diagram.nodes.map((node) => ({
+        id: node.id,
+        x: node.position.x,
+        y: node.position.y,
+        width: node.size.width,
+        height: node.size.height,
+      }));
+      if (rects.length === 0) continue;
+      const rectById = new Map(rects.map((rect) => [rect.id, rect]));
+      const bounds = {
+        x1: Math.min(...rects.map((r) => r.x)),
+        y1: Math.min(...rects.map((r) => r.y)),
+        x2: Math.max(...rects.map((r) => r.x + r.width)),
+        y2: Math.max(...rects.map((r) => r.y + r.height)),
+      };
+      const fans = assignFanSlots(diagram.edges, rectById);
+      const groups = parallelEdgeGroups(diagram.edges);
+      for (const edge of diagram.edges) {
+        const source = rectById.get(edge.source);
+        const target = rectById.get(edge.target);
+        if (source === undefined || target === undefined) continue;
+        const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+        const laid = getParallelEdgePath({
+          ...getFloatingAnchors(source, target, fans.get(edge.id)),
+          parallelIndex: group.index,
+          parallelCount: group.count,
+          obstacles: rects.filter(
+            (rect) => rect.id !== edge.source && rect.id !== edge.target,
+          ),
+        });
+        routed += 1;
+        for (const point of laid.points) {
+          assert.ok(
+            point.x >= bounds.x1 &&
+              point.x <= bounds.x2 &&
+              point.y >= bounds.y1 &&
+              point.y <= bounds.y2,
+            `${label}/${diagram.id} ${edge.source}->${edge.target} routed to ` +
+              `(${point.x},${point.y}), outside ${JSON.stringify(bounds)} — ` +
+              "the exporter frames from the elements and would clip it",
+          );
+        }
+      }
+    }
+  }
+  assert.ok(routed > 0, "no connector was routed — the sweep proves nothing");
+});
+
 if (failures > 0) {
   console.error(
     `\n${failures} of ${assertions + failures} orthogonal-route assertions FAILED`,

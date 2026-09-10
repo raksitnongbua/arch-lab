@@ -234,6 +234,17 @@ export interface ParallelEdgePathInput {
   labelBias?: LabelBias;
   /** From `getFloatingAnchors`. Omitted ⇒ 0 ⇒ any misalignment is drawn as a jog. */
   anchorSlack?: number;
+  /**
+   * Every element on the diagram EXCEPT this connector's own two, so the
+   * corridor can pick a lane clear of them.
+   *
+   * Omitted, the corridor sits at the midpoint — which is what the two
+   * callers with no diagram to hand (the editor's edge, and the line drawn
+   * while a connection is still being dragged) legitimately get. A route
+   * drawn mid-drag that jumped lanes as the pointer moved would be worse
+   * than one that crosses a box for the length of a gesture.
+   */
+  obstacles?: readonly NodeRect[];
 }
 
 export interface EdgePathGeometry {
@@ -300,6 +311,7 @@ export function getParallelEdgePath(
     targetSide: sideOf(input.targetPosition),
     corridorOffset: parallelOffset(input.parallelIndex, input.parallelCount),
     slack: input.anchorSlack,
+    obstacles: input.obstacles,
   });
 
   const length = polylineLength(points);
