@@ -234,6 +234,17 @@ export interface ParallelEdgePathInput {
   labelBias?: LabelBias;
   /** From `getFloatingAnchors`. Omitted ⇒ 0 ⇒ any misalignment is drawn as a jog. */
   anchorSlack?: number;
+  /**
+   * Every element on the diagram EXCEPT this connector's own two, so the
+   * corridor can pick a lane clear of them.
+   *
+   * Omitted, the corridor sits at the midpoint — which is what the two
+   * callers with no diagram to hand (the editor's edge, and the line drawn
+   * while a connection is still being dragged) legitimately get. A route
+   * drawn mid-drag that jumped lanes as the pointer moved would be worse
+   * than one that crosses a box for the length of a gesture.
+   */
+  obstacles?: readonly NodeRect[];
 }
 
 export interface EdgePathGeometry {
@@ -245,6 +256,17 @@ export interface EdgePathGeometry {
   /** Label anchor — halfway along the route, slid by `labelBias`. */
   labelX: number;
   labelY: number;
+  /**
+   * How far along the route the anchor sits, in flow units.
+   *
+   * Handed out so a chip can be moved ALONG its own line rather than only
+   * away from it: the placement pass needs somewhere to start measuring from,
+   * and recomputing it there would be the same arithmetic done twice with two
+   * chances to disagree.
+   */
+  labelArc: number;
+  /** The route's total length, so a slide can be clamped to it. */
+  routeLength: number;
   /**
    * The direction of the SEGMENT the anchor landed on.
    *
@@ -289,6 +311,7 @@ export function getParallelEdgePath(
     targetSide: sideOf(input.targetPosition),
     corridorOffset: parallelOffset(input.parallelIndex, input.parallelCount),
     slack: input.anchorSlack,
+    obstacles: input.obstacles,
   });
 
   const length = polylineLength(points);
@@ -299,11 +322,15 @@ export function getParallelEdgePath(
       : Math.min(LABEL_FAN_SHIFT, length * LABEL_FAN_FRACTION) * bias;
   const anchor = pointAlongPolyline(points, length / 2 + shift);
 
+  const labelArc = Math.min(Math.max(length / 2 + shift, 0), length);
+
   return {
     path: roundedPolylinePath(points),
     points,
     labelX: anchor.x,
     labelY: anchor.y,
+    labelArc,
+    routeLength: length,
     labelDirX: anchor.dx,
     labelDirY: anchor.dy,
   };

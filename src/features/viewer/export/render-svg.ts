@@ -26,6 +26,7 @@
 import { LEVEL_LABEL } from "@/lib/constants";
 import { DEFAULT_ICON_STYLE, type IconStyle } from "@/lib/icon-style";
 // Shared with the flowchart exporter — see `@/lib/svg-markup`.
+import { LEADER_THRESHOLD, nearestPointOnPolyline } from "@/lib/polyline-path";
 import { escapeXml, fmt } from "@/lib/svg-markup";
 // Ditto the surface-wash recipe: one definition of the gradient both
 // exporters bake into their files.
@@ -496,6 +497,25 @@ function nodeRectOf(node: C4Node): NodeRect {
   };
 }
 
+/**
+ * Every element except this connector's own two — what the corridor has to
+ * find a lane past. A connector may touch the boxes it joins, and only those.
+ */
+function obstaclesFor(
+  edge: { source: string; target: string },
+  rectById: ReadonlyMap<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >,
+): { x: number; y: number; width: number; height: number }[] {
+  const out = [];
+  for (const [id, rect] of rectById) {
+    if (id === edge.source || id === edge.target) continue;
+    out.push(rect);
+  }
+  return out;
+}
+
 function edgeMarkup(
   diagram: C4Diagram,
   theme: ExportTheme,
@@ -523,6 +543,7 @@ function edgeMarkup(
       parallelIndex: group.index,
       parallelCount: group.count,
       labelBias: labelBias.get(edge.id) ?? 0,
+      obstacles: obstaclesFor(edge, rectById),
     });
     return {
       ...laid,
@@ -550,6 +571,9 @@ function edgeMarkup(
       return [
         {
           id: edge.id,
+          route: laid.points,
+          arc: laid.labelArc,
+          routeLength: laid.routeLength,
           anchorX: laid.labelX,
           anchorY: laid.labelY,
           dirX: laid.dirX,
@@ -631,6 +655,20 @@ function edgeMarkup(
     const chipCentreY = placement?.y ?? labelY;
     const chipX = chipCentreX - chipWidth / 2;
     const chipY = chipCentreY - chipHeight / 2;
+    /* THE LEADER. A chip that could not fit anywhere along its own line is
+       placed clear of the diagram instead, where it is perfectly legible and
+       belongs to nothing a reader can name. The hairline says which line —
+       dotted and half-strength so it cannot be mistaken for a relationship
+       of its own, which is the one thing it must not become. */
+    const nearest = nearestPointOnPolyline(laid.points, {
+      x: chipCentreX,
+      y: chipCentreY,
+    });
+    if (nearest.distance > LEADER_THRESHOLD) {
+      parts.push(
+        `<line x1="${fmt(nearest.x)}" y1="${fmt(nearest.y)}" x2="${fmt(chipCentreX)}" y2="${fmt(chipCentreY)}" stroke="${theme.edge}" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="2 3"/>`,
+      );
+    }
     parts.push(
       `<rect x="${fmt(chipX)}" y="${fmt(chipY)}" width="${fmt(chipWidth)}" height="${fmt(chipHeight)}" rx="5" fill="${theme.canvas}" fill-opacity="0.92" stroke="${theme.nodeBorder}" stroke-opacity="0.6"/>`,
     );

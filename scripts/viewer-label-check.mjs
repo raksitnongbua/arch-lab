@@ -370,6 +370,165 @@ check("the placement module stays loadable by this check", () => {
 
 /* ----------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------- */
+/* A chip stays on its line, or says which line it belongs to               */
+/* ----------------------------------------------------------------------- */
+
+/* TWO HABITS, IN ORDER, and the order is the whole design. A chip first
+   slides ALONG its own connector looking for a clear stretch, because a chip
+   on the line needs no explanation. Only when the line has no stretch wide
+   enough — a 170-unit label on a connector 100 units long — does it walk
+   away, and then a leader is drawn back to the line so the reader can still
+   say which relationship it names.
+
+   The reported defect was the middle of those: chips placed clear of
+   everything, at the walk's full reach, naming nothing a reader could
+   identify. Shortening the walk was tried first and traded the problem for
+   chips sitting on top of an element, which is worse. */
+
+const { pointAlongPolyline, nearestPointOnPolyline, LEADER_THRESHOLD } =
+  await load("src/lib/polyline-path.ts");
+
+check("a chip slides along its line before it walks away from it", () => {
+  /* A long connector with one obstruction over its midpoint. Sliding finds
+     clear line either side; walking would leave the line for no reason. */
+  const route = [
+    { x: 0, y: 0 },
+    { x: 600, y: 0 },
+  ];
+  const blocker = { x: 260, y: -40, width: 80, height: 80 };
+  const placed = placeEdgeLabels(
+    [
+      {
+        id: "e",
+        anchorX: 300,
+        anchorY: 0,
+        dirX: 1,
+        dirY: 0,
+        width: 120,
+        height: 30,
+        route,
+        arc: 300,
+        routeLength: 600,
+      },
+    ],
+    [blocker],
+  );
+  const at = placed.get("e");
+  const off = nearestPointOnPolyline(route, at).distance;
+  assert.ok(
+    off < LEADER_THRESHOLD,
+    `the chip left the line (${off.toFixed(1)} away) when the line had room`,
+  );
+  assert.ok(
+    Math.abs(at.x - 300) > 1,
+    "the chip stayed on the blocked anchor instead of sliding",
+  );
+});
+
+check("a chip with nowhere on the line to go still clears the elements", () => {
+  /* The reported shape: a connector far shorter than the label it carries,
+     with an element at each end. There is no position on the line, so the
+     chip must leave it — and must not be parked on an element instead. */
+  const route = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+  ];
+  const nodes = [
+    { x: -200, y: -50, width: 200, height: 100 },
+    { x: 100, y: -50, width: 200, height: 100 },
+  ];
+  const placed = placeEdgeLabels(
+    [
+      {
+        id: "e",
+        anchorX: 50,
+        anchorY: 0,
+        dirX: 1,
+        dirY: 0,
+        width: 170,
+        height: 30,
+        route,
+        arc: 50,
+        routeLength: 100,
+      },
+    ],
+    nodes,
+  );
+  const at = placed.get("e");
+  const overlaps = nodes.some(
+    (n) =>
+      at.x - 85 < n.x + n.width &&
+      at.x + 85 > n.x &&
+      at.y - 15 < n.y + n.height &&
+      at.y + 15 > n.y,
+  );
+  assert.ok(!overlaps, "the chip was parked on top of an element");
+  assert.ok(
+    nearestPointOnPolyline(route, at).distance > LEADER_THRESHOLD,
+    "the fixture did not force the chip off the line, so it proves nothing",
+  );
+});
+
+check("both surfaces draw the leader, from the one helper", () => {
+  for (const [name, source] of [
+    ["the canvas", edge],
+    ["the exporter", exporter],
+  ]) {
+    assert.match(
+      source,
+      /nearestPointOnPolyline\(/,
+      `${name} does not measure the gap between a chip and its line`,
+    );
+    assert.match(
+      source,
+      /LEADER_THRESHOLD/,
+      `${name} uses its own idea of "too far" instead of the shared one`,
+    );
+    assert.match(
+      source,
+      /stroke-?[Dd]asharray[=:]\s*["{]?"?2 3/,
+      `${name} draws the leader solid, where it reads as a relationship`,
+    );
+  }
+});
+
+check("the nearest point is on the line, for every segment of a route", () => {
+  const route = [
+    { x: 0, y: 0 },
+    { x: 200, y: 0 },
+    { x: 200, y: 300 },
+  ];
+  for (const probe of [
+    { x: 100, y: -90 },
+    { x: 290, y: 150 },
+    { x: -60, y: -60 },
+    { x: 210, y: 400 },
+  ]) {
+    const near = nearestPointOnPolyline(route, probe);
+    const onLine =
+      (Math.abs(near.y) < 1e-6 && near.x >= -1e-6 && near.x <= 200 + 1e-6) ||
+      (Math.abs(near.x - 200) < 1e-6 &&
+        near.y >= -1e-6 &&
+        near.y <= 300 + 1e-6);
+    assert.ok(
+      onLine,
+      `nearest to ${JSON.stringify(probe)} was ${JSON.stringify({ x: near.x, y: near.y })}, which is off the route`,
+    );
+    /* And it is genuinely the nearest, not merely on the line. */
+    const sampled = Math.min(
+      ...Array.from({ length: 601 }, (_, i) => {
+        const at = pointAlongPolyline(route, i);
+        return Math.hypot(at.x - probe.x, at.y - probe.y);
+      }),
+    );
+    assert.ok(
+      near.distance <= sampled + 1,
+      `claimed ${near.distance.toFixed(2)} but a sampled walk found ${sampled.toFixed(2)}`,
+    );
+  }
+});
+
 if (failures > 0) {
   console.error(
     `\n${failures} of ${assertions} viewer-label assertions FAILED`,

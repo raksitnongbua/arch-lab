@@ -34,14 +34,17 @@
  * and already proven against right angles by the ER renderer, which has used
  * `fanOffset` for its orthogonal connectors all along.
  *
- * IT DOES NOT AVOID OBSTACLES YET. A connector can still cross an element it
- * does not touch, exactly as a declined bow could. That is a deliberate first
- * step, not an oversight: the corridor this picks is the midpoint between the
- * two nodes, and choosing a clear one instead is a channel search of the kind
- * `gantt/lib/layout.ts` already does. It is the next thing to do here, and it
- * needs its own check script and a wider export bound — a detouring route can
- * leave the node bounding box that `viewer/export/render-svg.ts` currently
- * frames from, which a bezier never could.
+ * IT AVOIDS OBSTACLES ON THE CORRIDOR ONLY, and the limit is worth stating
+ * because it is visible. The long middle run picks a lane clear of every
+ * element the connector does not touch, in the manner of the channel search
+ * `gantt/lib/layout.ts` already does. What it cannot move is either END: the
+ * attachment points are chosen before this runs, so a connector whose final
+ * approach passes through a box stays passing through it, and the remedy for
+ * that is for the router to re-choose which SIDE it arrives by — a larger
+ * change that would feed back into `edge-fan` and is not attempted here.
+ *
+ * On the diagram this was reported against, that is the difference between
+ * three crossings and two. Both remaining ones are terminal approaches.
  *
  * PURE, AND THAT IS LOAD-BEARING. `editor/lib/edge-geometry.ts` imports
  * `@xyflow/react` and so cannot be loaded by a check script through Node's
@@ -127,12 +130,40 @@ export interface OrthogonalRouteInput {
   /** Overrides `EDGE_STUB`. */
   stub?: number;
   /**
+   * Every element the connector does not touch, so the corridor can pick a
+   * lane clear of them. Omitted — as a caller with no diagram in hand has to
+   * — and the corridor sits at the midpoint, which is what it always did.
+   */
+  obstacles?: readonly Obstacle[];
+  /**
    * How far the two attachments may slide toward each other, along their own
    * sides, rather than be joined by a jog. 0 — the default — draws whatever
    * misalignment it is given. See `MAX_ANCHOR_SLIDE`.
    */
   slack?: number;
 }
+
+/** An element the connector must not run through. */
+export interface Obstacle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * How far the corridor will step looking for a clear lane, and by how much.
+ *
+ * A STEP SMALLER THAN AN ELEMENT IS WASTED WORK: the search is trying to get
+ * past a box, and a 4-unit nudge cannot. 24 clears a default 176-wide element
+ * in eight steps and lands on the 8-unit grid the format uses, so a routed
+ * corridor sits where a hand-placed one would. The reach is bounded because a
+ * corridor far outside both elements has stopped being a route between them —
+ * past that the honest answer is that the layout needs changing, which is the
+ * same call `edge-fan` makes when a side is too crowded to fan.
+ */
+const CHANNEL_STEP = 24;
+const CHANNEL_REACH = 480;
 
 /** The outward unit normal of a side. */
 function outward(side: FanSide): { x: number; y: number } {
@@ -205,19 +236,45 @@ function corridor(
   toOut: number,
   offset: number,
   stub: number,
+  /** Whether a crossing run at this coordinate misses every obstacle. */
+  clear?: (value: number) => boolean,
 ): number | null {
+  /* NEAREST CLEAR LANE, SEARCHED OUTWARD FROM THE ONE IT WANTED. Both
+     directions at each step so the corridor moves the shortest distance it
+     can, and the original is kept when nothing within reach is clear — a
+     connector that crosses a box is bad, and one flung to the edge of the
+     diagram to avoid it is worse. */
+  const search = (base: number, low: number, high: number): number => {
+    if (clear === undefined || clear(base)) return base;
+    for (let step = CHANNEL_STEP; step <= CHANNEL_REACH; step += CHANNEL_STEP) {
+      for (const candidate of [base + step, base - step]) {
+        if (candidate < low || candidate > high) continue;
+        if (clear(candidate)) return candidate;
+      }
+    }
+    return base;
+  };
+
   if (fromOut === toOut) {
     const bound = fromOut > 0 ? Math.max(from, to) : Math.min(from, to);
     const base = bound + fromOut * stub;
     const shifted = base + offset;
-    return fromOut > 0 ? Math.max(shifted, bound) : Math.min(shifted, bound);
+    const kept =
+      fromOut > 0 ? Math.max(shifted, bound) : Math.min(shifted, bound);
+    return fromOut > 0
+      ? search(kept, bound, bound + CHANNEL_REACH)
+      : search(kept, bound - CHANNEL_REACH, bound);
   }
   const low = Math.min(from, to);
   const high = Math.max(from, to);
   /* Facing each other but overlapping: the first stub already reaches past
      where the second one ends, so no crossing run can satisfy both. */
   if ((from - to) * fromOut > 0) return null;
-  return Math.min(Math.max((from + to) / 2 + offset, low), high);
+  return search(
+    Math.min(Math.max((from + to) / 2 + offset, low), high),
+    low,
+    high,
+  );
 }
 
 /**
@@ -274,9 +331,41 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
   const sourceHorizontal = isHorizontal(input.sourceSide);
   const targetHorizontal = isHorizontal(input.targetSide);
 
+  /* A LANE IS CLEAR WHEN THE CROSSING RUN MISSES EVERY BOX, measured over the
+     span the run actually covers rather than over the whole diagram — a
+     corridor is only in the way of what it passes. Strict comparisons, so a
+     run grazing an element's edge counts as clear: the alternative is a
+     search that steps away from a box it never touched. */
+  const boxes = input.obstacles ?? [];
+  const clearVertical = (x: number): boolean =>
+    !boxes.some(
+      (box) =>
+        x > box.x &&
+        x < box.x + box.width &&
+        Math.max(afterStub.y, beforeEnd.y) > box.y &&
+        Math.min(afterStub.y, beforeEnd.y) < box.y + box.height,
+    );
+  const clearHorizontal = (y: number): boolean =>
+    !boxes.some(
+      (box) =>
+        y > box.y &&
+        y < box.y + box.height &&
+        Math.max(afterStub.x, beforeEnd.x) > box.x &&
+        Math.min(afterStub.x, beforeEnd.x) < box.x + box.width,
+    );
+  const avoiding = boxes.length > 0;
+
   if (sourceHorizontal === targetHorizontal) {
     if (sourceHorizontal) {
-      const x = corridor(afterStub.x, out.x, beforeEnd.x, into.x, offset, stub);
+      const x = corridor(
+        afterStub.x,
+        out.x,
+        beforeEnd.x,
+        into.x,
+        offset,
+        stub,
+        avoiding ? clearVertical : undefined,
+      );
       if (x !== null) {
         return simplify([
           start,
@@ -301,7 +390,15 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
         end,
       ]);
     }
-    const y = corridor(afterStub.y, out.y, beforeEnd.y, into.y, offset, stub);
+    const y = corridor(
+      afterStub.y,
+      out.y,
+      beforeEnd.y,
+      into.y,
+      offset,
+      stub,
+      avoiding ? clearHorizontal : undefined,
+    );
     if (y !== null) {
       return simplify([
         start,

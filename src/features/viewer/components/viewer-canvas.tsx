@@ -2477,6 +2477,9 @@ function ViewerCanvasInner({
         labelY: number;
         dirX: number;
         dirY: number;
+        points: readonly { x: number; y: number }[];
+        labelArc: number;
+        routeLength: number;
       }
     >();
     for (const edge of diagram.edges) {
@@ -2485,17 +2488,33 @@ function ViewerCanvasInner({
       if (source === undefined || target === undefined) continue;
       const anchors = getFloatingAnchors(source, target, fans.get(edge.id));
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
-      const { path, labelX, labelY, labelDirX, labelDirY } =
-        getParallelEdgePath({
-          ...anchors,
-          parallelIndex: group.index,
-          parallelCount: group.count,
-          labelBias: labelBias.get(edge.id) ?? 0,
-        });
+      const {
+        path,
+        labelX,
+        labelY,
+        labelDirX,
+        labelDirY,
+        points,
+        labelArc,
+        routeLength,
+      } = getParallelEdgePath({
+        ...anchors,
+        parallelIndex: group.index,
+        parallelCount: group.count,
+        labelBias: labelBias.get(edge.id) ?? 0,
+        obstacles: modelRects.filter(
+          (_rect, index) =>
+            diagram.nodes[index].id !== edge.source &&
+            diagram.nodes[index].id !== edge.target,
+        ),
+      });
       geometry.set(edge.id, {
         path,
         labelX,
         labelY,
+        points,
+        labelArc,
+        routeLength,
         /* The direction of the segment the anchor sits on, not the diagonal
            between the two nodes — see `EdgePathGeometry.labelDirX`. */
         dirX: labelDirX,
@@ -2512,6 +2531,9 @@ function ViewerCanvasInner({
         return [
           {
             id: edge.id,
+            route: laid.points,
+            arc: laid.labelArc,
+            routeLength: laid.routeLength,
             anchorX: laid.labelX,
             anchorY: laid.labelY,
             dirX: laid.dirX,
@@ -2582,6 +2604,13 @@ function ViewerCanvasInner({
           fanSlots: fans.get(edge.id),
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
+          /* The same list the geometry map above and the exporter use — see
+             `obstacles` on the edge's data for why it is handed down. */
+          obstacles: modelRects.filter(
+            (_rect, index) =>
+              diagram.nodes[index].id !== edge.source &&
+              diagram.nodes[index].id !== edge.target,
+          ),
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,

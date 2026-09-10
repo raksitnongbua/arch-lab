@@ -45,6 +45,7 @@ import {
   type InternalNode,
 } from "@xyflow/react";
 
+import { LEADER_THRESHOLD, nearestPointOnPolyline } from "@/lib/polyline-path";
 import { cn } from "@/lib/utils";
 import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 import { VIEWER_DURATIONS } from "../lib/motion";
@@ -101,6 +102,18 @@ export interface ViewerEdgeData extends Record<string, unknown> {
    * edges have labels.
    */
   labelPlacement: { x: number; y: number; crowded: boolean } | null;
+  /**
+   * Every element except this connector's own two, so its corridor picks a
+   * lane clear of them.
+   *
+   * Handed down rather than read from React Flow's store here: an edge would
+   * have to subscribe to every node's measured rect to work it out, which is
+   * one subscription per edge for a list that only changes with the model.
+   * The canvas computes it once from the model rects — the same input the
+   * exporter and the chip-placement pass use, so the line on screen, the line
+   * in the PNG and the line the chips were placed around are one line.
+   */
+  obstacles: readonly { x: number; y: number; width: number; height: number }[];
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -170,11 +183,12 @@ function ViewerEdgeInner({
       ? getFloatingAnchors(sourceRect, targetRect, data?.fanSlots)
       : { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
 
-  const { path, labelX, labelY } = getParallelEdgePath({
+  const { path, points, labelX, labelY } = getParallelEdgePath({
     ...anchors,
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
     labelBias: data?.labelBias ?? 0,
+    obstacles: data?.obstacles,
   });
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe
@@ -186,6 +200,14 @@ function ViewerEdgeInner({
 
   const chipX = data?.labelPlacement?.x ?? labelX;
   const chipY = data?.labelPlacement?.y ?? labelY;
+  /* THE LEADER, and the exporter draws the identical one from the identical
+     helper. A chip whose line has no clear stretch wide enough to hold it is
+     placed off the line, where it is legible and belongs to nothing the
+     reader can name; this says which relationship it names. Dotted and half
+     strength, because the one thing it must not be mistaken for is a
+     relationship of its own. */
+  const nearest = nearestPointOnPolyline(points, { x: chipX, y: chipY });
+  const leader = nearest.distance > LEADER_THRESHOLD ? nearest : null;
   const label = data?.edge.label;
   const technology = data?.edge.technology;
   const emphasis = data?.emphasis ?? "idle";
@@ -289,6 +311,20 @@ function ViewerEdgeInner({
             />
           ))}
         </g>
+      ) : null}
+      {leader !== null ? (
+        <line
+          aria-hidden="true"
+          className="pointer-events-none"
+          x1={leader.x}
+          y1={leader.y}
+          x2={chipX}
+          y2={chipY}
+          stroke="var(--edge)"
+          strokeOpacity={0.45}
+          strokeWidth={1}
+          strokeDasharray="2 3"
+        />
       ) : null}
       {showFlow ? (
         // The flow overlay: one fixed gradient along this edge's anchors,
