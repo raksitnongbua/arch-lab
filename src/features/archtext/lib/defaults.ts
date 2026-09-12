@@ -46,6 +46,8 @@ const LAYER_STEP_X = 320;
  * sideways, so the gap carries no label.
  */
 const MEMBER_STEP_Y = 152;
+/** What `MEMBER_STEP_Y` budgets for the element itself — tallest default node. */
+const MEMBER_SPAN = 96;
 /**
  * Gap between two bands of a folded flow. Wider than the gutter inside a band
  * because the arrow that crosses it is the one that doubles back — the reader
@@ -82,6 +84,16 @@ const MIN_LAYERS_PER_BAND = 4;
  * pitch here.
  */
 const FRAME_GUTTER = 64;
+
+/**
+ * What one column of the ordinary pitch budgets for the element standing in
+ * it. `COLUMN_STEP` is this plus the gutter beside it, and both are stated
+ * here so a row that mixes elements with reserved lanes can be measured as
+ * widths and gaps rather than as a single pitch.
+ */
+const NODE_SPAN = 176;
+/** The gutter `COLUMN_STEP` leaves between two neighbouring elements. */
+const COLUMN_GUTTER = COLUMN_STEP - NODE_SPAN;
 
 /** An edge as the layout sees it — endpoints only. */
 export interface DefaultLayoutEdge {
@@ -213,22 +225,38 @@ function regroupByFrame(
 
 /**
  * Where each member of a row sits along its own axis, in pixels from the
- * first: the ordinary pitch, plus `FRAME_GUTTER` wherever the boundary a
- * member belongs to differs from its neighbour's. The last entry is the row's
- * span, which is what narrow rows are centred against.
+ * first: each member's own span, plus the gutter between it and its
+ * neighbour, plus `FRAME_GUTTER` wherever the boundary a member belongs to
+ * differs from its neighbour's. The last entry is the row's span, which is
+ * what narrow rows are centred against.
+ *
+ * MEASURED AS WIDTHS AND GAPS rather than as one pitch, because a row may
+ * hold reserved lanes as well as elements and the two are not the same size.
+ * With no lanes in the row the arithmetic is `span + gutter` for every step,
+ * which is the pitch it replaced — so a document that reserves no lane is
+ * laid out exactly where it always was.
  */
 function offsetsFor(
   members: readonly string[],
-  pitch: number,
+  span: number,
+  gutter: number,
   frameOf: ReadonlyMap<string, string>,
+  isLane: (id: string) => boolean = () => false,
 ): number[] {
   const out: number[] = [];
   let at = 0;
   members.forEach((id, index) => {
     if (index > 0) {
-      at += pitch;
-      const previous = frameOf.get(members[index - 1]);
-      if (frameOf.get(id) !== previous) at += FRAME_GUTTER;
+      const previous = members[index - 1];
+      at += isLane(previous) ? 0 : span;
+      at += isLane(previous) || isLane(id) ? gutter / 2 : gutter;
+      if (
+        !isLane(previous) &&
+        !isLane(id) &&
+        frameOf.get(id) !== frameOf.get(previous)
+      ) {
+        at += FRAME_GUTTER;
+      }
     }
     out.push(at);
   });
@@ -260,23 +288,77 @@ export function defaultPositions(
   const canonical = canonicalEdges(idSet, edges);
   const layer = layerOf(ids, canonical);
 
+  /**
+   * A RESERVED LANE IN EVERY ROW A CONNECTOR CROSSES WITHOUT BELONGING TO IT.
+   *
+   * An edge whose ends are two or more rows apart has to travel past the rows
+   * in between, and those rows used to be ordered as though it did not exist.
+   * The barycentre was then free to place one of their elements squarely on
+   * the line: a gateway two rows below an ingress had the web application put
+   * directly between them, and no corridor search can rescue a connector whose
+   * two ends sit on either side of a box — both of its legs have to get past
+   * it, whichever lane the crossing run takes.
+   *
+   * So the long edge is broken into a chain through the rows it crosses, and
+   * each link stands in its row as an ordinary member: the barycentre orders
+   * it with everything else, and the row's real elements are laid out beside
+   * it rather than on top of it. This is the standard dummy-vertex treatment
+   * a layered layout uses, and it is here for its ORDER, not its width — a
+   * lane and its two half-gutters occupy exactly `COLUMN_STEP`, so no diagram
+   * grows because one was reserved.
+   *
+   * WHAT A LANE DOES NOT DO, because it is visible and the boundary matters. It
+   * holds a column open; it does not steer the connector into that column. Both
+   * ends are attached by `edge-fan` before any of this is drawn, so where a
+   * source and a target sit directly above one another with an unrelated element
+   * beside them, the connector still runs straight down between its own two
+   * anchors and the lane stands empty somewhere else in the row. Closing that
+   * would mean the layout choosing attachment points, which is `edge-fan`'s job
+   * and a larger change than this. On every document that ships with the repo
+   * the lane is enough — `check:layout-quality` is what says so, and what will
+   * say when it stops being enough.
+   *
+   * `tb` ONLY. The `lr` path folds its layers into bands, so a connector that
+   * skips a layer may cross a band boundary rather than a row; what a lane
+   * should mean there is a separate question, and reserving one on a geometry
+   * that has not been measured for it would move every folded document for a
+   * benefit nobody has shown.
+   */
+  const lanes = new Set<string>();
+  const laneRow = new Map<string, number>();
   const predecessors = new Map<string, string[]>();
   for (const id of ids) predecessors.set(id, []);
-  for (const edge of canonical) {
-    if ((layer.get(edge.source) ?? 0) < (layer.get(edge.target) ?? 0)) {
-      predecessors.get(edge.target)?.push(edge.source);
+  canonical.forEach((edge, index) => {
+    const from = layer.get(edge.source) ?? 0;
+    const to = layer.get(edge.target) ?? 0;
+    if (from >= to) return;
+    let above = edge.source;
+    if (direction === "tb") {
+      for (let row = from + 1; row < to; row += 1) {
+        /* NUL-prefixed, which no node id can be: `canonicalEdges` already
+           uses NUL as the separator no id may contain. */
+        const lane = `\u0000lane\u0000${index}\u0000${row}`;
+        lanes.add(lane);
+        laneRow.set(lane, row);
+        rank.set(lane, ids.length + rank.size);
+        predecessors.set(lane, [above]);
+        above = lane;
+      }
     }
-  }
+    predecessors.get(edge.target)?.push(above);
+  });
+  const isLane = (id: string): boolean => lanes.has(id);
 
   const rows = new Map<number, string[]>();
   let lastRow = 0;
-  for (const id of ids) {
-    const row = layer.get(id) ?? 0;
+  const intoRow = (id: string, row: number): void => {
     if (row > lastRow) lastRow = row;
     const bucket = rows.get(row);
     if (bucket === undefined) rows.set(row, [id]);
     else bucket.push(id);
-  }
+  };
+  for (const id of ids) intoRow(id, layer.get(id) ?? 0);
+  for (const lane of lanes) intoRow(lane, laneRow.get(lane) ?? 0);
 
   // Order each row by the mean column of its predecessors in the row above
   // (barycentre heuristic) so edges run mostly straight down; sorted-id order
@@ -347,7 +429,12 @@ export function defaultPositions(
     const spans = new Map<number, number[]>();
     let tallestSpan = 0;
     for (let layer = 0; layer < layers; layer += 1) {
-      const offsets = offsetsFor(rows.get(layer) ?? [], MEMBER_STEP_Y, frameOf);
+      const offsets = offsetsFor(
+        rows.get(layer) ?? [],
+        MEMBER_SPAN,
+        MEMBER_STEP_Y - MEMBER_SPAN,
+        frameOf,
+      );
       spans.set(layer, offsets);
       const span = offsets[offsets.length - 1] ?? 0;
       if (span > tallestSpan) tallestSpan = span;
@@ -396,7 +483,13 @@ export function defaultPositions(
   const columns = new Map<number, number[]>();
   let widestSpan = 0;
   for (let row = 0; row <= lastRow; row += 1) {
-    const offsets = offsetsFor(rows.get(row) ?? [], COLUMN_STEP, frameOf);
+    const offsets = offsetsFor(
+      rows.get(row) ?? [],
+      NODE_SPAN,
+      COLUMN_GUTTER,
+      frameOf,
+      isLane,
+    );
     columns.set(row, offsets);
     const span = offsets[offsets.length - 1] ?? 0;
     if (span > widestSpan) widestSpan = span;
@@ -408,6 +501,8 @@ export function defaultPositions(
     // Centre narrow rows under the widest one, snapped back to the 8-px grid.
     const indent = Math.round((widestSpan - span) / 2 / 8) * 8;
     members.forEach((id, column) => {
+      // A lane holds a column open; nothing stands in it, so nothing is placed.
+      if (isLane(id)) return;
       positions.set(id, {
         x: ORIGIN + indent + offsets[column],
         y: ORIGIN + row * ROW_STEP,
