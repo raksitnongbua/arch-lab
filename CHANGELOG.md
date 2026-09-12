@@ -7,6 +7,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`direction=fit` — let the diagram choose its own shape.** A third value
+  beside `tb` and `lr`, on a diagram's line or in the file header. It names no
+  direction: the diagram is laid out top-down, left-to-right, and top-down
+  wrapped into columns, and whichever comes out nearest the shape of a screen
+  is the one kept. Use it when the shape matters more than the reading
+  direction — where the flow has a direction a reader is meant to follow, keep
+  writing `tb` or `lr`. Across the bundled diagrams it more than halves the
+  worst mismatches without adding a single crossing.
+
 ### Changed
 
 - **Letting the layout place the elements now produces a diagram at least as

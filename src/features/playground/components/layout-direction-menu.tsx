@@ -202,16 +202,19 @@ const DIRECTIONS: readonly {
 }[] = [
   { value: "tb", label: "Top-down" },
   { value: "lr", label: "Left-right" },
+  { value: "fit", label: "Fit a screen" },
 ];
 
 const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
   layer: {
     tb: "Writes direction=tb on this diagram's line",
     lr: "Writes direction=lr on this diagram's line — folds a long flow into bands",
+    fit: "Writes direction=fit on this diagram's line — lays it out every way and keeps the one nearest the shape of a screen",
   },
   file: {
     tb: "Writes direction tb in the file header",
     lr: "Writes direction lr in the file header — folds a long flow into bands",
+    fit: "Writes direction fit in the file header — lays each diagram out every way and keeps the one nearest the shape of a screen",
   },
 };
 

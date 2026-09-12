@@ -16,12 +16,16 @@
  */
 
 import {
+  C4_LAYOUT_DIRECTION_MEANING,
+  C4_LAYOUT_DIRECTIONS,
   C4_LEVELS,
+  isLayoutDirection,
   markPlacedByHand,
   VALID_NODE_TYPES_BY_LEVEL,
 } from "@/types";
 import type {
   ArchLabFile,
+  C4LayoutDirection,
   C4Level,
   C4NodeType,
   EdgeDirection,
@@ -33,6 +37,23 @@ import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
 import { joinList } from "@/lib/prose";
 
 import { LineCursor } from "./cursor";
+
+/** What the cursor says it wanted, when a direction word is missing. */
+const DIRECTION_WORDS = joinList(
+  C4_LAYOUT_DIRECTIONS.map((value) => `"${value}"`),
+  "or",
+);
+
+/** Why a word is not a layout direction, naming every one that is. */
+function directionRefusal(value: string): string {
+  const offered = joinList(
+    C4_LAYOUT_DIRECTIONS.map(
+      (each) => `"${each}" (${C4_LAYOUT_DIRECTION_MEANING[each]})`,
+    ),
+    "or",
+  );
+  return `"${value}" is not a layout direction — expected ${offered}`;
+}
 import { compareStrings, defaultEdgeId, DEFAULT_TIMESTAMP } from "./defaults";
 import { defaultPositions, defaultSizeFor } from "./defaults";
 import { failAt } from "./errors";
@@ -197,7 +218,7 @@ interface PendingDiagram extends Loc {
   level: C4Level;
   title?: string;
   ownerAttr?: string;
-  directionAttr?: "tb" | "lr";
+  directionAttr?: C4LayoutDirection;
   /** Meaningful only when `hasIn` is true; `null` = explicit `in=null`. */
   inAttr?: string | null;
   hasIn: boolean;
@@ -218,7 +239,7 @@ interface Header {
   versionLoc?: Loc;
   schema?: string;
   /** File-wide default layout direction; a diagram may override it. */
-  direction?: "tb" | "lr";
+  direction?: C4LayoutDirection;
   /** Source line of the `direction` line, for `ArchTextSpans.header`. */
   directionLine?: number;
   title?: string;
@@ -818,16 +839,13 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       if (header.direction !== undefined) {
         cursor.fail('duplicate "direction" line — it may appear only once');
       }
-      /* Bare, not quoted: it is one of two fixed words, like a node type,
-       * rather than free text like a title. Refused BY NAME when it is
-       * neither, because a silently ignored layout hint is a diagram that
-       * lays out the way the author did not ask for with nothing to explain
-       * why. */
-      const value = cursor.readBare(/^[a-z]+/, '"tb" or "lr"');
-      if (value !== "tb" && value !== "lr") {
-        cursor.fail(
-          `"${value}" is not a layout direction — expected "tb" (top-down, the default) or "lr" (left-to-right, folding a long flow into bands)`,
-        );
+      /* Bare, not quoted: it is one of a few fixed words, like a node type,
+       * rather than free text like a title. Refused BY NAME when it is none of
+       * them, because a silently ignored layout hint is a diagram that lays
+       * out the way the author did not ask for with nothing to explain why. */
+      const value = cursor.readBare(/^[a-z]+/, DIRECTION_WORDS);
+      if (!isLayoutDirection(value)) {
+        cursor.fail(directionRefusal(value));
       }
       header.direction = value;
       header.directionLine = loc.line;
@@ -1156,14 +1174,9 @@ function parseDiagramHeader(
           'duplicate "direction=" attribute',
         );
       }
-      const value = cursor.readBare(/^[a-z]+/, '"tb" or "lr"');
-      if (value !== "tb" && value !== "lr") {
-        failAt(
-          attrLoc.line,
-          attrLoc.column,
-          `"${value}" is not a layout direction — expected "tb" (top-down, the default) or "lr" (left-to-right, folding a long flow into bands)`,
-          value,
-        );
+      const value = cursor.readBare(/^[a-z]+/, DIRECTION_WORDS);
+      if (!isLayoutDirection(value)) {
+        failAt(attrLoc.line, attrLoc.column, directionRefusal(value), value);
       }
       diagram.directionAttr = value;
     } else if (word === "in") {

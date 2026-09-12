@@ -451,9 +451,36 @@ export interface C4Frame {
  * `tb` — layers stack downwards, the original and the default. `lr` — layers
  * advance along the long axis and a long flow FOLDS into bands, so a deep
  * chain lands near the shape of a screen instead of a column three viewports
- * tall.
+ * tall. `fit` — neither is named: the layout is computed all three ways (`tb`,
+ * `lr`, and `tb` folded into bands) and whichever lands nearest the shape of a
+ * screen is kept.
+ *
+ * THE LIST IS THE SOURCE, and the parser, the serializer and the menu all read
+ * it rather than restating it. Four places used to spell `"tb" | "lr"` out by
+ * hand, including two copies of the same error message; adding a third value
+ * meant finding all of them, which is the shape of bug `codebase.md` habit 4
+ * is about.
  */
-export type C4LayoutDirection = "tb" | "lr";
+export const C4_LAYOUT_DIRECTIONS = ["tb", "lr", "fit"] as const;
+
+export type C4LayoutDirection = (typeof C4_LAYOUT_DIRECTIONS)[number];
+
+/**
+ * What each direction does, in the words the parser refuses with and the menu
+ * describes rows by. One sentence each, written for an author rather than a
+ * maintainer — two copies of this had already drifted apart inside the parser
+ * before there was a third value to keep in step.
+ */
+export const C4_LAYOUT_DIRECTION_MEANING: Record<C4LayoutDirection, string> = {
+  tb: "top-down, the default",
+  lr: "left-to-right, folding a long flow into bands",
+  fit: "whichever of those lands nearest the shape of a screen",
+};
+
+/** Whether a string is a layout direction the format accepts. */
+export function isLayoutDirection(value: string): value is C4LayoutDirection {
+  return (C4_LAYOUT_DIRECTIONS as readonly string[]).includes(value);
+}
 
 /**
  * One line of a beat: the elements it walks, in the order it tells them.

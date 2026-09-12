@@ -61,6 +61,7 @@
  */
 
 import type {
+  C4LayoutDirection,
   ArchLabFile,
   C4Diagram,
   C4Edge,
@@ -2062,7 +2063,7 @@ function frameMintPatch(
 export function revisedFileDirectionEdit(
   doc: ViewDocument,
   sourceText: string,
-  direction: "tb" | "lr" | "none",
+  direction: C4LayoutDirection | "none",
 ): CanvasEdit | null {
   if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
     return null;
@@ -2125,7 +2126,7 @@ export function revisedDirectionEdit(
   doc: ViewDocument,
   sourceText: string,
   diagramId: string,
-  direction: "tb" | "lr" | "inherit",
+  direction: C4LayoutDirection | "inherit",
 ): CanvasEdit | null {
   if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
     return null;

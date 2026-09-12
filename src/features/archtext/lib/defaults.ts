@@ -9,7 +9,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { C4NodeType, Point, Size } from "@/types";
+import type { C4LayoutDirection, C4NodeType, Point, Size } from "@/types";
 
 /**
  * `metadata.createdAt`/`updatedAt` when the text carries no `created`/
@@ -55,6 +55,14 @@ const MEMBER_SPAN = 96;
  */
 const BAND_GAP_Y = 120;
 /**
+ * Gap between two columns of a top-down flow wrapped by `fit`. Wider than
+ * `BAND_GAP_Y` because the arrow crossing it travels back across the whole
+ * diagram rather than down one row, and because the rows either side of it are
+ * already centred within their own column — without the extra room the two
+ * columns read as one wide row of unrelated boxes.
+ */
+const BAND_GAP_X = 160;
+/**
  * The shape a folded flow aims at. Every screen a diagram is presented on is
  * landscape — a laptop, a projector, a slide — so this is 16:9 rather than
  * anything derived from the model. A target, never a constraint: the fold
@@ -67,6 +75,25 @@ const TARGET_RATIO = 16 / 9;
  * full size, and a two-box band reads worse than the straight run it replaced.
  */
 const MIN_LAYERS_PER_BAND = 4;
+/**
+ * The shortest column a `fit` wrap may produce.
+ *
+ * SAME NUMBER AS `MIN_LAYERS_PER_BAND`, DIFFERENT REASON, AND MEASURED. A
+ * three-row floor was tried first, on the argument that a vertical run of
+ * three still reads as a flow where a two-layer horizontal strip does not. It
+ * did buy shape — two more diagrams wrapped, and the mean distance from 16:9
+ * went from 0.65 to 0.58 — and it cost each of them a crossing, because the
+ * connector from the foot of one column to the head of the next travels back
+ * across everything between. At four the wraps that survive cost nothing, so
+ * this is the floor `check:layout-quality` holds: shape is what `fit` is for,
+ * but not at the price of a line through the diagram.
+ *
+ * It is a separate constant rather than a second use of `MIN_LAYERS_PER_BAND`
+ * because the two govern different axes and could move apart: that one is
+ * about a strip being too short to read as a band, this one about a column
+ * being too short to be worth the return journey.
+ */
+const MIN_ROWS_PER_COLUMN = 4;
 /**
  * Extra pitch inserted between two neighbours in a row that belong to
  * DIFFERENT frames (or where one is framed and the other is not).
@@ -94,6 +121,27 @@ const FRAME_GUTTER = 64;
 const NODE_SPAN = 176;
 /** The gutter `COLUMN_STEP` leaves between two neighbouring elements. */
 const COLUMN_GUTTER = COLUMN_STEP - NODE_SPAN;
+
+/**
+ * How landscape a set of placements is: the bounding box's width over its
+ * height, measured with the spans the layout budgets rather than each node's
+ * own size, so the number matches the pitches that produced it.
+ */
+function shapeOf(placed: ReadonlyMap<string, Point>): number {
+  if (placed.size === 0) return TARGET_RATIO;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of placed.values()) {
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+  const height = maxY - minY + MEMBER_SPAN;
+  return height === 0 ? TARGET_RATIO : (maxX - minX + NODE_SPAN) / height;
+}
 
 /** An edge as the layout sees it — endpoints only. */
 export interface DefaultLayoutEdge {
@@ -279,7 +327,7 @@ function offsetsFor(
 export function defaultPositions(
   nodeIds: readonly string[],
   edges: readonly DefaultLayoutEdge[],
-  direction: "tb" | "lr" = "tb",
+  direction: C4LayoutDirection = "tb",
   frameOf: ReadonlyMap<string, string> = new Map(),
 ): Map<string, Point> {
   const ids = [...nodeIds].sort(compareStrings);
@@ -333,7 +381,7 @@ export function defaultPositions(
     const to = layer.get(edge.target) ?? 0;
     if (from >= to) return;
     let above = edge.source;
-    if (direction === "tb") {
+    if (direction !== "lr") {
       for (let row = from + 1; row < to; row += 1) {
         /* NUL-prefixed, which no node id can be: `canonicalEdges` already
            uses NUL as the separator no id may contain. */
@@ -420,17 +468,25 @@ export function defaultPositions(
    * column in the other direction. The tie goes to the flow, because a graph
    * as wide as it is deep reads better with its arrows running the way people
    * scan. */
-  if (direction === "lr" && lastRow + 1 >= widest) {
+  const placeLeftRight = (): Map<string, Point> | null => {
+    if (lastRow + 1 < widest) return null;
     const layers = lastRow + 1;
     /* Measured in pixels rather than in members, because a layer carrying two
        frames is taller than its member count says. With no frames every span
        is `(n − 1)·MEMBER_STEP_Y` and the arithmetic below is the arithmetic
        that was here before. */
+    /* LANES ARE NOT MEMBERS HERE. They are reserved against ROWS, and this
+       arrangement has none — a layer runs down the page and the connectors
+       that skip one travel sideways past it. Left in, they would pad every
+       band with room nothing stands in, and `fit` would then compare a band
+       layout inflated by lanes against a row layout that uses them. */
+    const membersOf = (layer: number): string[] =>
+      (rows.get(layer) ?? []).filter((id) => !isLane(id));
     const spans = new Map<number, number[]>();
     let tallestSpan = 0;
     for (let layer = 0; layer < layers; layer += 1) {
       const offsets = offsetsFor(
-        rows.get(layer) ?? [],
+        membersOf(layer),
         MEMBER_SPAN,
         MEMBER_STEP_Y - MEMBER_SPAN,
         frameOf,
@@ -463,52 +519,109 @@ export function defaultPositions(
     }
     const perBand = Math.ceil(layers / bands);
 
+    const placed = new Map<string, Point>();
     for (let layer = 0; layer < layers; layer += 1) {
-      const members = rows.get(layer) ?? [];
+      const members = membersOf(layer);
       const offsets = spans.get(layer) ?? [];
       const span = offsets[offsets.length - 1] ?? 0;
       const band = Math.floor(layer / perBand);
       // Centre short layers within their band, back on the 8-px grid.
       const inset = Math.round((tallestSpan - span) / 2 / 8) * 8;
       members.forEach((id, member) => {
-        positions.set(id, {
+        placed.set(id, {
           x: ORIGIN + (layer % perBand) * LAYER_STEP_X,
           y: ORIGIN + band * bandPitch + inset + offsets[member],
         });
       });
     }
+    return placed;
+  };
+
+  /**
+   * Rows stacked downwards, optionally wrapped into `columns` of them.
+   *
+   * One column is the layout `tb` has always produced. More than one is what
+   * `fit` reaches for when the flow is deep and narrow: the rows continue in a
+   * fresh column to the right, the way `lr` continues in a fresh band below.
+   */
+  const placeTopDown = (columns: number): Map<string, Point> => {
+    const offsetsByRow = new Map<number, number[]>();
+    let widestSpan = 0;
+    for (let row = 0; row <= lastRow; row += 1) {
+      const offsets = offsetsFor(
+        rows.get(row) ?? [],
+        NODE_SPAN,
+        COLUMN_GUTTER,
+        frameOf,
+        isLane,
+      );
+      offsetsByRow.set(row, offsets);
+      const span = offsets[offsets.length - 1] ?? 0;
+      if (span > widestSpan) widestSpan = span;
+    }
+    const perColumn = Math.ceil((lastRow + 1) / columns);
+    const columnPitch = widestSpan + NODE_SPAN + BAND_GAP_X;
+
+    const placed = new Map<string, Point>();
+    for (let row = 0; row <= lastRow; row += 1) {
+      const members = rows.get(row) ?? [];
+      const offsets = offsetsByRow.get(row) ?? [];
+      const span = offsets[offsets.length - 1] ?? 0;
+      // Centre narrow rows under the widest one, snapped back to the 8-px grid.
+      const indent = Math.round((widestSpan - span) / 2 / 8) * 8;
+      const column = Math.floor(row / perColumn);
+      members.forEach((id, member) => {
+        // A lane holds a column open; nothing stands in it, so nothing is placed.
+        if (isLane(id)) return;
+        placed.set(id, {
+          x: ORIGIN + column * columnPitch + indent + offsets[member],
+          y: ORIGIN + (row % perColumn) * ROW_STEP,
+        });
+      });
+    }
+    return placed;
+  };
+
+  if (direction === "fit") {
+    /* EVERY SHAPE THE LAYOUT CAN MAKE, AND THE ONE NEAREST A SCREEN WINS.
+       `fit` names no direction, so there is nothing to honour and no reason to
+       prefer one arrangement over another except the shape it comes out. The
+       candidates are the two the author could have written plus the wrappings
+       of the top-down one; `placeLeftRight` already picks its own band count,
+       so it contributes its best rather than all of them.
+       TIES KEEP THE EARLIER CANDIDATE, and the plain top-down layout is first
+       — a diagram that gains nothing by being folded is left unfolded, which
+       is the same rule the band count follows. */
+    const candidates: Map<string, Point>[] = [placeTopDown(1)];
+    const sideways = placeLeftRight();
+    if (sideways !== null) candidates.push(sideways);
+    for (let columns = 2; columns <= lastRow + 1; columns += 1) {
+      if (Math.ceil((lastRow + 1) / columns) < MIN_ROWS_PER_COLUMN) continue;
+      candidates.push(placeTopDown(columns));
+    }
+
+    let best = candidates[0];
+    let closest = Number.POSITIVE_INFINITY;
+    for (const candidate of candidates) {
+      const distance = Math.abs(shapeOf(candidate) - TARGET_RATIO);
+      if (distance < closest) {
+        closest = distance;
+        best = candidate;
+      }
+    }
+    for (const [id, point] of best) positions.set(id, point);
     return positions;
   }
 
-  const columns = new Map<number, number[]>();
-  let widestSpan = 0;
-  for (let row = 0; row <= lastRow; row += 1) {
-    const offsets = offsetsFor(
-      rows.get(row) ?? [],
-      NODE_SPAN,
-      COLUMN_GUTTER,
-      frameOf,
-      isLane,
-    );
-    columns.set(row, offsets);
-    const span = offsets[offsets.length - 1] ?? 0;
-    if (span > widestSpan) widestSpan = span;
+  if (direction === "lr") {
+    const sideways = placeLeftRight();
+    if (sideways !== null) {
+      for (const [id, point] of sideways) positions.set(id, point);
+      return positions;
+    }
   }
-  for (let row = 0; row <= lastRow; row += 1) {
-    const members = rows.get(row) ?? [];
-    const offsets = columns.get(row) ?? [];
-    const span = offsets[offsets.length - 1] ?? 0;
-    // Centre narrow rows under the widest one, snapped back to the 8-px grid.
-    const indent = Math.round((widestSpan - span) / 2 / 8) * 8;
-    members.forEach((id, column) => {
-      // A lane holds a column open; nothing stands in it, so nothing is placed.
-      if (isLane(id)) return;
-      positions.set(id, {
-        x: ORIGIN + indent + offsets[column],
-        y: ORIGIN + row * ROW_STEP,
-      });
-    });
-  }
+
+  for (const [id, point] of placeTopDown(1)) positions.set(id, point);
   return positions;
 }
 

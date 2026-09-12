@@ -237,8 +237,23 @@ const scoreOf = (diagram) => {
   return { connector, element, total: connector + element };
 };
 
+/** How landscape a diagram's elements are: width over height of their bounds. */
+const shapeOf = (diagram) => {
+  const rects = [...rectsOf(diagram).values()];
+  const width =
+    Math.max(...rects.map((r) => r.x + r.width)) -
+    Math.min(...rects.map((r) => r.x));
+  const height =
+    Math.max(...rects.map((r) => r.y + r.height)) -
+    Math.min(...rects.map((r) => r.y));
+  return height === 0 ? 0 : width / height;
+};
+
+/** The shape every screen a diagram is presented on has. */
+const TARGET_RATIO = 16 / 9;
+
 /** The same diagram with every element placed by the layout instead. */
-const arranged = (diagram) => {
+const arranged = (diagram, direction) => {
   const frameOf = new Map(
     diagram.nodes
       .filter((node) => typeof node.frameId === "string")
@@ -250,7 +265,7 @@ const arranged = (diagram) => {
       source: edge.source,
       target: edge.target,
     })),
-    diagram.layoutDirection ?? "tb",
+    direction ?? diagram.layoutDirection ?? "tb",
     frameOf,
   );
   return {
@@ -315,6 +330,44 @@ for (const { doc, diagram } of corpus) {
     }
   });
 }
+
+/* ----------------------------------------------------------------------- */
+/* 2b. `direction=fit` holds the same bar, and improves the shape           */
+/* ----------------------------------------------------------------------- */
+
+for (const { doc, diagram } of corpus) {
+  check(`${doc}/${diagram.id} arranged with direction=fit is no worse`, () => {
+    const before = scoreOf(diagram);
+    const after = scoreOf(arranged(diagram, "fit"));
+    if (after.total > before.total) {
+      fail(
+        `fit scores ${after.total} crossings against ${before.total} as authored`,
+      );
+    }
+  });
+}
+
+check("direction=fit lands nearer the shape of a screen than tb does", () => {
+  /* THE WHOLE CLAIM OF `fit`, and the only assertion that can catch it
+     quietly doing nothing. It is measured as a MEAN over the corpus rather
+     than per diagram: fit picks from a set that always includes plain `tb`,
+     so per diagram it can only tie or win, and an assertion saying so would
+     restate the implementation. The mean is what says the extra candidates
+     are worth offering at all. */
+  const distance = (diagram, direction) =>
+    Math.abs(shapeOf(arranged(diagram, direction)) - TARGET_RATIO);
+  const mean = (direction) =>
+    corpus.reduce((sum, { diagram }) => sum + distance(diagram, direction), 0) /
+    corpus.length;
+  const topDown = mean("tb");
+  const fitted = mean("fit");
+  if (!(fitted < topDown)) {
+    fail(
+      `fit is a mean ${fitted.toFixed(2)} from 16:9 against tb's ` +
+        `${topDown.toFixed(2)} — it is picking no better than top-down`,
+    );
+  }
+});
 
 /* ----------------------------------------------------------------------- */
 /* 2. What the lanes buy                                                    */
