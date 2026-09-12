@@ -29,6 +29,7 @@
  */
 
 import type {
+  C4LayoutDirection,
   ArchLabFile,
   C4Diagram,
   C4NodeType,
@@ -58,6 +59,8 @@ import {
   VIEWPORT_KEYS,
   splitUnknowns,
 } from "./schema";
+import { isLayoutDirection } from "@/types";
+
 import {
   BARE_ID_RE,
   BARE_TAG_RE,
@@ -202,7 +205,7 @@ export function serializeArchText(file: ArchLabFile): string {
    * Omitted when absent, which is what keeps a document that never mentions
    * direction byte-identical through a round trip. */
   const fileDirection = (file as Record<string, unknown>).direction;
-  if (fileDirection === "tb" || fileDirection === "lr") {
+  if (typeof fileDirection === "string" && isLayoutDirection(fileDirection)) {
     lines.push(`direction ${fileDirection}`);
   } else if (fileDirection !== undefined) {
     invalid("direction", fileDirection);
@@ -662,7 +665,7 @@ function diagramHeadLine(
   }
   if (typeof owner === "string") head += ` owner=${idToken(owner)}`;
   const ownDirection = diagram.direction;
-  if (ownDirection === "tb" || ownDirection === "lr") {
+  if (typeof ownDirection === "string" && isLayoutDirection(ownDirection)) {
     head += ` direction=${ownDirection}`;
   } else if (ownDirection !== undefined) {
     invalid(`diagram "${id}".direction`, ownDirection);
@@ -702,7 +705,7 @@ function emitDiagram(
   lines: string[],
   diagram: Record<string, unknown>,
   nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
-  direction: "tb" | "lr",
+  direction: C4LayoutDirection,
 ): void {
   const id = diagram.id as string;
   const level = diagram.level;
@@ -889,11 +892,11 @@ export function resolveDirection(
   /* Structurally typed for `defaultNodeLayout`'s benefit — see the note on
      `defaultLayoutFor`; `Record<string, unknown>` still satisfies it. */
   diagram: { readonly direction?: unknown },
-): "tb" | "lr" {
+): C4LayoutDirection {
   const own = diagram.direction;
-  if (own === "tb" || own === "lr") return own;
+  if (typeof own === "string" && isLayoutDirection(own)) return own;
   const fileWide = (file as Record<string, unknown>).direction;
-  if (fileWide === "tb" || fileWide === "lr") return fileWide;
+  if (typeof fileWide === "string" && isLayoutDirection(fileWide)) return fileWide;
   return "tb";
 }
 
@@ -905,7 +908,7 @@ export function resolveDirection(
 function defaultLayoutFor(
   nodes: readonly { readonly id?: unknown; readonly frameId?: unknown }[],
   edges: readonly { readonly source?: unknown; readonly target?: unknown }[],
-  direction: "tb" | "lr",
+  direction: C4LayoutDirection,
 ): ReadonlyMap<string, Point> {
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
   /* The same map the parser builds from the same `in=` values — a boundary's

@@ -50,7 +50,13 @@ import {
    in prose here would go stale the day it is reworded. */
 import { resetLayerLabel } from "@/lib/prose";
 import { MAX_TITLE_LENGTH, titleLengthOverCap } from "@/lib/constants";
-import type { ArchLabFile, C4Diagram, C4Level, SequenceLabFile } from "@/types";
+import type {
+  C4LayoutDirection,
+  ArchLabFile,
+  C4Diagram,
+  C4Level,
+  SequenceLabFile,
+} from "@/types";
 import { C4_ABSTRACTION, isBoundaryPlaceholder } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -316,7 +322,7 @@ function extentOf(
 
 function laidOutBy(
   diagram: C4Diagram,
-  direction: "tb" | "lr",
+  direction: C4LayoutDirection,
 ): Map<string, { x: number; y: number }> {
   return defaultPositions(
     diagram.nodes.map((node) => node.id).sort(),

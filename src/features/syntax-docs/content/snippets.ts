@@ -823,16 +823,18 @@ export const HEADER_ROWS: readonly HeaderRow[] = [
     notes: "Optional.",
   },
   {
-    syntax: "direction tb|lr",
-    example: "direction lr",
+    syntax: "direction tb|lr|fit",
+    example: "direction fit",
     mapsTo: "direction",
     notes:
       "Optional; the default layout direction for every diagram that does " +
       "not set its own. Omitted means `tb` — top-down, as every document " +
       "laid out before this line existed. `lr` runs layers along the long " +
       "axis and folds a long flow into bands, so a deep chain lands near the " +
-      "shape of a screen instead of a column. Only affects nodes whose " +
-      "position the text omits.",
+      "shape of a screen instead of a column. `fit` names no direction: the " +
+      "diagram is laid out every way — top-down, left-to-right, and top-down " +
+      "wrapped into columns — and whichever lands nearest the shape of a " +
+      "screen is kept. Only affects nodes whose position the text omits.",
   },
   {
     syntax: "tags #a #b",

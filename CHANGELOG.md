@@ -7,8 +7,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`direction=fit` — let the diagram choose its own shape.** A third value
+  beside `tb` and `lr`, on a diagram's line or in the file header. It names no
+  direction: the diagram is laid out top-down, left-to-right, and top-down
+  wrapped into columns, and whichever comes out nearest the shape of a screen
+  is the one kept. Use it when the shape matters more than the reading
+  direction — where the flow has a direction a reader is meant to follow, keep
+  writing `tb` or `lr`. Across the bundled diagrams it more than halves the
+  worst mismatches without adding a single crossing.
+
+### Changed
+
+- **Letting the layout place the elements now produces a diagram at least as
+  readable as a hand-arranged one.** Where a relationship has to travel past
+  rows it does not belong to, those rows now leave a lane open for it, so the
+  layout no longer parks an element squarely on a line. Measured across every
+  C4 diagram bundled with the repo, arranging scores no more crossings than
+  the author's own placement on any of them, and draws no relationship through
+  an element at all. **A diagram whose text omits coordinates will open in
+  different positions than before** — it is laid out by these rules, not by
+  the ones it was written under. Nothing about the format changed and no file
+  needs editing; documents that carry their own coordinates are untouched.
+
 ### Fixed
 
+- **A relationship no longer runs through an element when a clear lane
+  exists.** The route picked its lane by looking only at the long middle
+  stretch and ignoring the two runs that reach it — so it settled on the first
+  lane whose middle happened to be clear while the rest of the line went
+  through a box, and skipped past better lanes further out.
 - **A relationship no longer runs through an element it has nothing to do
   with** — where it can be avoided. The long middle stretch of a connector
   now picks a lane clear of the elements it passes. What it cannot move is

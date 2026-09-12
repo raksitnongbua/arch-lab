@@ -122,6 +122,8 @@ import {
   resetUseCasePositionsEdit,
 } from "../input/usecase-edit";
 import { retitledEdit, type RetitleFields } from "../input/retitle-edit";
+import type { C4LayoutDirection } from "@/types";
+
 import {
   dictReorderRefusal,
   reorderedDictFieldEdit,
@@ -338,7 +340,7 @@ export function useCanvasEditing({
   applyDirection: (
     diagramId: string,
     scope: "layer" | "file",
-    direction: "tb" | "lr",
+    direction: C4LayoutDirection,
   ) => void;
   clearDirection: (diagramId: string, scope: "layer" | "file") => void;
   /**
@@ -589,7 +591,11 @@ export function useCanvasEditing({
    * surprise `revisedFileDirectionEdit` refuses to cause.
    */
   const applyDirection = useCallback(
-    (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
+    (
+      diagramId: string,
+      scope: "layer" | "file",
+      direction: C4LayoutDirection,
+    ) => {
       const placement = layerPlacement(doc, diagramId);
       const next =
         scope === "layer"

@@ -46,8 +46,10 @@
  * second one of the same kind.
  *
  * The glyphs are the shapes, not letters: a column of bars for top-down, a row
- * of them for left-to-right. A reader reaches for this because the picture is
- * the wrong shape, so the control shows shapes.
+ * of them for left-to-right, and the same bars wrapped into a block for fit. A
+ * reader reaches for this because the picture is the wrong shape, so the
+ * control shows shapes. `DIRECTION_GLYPH` holds them, keyed by direction so a
+ * new one cannot quietly borrow another's.
  *
  * AND IT SAYS WHAT IT CANNOT DO, AT THE MOMENT OF PRESSING. Geometry beats the
  * direction per element, so on a diagram somebody has arranged by hand this
@@ -130,6 +132,47 @@ import {
 /** Which document line a press writes. */
 export type DirectionScope = "layer" | "file";
 
+/**
+ * The bars each direction arranges, as the shape it arranges them into.
+ *
+ * ONE VOCABULARY, THREE ARRANGEMENTS. A reader reaches for this control
+ * because the picture is the wrong shape, so every row shows a shape rather
+ * than a letter — and they are the SAME bars each time, because the layout
+ * moves the same elements whichever row is pressed. `tb` stacks them, `lr`
+ * stands them side by side, and `fit` wraps them into a block, which is
+ * exactly what it does to a run that will not fit a screen.
+ *
+ * A TOTAL TABLE, not a ternary. The two glyphs used to be an `=== "tb" ?` and
+ * an else, so the moment a third direction existed it silently rendered the
+ * `lr` bars — a row that says nothing it does not do is the one rule this
+ * menu was built on. Keyed by direction, a new value will not compile without
+ * a shape of its own.
+ */
+const DIRECTION_GLYPH: Record<C4LayoutDirection, React.ReactNode> = {
+  tb: (
+    <>
+      <rect x="3" y="1" width="6" height="2.4" rx="0.6" />
+      <rect x="3" y="4.8" width="6" height="2.4" rx="0.6" />
+      <rect x="3" y="8.6" width="6" height="2.4" rx="0.6" />
+    </>
+  ),
+  lr: (
+    <>
+      <rect x="1" y="3" width="2.4" height="6" rx="0.6" />
+      <rect x="4.8" y="3" width="2.4" height="6" rx="0.6" />
+      <rect x="8.6" y="3" width="2.4" height="6" rx="0.6" />
+    </>
+  ),
+  fit: (
+    <>
+      <rect x="1" y="1.6" width="4.2" height="3.4" rx="0.6" />
+      <rect x="6.8" y="1.6" width="4.2" height="3.4" rx="0.6" />
+      <rect x="1" y="7" width="4.2" height="3.4" rx="0.6" />
+      <rect x="6.8" y="7" width="4.2" height="3.4" rx="0.6" />
+    </>
+  ),
+};
+
 function DirectionGlyph({
   value,
   className,
@@ -137,27 +180,14 @@ function DirectionGlyph({
   value: C4LayoutDirection;
   className?: string;
 }) {
-  return value === "tb" ? (
+  return (
     <svg
       viewBox="0 0 12 12"
       aria-hidden="true"
       fill="currentColor"
       className={className}
     >
-      <rect x="3" y="1" width="6" height="2.4" rx="0.6" />
-      <rect x="3" y="4.8" width="6" height="2.4" rx="0.6" />
-      <rect x="3" y="8.6" width="6" height="2.4" rx="0.6" />
-    </svg>
-  ) : (
-    <svg
-      viewBox="0 0 12 12"
-      aria-hidden="true"
-      fill="currentColor"
-      className={className}
-    >
-      <rect x="1" y="3" width="2.4" height="6" rx="0.6" />
-      <rect x="4.8" y="3" width="2.4" height="6" rx="0.6" />
-      <rect x="8.6" y="3" width="2.4" height="6" rx="0.6" />
+      {DIRECTION_GLYPH[value]}
     </svg>
   );
 }
@@ -202,16 +232,19 @@ const DIRECTIONS: readonly {
 }[] = [
   { value: "tb", label: "Top-down" },
   { value: "lr", label: "Left-right" },
+  { value: "fit", label: "Fit a screen" },
 ];
 
 const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
   layer: {
     tb: "Writes direction=tb on this diagram's line",
     lr: "Writes direction=lr on this diagram's line — folds a long flow into bands",
+    fit: "Writes direction=fit on this diagram's line — lays it out every way and keeps the one nearest the shape of a screen",
   },
   file: {
     tb: "Writes direction tb in the file header",
     lr: "Writes direction lr in the file header — folds a long flow into bands",
+    fit: "Writes direction fit in the file header — lays each diagram out every way and keeps the one nearest the shape of a screen",
   },
 };
 
