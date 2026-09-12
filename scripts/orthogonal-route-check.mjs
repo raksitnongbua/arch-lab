@@ -883,6 +883,41 @@ check("a corridor steps aside for a box in its way", () => {
   );
 });
 
+check("a lane is judged by the whole Z, not by its crossing run alone", () => {
+  /* THE DEFECT THIS PINS. A lane used to be accepted as soon as the short
+     crossing run missed every box, while the two legs that reach it — most of
+     the connector — were never looked at. The box below is placed to make the
+     difference visible: it stands on the SOURCE's leg and clear of the
+     target's, and it stops short of the midpoint lane, so testing the run
+     alone accepts a route that goes straight through it. Without the legs in
+     the predicate the search never steps past this box, because as far as it
+     can tell there was nothing to step past. */
+  const beside = { x: 450, y: 300, width: 60, height: 100 };
+  const points = orthogonalRoute({
+    sourceX: 500,
+    sourceY: 100,
+    sourceSide: "bottom",
+    targetX: 520,
+    targetY: 700,
+    targetSide: "top",
+    obstacles: [beside],
+  });
+  const through = points.slice(1).some((point, index) => {
+    const previous = points[index];
+    return (
+      Math.max(previous.x, point.x) > beside.x &&
+      Math.min(previous.x, point.x) < beside.x + beside.width &&
+      Math.max(previous.y, point.y) > beside.y &&
+      Math.min(previous.y, point.y) < beside.y + beside.height
+    );
+  });
+  assert.ok(
+    !through,
+    `the route runs through the box at ${beside.x},${beside.y}: ` +
+      points.map((p) => `${p.x},${p.y}`).join(" "),
+  );
+});
+
 check("and does not move when nothing is in the way", () => {
   const plain = {
     sourceX: 300,

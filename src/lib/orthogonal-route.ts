@@ -236,20 +236,37 @@ function corridor(
   toOut: number,
   offset: number,
   stub: number,
-  /** Whether a crossing run at this coordinate misses every obstacle. */
-  clear?: (value: number) => boolean,
+  /**
+   * Whether a lane at this coordinate is acceptable, best first. The whole Z
+   * missing every box is what the router wants; the crossing run alone
+   * missing them is what it settles for.
+   */
+  clear: readonly ((value: number) => boolean)[] = [],
 ): number | null {
   /* NEAREST CLEAR LANE, SEARCHED OUTWARD FROM THE ONE IT WANTED. Both
      directions at each step so the corridor moves the shortest distance it
      can, and the original is kept when nothing within reach is clear — a
      connector that crosses a box is bad, and one flung to the edge of the
-     diagram to avoid it is worse. */
+     diagram to avoid it is worse.
+     EACH STANDARD IS SEARCHED IN FULL BEFORE THE NEXT IS TRIED, so a lane
+     that clears everything always beats a nearer one that only clears the
+     crossing run. Falling back rather than loosening the test is what keeps
+     the strict predicate from turning a route that used to step aside into
+     one that gives up: where nothing satisfies it — a box tall enough to
+     stand in both legs and the run at once — the answer is the one the
+     looser standard would have given anyway. */
   const search = (base: number, low: number, high: number): number => {
-    if (clear === undefined || clear(base)) return base;
-    for (let step = CHANNEL_STEP; step <= CHANNEL_REACH; step += CHANNEL_STEP) {
-      for (const candidate of [base + step, base - step]) {
-        if (candidate < low || candidate > high) continue;
-        if (clear(candidate)) return candidate;
+    for (const acceptable of clear) {
+      if (acceptable(base)) return base;
+      for (
+        let step = CHANNEL_STEP;
+        step <= CHANNEL_REACH;
+        step += CHANNEL_STEP
+      ) {
+        for (const candidate of [base + step, base - step]) {
+          if (candidate < low || candidate > high) continue;
+          if (acceptable(candidate)) return candidate;
+        }
       }
     }
     return base;
@@ -331,29 +348,77 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
   const sourceHorizontal = isHorizontal(input.sourceSide);
   const targetHorizontal = isHorizontal(input.targetSide);
 
-  /* A LANE IS CLEAR WHEN THE CROSSING RUN MISSES EVERY BOX, measured over the
-     span the run actually covers rather than over the whole diagram — a
-     corridor is only in the way of what it passes. Strict comparisons, so a
-     run grazing an element's edge counts as clear: the alternative is a
-     search that steps away from a box it never touched. */
+  /* A LANE IS CLEAR WHEN THE WHOLE Z MISSES EVERY BOX — the crossing run AND
+     the two legs that reach it, each measured over the span it actually
+     covers rather than over the whole diagram. Strict comparisons, so a run
+     grazing an element's edge counts as clear: the alternative is a search
+     that steps away from a box it never touched.
+
+     THE LEGS USED TO BE LEFT OUT, and that is what put a connector through a
+     box on a diagram whose elements sit in rows. A lane is chosen by stepping
+     outward from the midpoint, and testing the crossing run alone accepts the
+     first lane whose short horizontal hop happens to clear the row it lands
+     in — while the two vertical legs, which are most of the connector, run
+     straight down through it. Every lane the search then skips over was a
+     better one. The legs move WITH the lane, so they belong inside the
+     predicate the search is asking about, not in a check applied after it. */
   const boxes = input.obstacles ?? [];
-  const clearVertical = (x: number): boolean =>
+  const spans = (
+    at: number,
+    from: number,
+    to: number,
+    low: number,
+    size: number,
+    crossLow: number,
+    crossSize: number,
+  ): boolean =>
+    at > low &&
+    at < low + size &&
+    Math.max(from, to) > crossLow &&
+    Math.min(from, to) < crossLow + crossSize;
+  /** The crossing run alone, vertical at `x` / horizontal at `y`. */
+  const runVertical = (x: number): boolean =>
+    !boxes.some((box) =>
+      spans(x, afterStub.y, beforeEnd.y, box.x, box.width, box.y, box.height),
+    );
+  const runHorizontal = (y: number): boolean =>
+    !boxes.some((box) =>
+      spans(y, afterStub.x, beforeEnd.x, box.y, box.height, box.x, box.width),
+    );
+  /** The run and both legs that reach it. */
+  const wholeVertical = (x: number): boolean =>
+    runVertical(x) &&
     !boxes.some(
       (box) =>
-        x > box.x &&
-        x < box.x + box.width &&
-        Math.max(afterStub.y, beforeEnd.y) > box.y &&
-        Math.min(afterStub.y, beforeEnd.y) < box.y + box.height,
+        spans(
+          afterStub.y,
+          afterStub.x,
+          x,
+          box.y,
+          box.height,
+          box.x,
+          box.width,
+        ) ||
+        spans(beforeEnd.y, beforeEnd.x, x, box.y, box.height, box.x, box.width),
     );
-  const clearHorizontal = (y: number): boolean =>
+  const wholeHorizontal = (y: number): boolean =>
+    runHorizontal(y) &&
     !boxes.some(
       (box) =>
-        y > box.y &&
-        y < box.y + box.height &&
-        Math.max(afterStub.x, beforeEnd.x) > box.x &&
-        Math.min(afterStub.x, beforeEnd.x) < box.x + box.width,
+        spans(
+          afterStub.x,
+          afterStub.y,
+          y,
+          box.x,
+          box.width,
+          box.y,
+          box.height,
+        ) ||
+        spans(beforeEnd.x, beforeEnd.y, y, box.x, box.width, box.y, box.height),
     );
-  const avoiding = boxes.length > 0;
+  const verticalLanes = boxes.length > 0 ? [wholeVertical, runVertical] : [];
+  const horizontalLanes =
+    boxes.length > 0 ? [wholeHorizontal, runHorizontal] : [];
 
   if (sourceHorizontal === targetHorizontal) {
     if (sourceHorizontal) {
@@ -364,7 +429,7 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
         into.x,
         offset,
         stub,
-        avoiding ? clearVertical : undefined,
+        verticalLanes,
       );
       if (x !== null) {
         return simplify([
@@ -397,7 +462,7 @@ export function orthogonalRoute(input: OrthogonalRouteInput): PolylinePoint[] {
       into.y,
       offset,
       stub,
-      avoiding ? clearHorizontal : undefined,
+      horizontalLanes,
     );
     if (y !== null) {
       return simplify([
