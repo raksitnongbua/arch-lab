@@ -349,17 +349,18 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
   /* THE LOCK GETS A STEP because it is the one control that takes every other
      one away, and since the canvas locks by default (`lib/canvas-lock.ts`) it
      is now the step that explains why there is nothing to press on the diagram
-     yet. The strip's own “Edit” is meant to answer that without help; this is
+     yet. The strip's own padlock is meant to answer that without help; this is
      the second chance, and it is the place to say that the editing controls
      APPEAR with it, which the button alone cannot. It teaches the SEQUENCE
      canvas's wording because this is the sequence viewer's tour; the C4 shell
      carries its own. */
   {
-    title: "Press Edit to change it",
+    title: "Unlock the canvas to change it",
     body:
       "The canvas starts read-only, so a stray click cannot move anything " +
-      "while you read or present. “Edit” at the top of this pane turns it on " +
-      "and the editing controls appear with it; “Lock” puts them away again.",
+      "while you read or present. The padlock at the top of this pane unlocks " +
+      "it and the editing controls appear with it; press it again to lock. " +
+      "The chip beside it reads Read-only or Editable.",
     icon: Pencil,
   },
 ];

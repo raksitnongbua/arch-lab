@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Validator } from "@/features/validate";
 
 export const metadata: Metadata = {
-  title: "Validate a model — arch-lab",
+  title: "Validate a model",
   description:
     "Check .alab, arch-lab JSON or Mermaid C4 against the real parsers and get the exact line and column of any problem. Runs entirely in your browser.",
   alternates: { canonical: "/validate" },

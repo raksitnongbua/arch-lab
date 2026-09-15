@@ -429,6 +429,45 @@ check("registered descriptions come from the catalogue", () => {
   }
 });
 
+/*
+ * THE DRIFT THIS CHECK WAS ADDED FOR. Tool descriptions have come from the
+ * catalogue since the feature shipped, and the check above proves it — but
+ * ARGUMENT descriptions were typed a second time in `server.ts`, and nothing
+ * compared the copies. They diverged: the timeline schema told every agent
+ * "Unlike gantt, this conversion runs both ways" for a release after that
+ * stopped being true, while the catalogue the /mcp page renders said the
+ * opposite, and `create_share_link` advertised two notations while the code
+ * accepted nine. An argument description is what a model reads BEFORE it
+ * calls, so it is a contract, and a contract with two authors has none.
+ */
+check("registered argument descriptions come from the catalogue", () => {
+  for (const tool of registered.tools) {
+    const entry = MCP_TOOLS.find((candidate) => candidate.name === tool.name);
+    const shape = tool.config.inputSchema ?? {};
+    for (const arg of entry.args) {
+      const schema = shape[arg.name];
+      assert.ok(
+        schema !== undefined,
+        `${tool.name} documents an argument "${arg.name}" it does not register`,
+      );
+      assert.equal(
+        schema.description,
+        arg.description,
+        `${tool.name}.${arg.name}: the sentence the agent receives must be ` +
+          "the sentence catalog.ts documents — type it once, in the " +
+          "catalogue, and reference it from server.ts",
+      );
+    }
+    for (const name of Object.keys(shape)) {
+      assert.ok(
+        entry.args.some((arg) => arg.name === name),
+        `${tool.name} registers an argument "${name}" the catalogue does ` +
+          "not document, so the /mcp page cannot show it",
+      );
+    }
+  }
+});
+
 check("every tool is annotated read-only", () => {
   for (const tool of registered.tools) {
     assert.equal(

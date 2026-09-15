@@ -9,7 +9,7 @@ export function Footer() {
       <div className="flex w-full flex-col gap-2 px-4 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p>
           <span className="font-mono">{APP_NAME}</span> — local-first
-          architecture documentation. C4 today; more diagram types planned.
+          architecture diagrams, written as plain text.
         </p>
         {/* The FAQ lives here rather than in the header, and that is a
             deliberate placement: the header row has already run out of viewport

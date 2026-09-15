@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SyntaxReference } from "@/features/syntax-docs";
 
 export const metadata: Metadata = {
-  title: "The .alab syntax — arch-lab text format reference",
+  title: "The .alab text format reference",
   description:
     "The .alab text format, construct by construct — nodes, edges, drill-down, sequence messages and fragments. Every example is verified against the real parser.",
   alternates: { canonical: "/syntax" },

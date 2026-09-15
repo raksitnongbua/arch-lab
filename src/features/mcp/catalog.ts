@@ -418,6 +418,33 @@ const FORMAT_ARG: McpArgDoc = {
     "which reads the first meaningful line to decide.",
 };
 
+/**
+ * The shared argument prose, exported so `server.ts` can put THE SAME SENTENCE
+ * in the zod schema an agent actually receives.
+ *
+ * Tool descriptions have always come from this file (`doc()` in `server.ts`),
+ * and the header there says so. Argument descriptions did not, and the two
+ * copies drifted in the way the comment on `TIMELINE_SOURCE_ARG` records: the
+ * schema went on telling agents "unlike gantt, this conversion runs both ways"
+ * after that stopped being true, while the catalogue the `/mcp` page renders
+ * said the opposite. An argument description is a contract an agent reads
+ * BEFORE it calls, so it gets one owner, and `check:mcp` compares the
+ * registered schemas against these.
+ */
+export const MCP_ARG_DOCS = {
+  source: SOURCE_ARG,
+  sequenceSource: SEQUENCE_SOURCE_ARG,
+  flowchartSource: FLOWCHART_SOURCE_ARG,
+  usecaseSource: USECASE_SOURCE_ARG,
+  erSource: ER_SOURCE_ARG,
+  dictSource: DICT_SOURCE_ARG,
+  ganttSource: GANTT_SOURCE_ARG,
+  timelineSource: TIMELINE_SOURCE_ARG,
+  lifecycleSource: LIFECYCLE_SOURCE_ARG,
+  shareSource: SHARE_SOURCE_ARG,
+  format: FORMAT_ARG,
+} as const;
+
 export const MCP_TOOLS: readonly McpToolDoc[] = [
   {
     name: "validate_model",
@@ -792,7 +819,10 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       {
         name: "to",
         required: true,
-        description: 'Target format: "alab", "json" or "mermaid".',
+        description:
+          'Target format: "alab", "json" or "mermaid". `.alab` and JSON ' +
+          "convert both ways losslessly; Mermaid is a one-way, lossy export " +
+          "of one diagram.",
       },
       {
         name: "diagram_id",
@@ -956,9 +986,9 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     name: "create_share_link",
     title: "Create a share link",
     description:
-      "Turn a C4 model OR a sequence diagram into a URL that opens it in " +
+      "Turn any .alab document into a URL that opens it in " +
       "the arch-lab viewer, so a human can see the diagram — C4 models open " +
-      "the two-pane viewer, sequence documents the sequence playground. The " +
+      "the two-pane viewer, every other notation its own playground. The " +
       "document is encoded into the URL fragment, which browsers never send " +
       "to a server — nothing is uploaded or stored. Refuses documents too " +
       "large to fit a link that would survive being pasted into chat or " +
@@ -966,7 +996,7 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "those and asks your human which the reader actually needs rather " +
       "than choosing for them. " +
       "Can optionally expire after a number of days. The format " +
-      "argument applies to the C4 readings; a sequence document is detected " +
+      "argument applies to the C4 readings; every other kind is detected " +
       "from its first line.",
     asks:
       "a model with several diagrams has no `diagram_id` and a root too thin " +
@@ -979,8 +1009,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         name: "diagram_id",
         required: false,
         description:
-          "Open the link at this diagram (C4 models only — a sequence " +
-          "document is a single flow with no diagrams). Omitting it is safe " +
+          "Open the link at this diagram (C4 models only — every other " +
+          "notation is one document with no diagrams). Omitting it is safe " +
           "when the model has one or two diagrams, or when its root holds " +
           "the picture you mean: the root is then used. On a model with " +
           "three or more diagrams whose root is a bare signpost, the tool " +
@@ -1174,7 +1204,7 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
     id: "share",
     title: "Show a human",
     blurb:
-      "Turn a finished C4 model or sequence flow into a link that opens " +
+      "Turn a finished document in any notation into a link that opens " +
       "the diagram in the viewer.",
     tools: toolsNamed("create_share_link"),
   },
