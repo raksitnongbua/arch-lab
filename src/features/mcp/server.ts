@@ -21,6 +21,7 @@ import type { IconCategory } from "@/features/editor/lib/icons/categories";
 import type { CheckChoice } from "@/features/validate/lib/check";
 
 import {
+  MCP_ARG_DOCS,
   MCP_PROMPTS,
   MCP_RESOURCES,
   MCP_TOOLS,
@@ -50,78 +51,44 @@ import { validateModel } from "./tools/validate";
 const FORMAT_SCHEMA = z
   .enum(["auto", "alab", "json", "mermaid"])
   .default("auto")
-  .describe(
-    'Force how `source` is read. Defaults to "auto" (detect from the first ' +
-      "meaningful line).",
-  );
+  .describe(MCP_ARG_DOCS.format.description);
 
-const SOURCE_SCHEMA = z
-  .string()
-  .describe("Model text: .alab, arch-lab JSON, or Mermaid C4.");
+const SOURCE_SCHEMA = z.string().describe(MCP_ARG_DOCS.source.description);
 
 const SEQUENCE_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Sequence diagram text: .alab sequence, or Mermaid sequenceDiagram.",
-  );
+  .describe(MCP_ARG_DOCS.sequenceSource.description);
 
 const FLOWCHART_SOURCE_SCHEMA = z
   .string()
-  .describe("Flowchart text: .alab flowchart, or Mermaid flowchart/graph.");
+  .describe(MCP_ARG_DOCS.flowchartSource.description);
 
 const USECASE_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Use-case diagram text: .alab usecase, or Mermaid in the actor/use-case " +
-      "convention.",
-  );
+  .describe(MCP_ARG_DOCS.usecaseSource.description);
 
-const ER_SOURCE_SCHEMA = z
-  .string()
-  .describe("ER diagram text: .alab er, or Mermaid erDiagram.");
+const ER_SOURCE_SCHEMA = z.string().describe(MCP_ARG_DOCS.erSource.description);
 
 const DICT_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Data dictionary text: .alab dict. There is no Mermaid dialect — Mermaid " +
-      "has no dictionary notation.",
-  );
+  .describe(MCP_ARG_DOCS.dictSource.description);
 
 const GANTT_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Gantt text: .alab gantt, or Mermaid gantt. Mermaid is read only — " +
-      "the import is one-way and lossy.",
-  );
+  .describe(MCP_ARG_DOCS.ganttSource.description);
 
 const TIMELINE_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Milestone timeline text: .alab timeline, or Mermaid timeline. Unlike " +
-      "gantt, this conversion runs both ways.",
-  );
+  .describe(MCP_ARG_DOCS.timelineSource.description);
 
 const LIFECYCLE_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Lifecycle text: .alab lifecycle. The only dialect — Mermaid has no " +
-      "lifecycle notation (stateDiagram-v2 is a state machine, not one " +
-      "subject's history), so none was invented.",
-  );
+  .describe(MCP_ARG_DOCS.lifecycleSource.description);
 
 /* `create_share_link` accepts EVERY document kind — see tools/share.ts. */
 const SHARE_SOURCE_SCHEMA = z
   .string()
-  .describe(
-    "Document text: .alab, arch-lab JSON or Mermaid C4 for C4 models; " +
-      ".alab sequence or Mermaid sequenceDiagram for sequence diagrams; " +
-      ".alab flowchart or Mermaid flowchart/graph for flowcharts; " +
-      ".alab usecase or Mermaid in the actor/use-case convention for " +
-      "use-case diagrams; .alab er or Mermaid erDiagram for ER diagrams; " +
-      ".alab dict for data dictionaries; .alab gantt or Mermaid gantt " +
-      "for gantt charts; .alab timeline or Mermaid timeline for milestone " +
-      "timelines; .alab lifecycle for lifecycles.",
-  );
+  .describe(MCP_ARG_DOCS.shareSource.description);
 
 /**
  * Looks a tool's prose up by name so `registerTool` never carries a
@@ -137,6 +104,23 @@ function doc(name: string): McpToolDoc {
     );
   }
   return found;
+}
+
+/**
+ * The same lookup for an ARGUMENT's prose. Shared arguments come from
+ * `MCP_ARG_DOCS` above; this is for the ones only one tool has, so that a
+ * per-tool sentence is still typed once, in the catalogue the `/mcp` page
+ * renders. `check:mcp` compares every registered schema against it.
+ */
+function argDoc(toolName: string, argName: string): string {
+  const found = doc(toolName).args.find((arg) => arg.name === argName);
+  if (found === undefined) {
+    throw new Error(
+      `mcp: ${toolName} has no documented argument "${argName}" — add it to ` +
+        "catalog.ts.",
+    );
+  }
+  return found.description;
 }
 
 /** Every tool is read-only and side-effect free; say so in the protocol. */
@@ -381,16 +365,11 @@ export function registerArchLabMcp(server: McpServer): void {
         format: FORMAT_SCHEMA,
         to: z
           .enum(["alab", "json", "mermaid"])
-          .describe(
-            "Target format. .alab ⇄ json is lossless; mermaid is a one-way, " +
-              "lossy export of one diagram.",
-          ),
+          .describe(argDoc("convert_model", "to")),
         diagram_id: z
           .string()
           .optional()
-          .describe(
-            'Which diagram to emit, for to="mermaid". Defaults to the root.',
-          ),
+          .describe(argDoc("convert_model", "diagram_id")),
       },
     },
     ({ source, format, to, diagram_id }) =>
@@ -409,7 +388,7 @@ export function registerArchLabMcp(server: McpServer): void {
         include_contents: z
           .boolean()
           .default(false)
-          .describe("Also list every node and edge of every diagram."),
+          .describe(argDoc("describe_model", "include_contents")),
       },
     },
     ({ source, format, include_contents }) =>
@@ -426,7 +405,7 @@ export function registerArchLabMcp(server: McpServer): void {
         section: z
           .enum(SYNTAX_SECTION_IDS)
           .optional()
-          .describe("One section only. Omit for the whole reference."),
+          .describe(argDoc("get_syntax_reference", "section")),
       },
     },
     ({ section }) => getSyntaxReference(section),
@@ -439,13 +418,7 @@ export function registerArchLabMcp(server: McpServer): void {
     {
       ...config("list_icons"),
       inputSchema: {
-        query: z
-          .string()
-          .optional()
-          .describe(
-            "Case-insensitive substring, matched against name, slug and " +
-              "aliases. Omit for the full vocabulary.",
-          ),
+        query: z.string().optional().describe(argDoc("list_icons", "query")),
         /* The cast narrows the registry's `readonly IconCategory[]` to the
            non-empty tuple `z.enum` wants; the values themselves come from the
            same table the icon picker renders, so the schema and the picker
@@ -453,7 +426,7 @@ export function registerArchLabMcp(server: McpServer): void {
         category: z
           .enum(ICON_CATEGORY_ORDER as [IconCategory, ...IconCategory[]])
           .optional()
-          .describe("Restrict to one category. Omit to search all of them."),
+          .describe(argDoc("list_icons", "category")),
       },
     },
     ({ query, category }) => listIcons(query, category),
@@ -472,8 +445,11 @@ export function registerArchLabMcp(server: McpServer): void {
     {
       ...config("get_example_model"),
       inputSchema: {
-        id: z.string().describe("The example's id, from list_example_models."),
-        format: z.enum(["alab", "json"]).default("alab"),
+        id: z.string().describe(argDoc("get_example_model", "id")),
+        format: z
+          .enum(["alab", "json"])
+          .default("alab")
+          .describe(argDoc("get_example_model", "format")),
       },
     },
     ({ id, format }) => getExampleModel(id, format),
@@ -491,23 +467,14 @@ export function registerArchLabMcp(server: McpServer): void {
         diagram_id: z
           .string()
           .optional()
-          .describe(
-            "Open the link at this diagram (C4 models only). Defaults to " +
-              "the root.",
-          ),
+          .describe(argDoc("create_share_link", "diagram_id")),
         ttl_days: z
           .number()
           .int()
           .min(1)
           .max(400)
           .optional()
-          .describe(
-            "Make the link stop working after this many days. Omit for a link " +
-              "that never expires (the default). The expiry is signed, so it " +
-              "cannot be edited in the URL — but it is NOT access control: " +
-              "anyone holding the link can read the model until it lapses. " +
-              "Requires a share signing key on the deployment.",
-          ),
+          .describe(argDoc("create_share_link", "ttl_days")),
       },
     },
     async ({ source, format, diagram_id, ttl_days }) =>

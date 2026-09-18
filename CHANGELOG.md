@@ -33,6 +33,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The MCP tool arguments now describe what the tools actually accept.** The
+  sentence an agent reads before calling was typed twice, once in the
+  catalogue the `/mcp` page renders and once in the server's schema, and the
+  two had drifted apart: the timeline argument said its Mermaid conversion ran
+  "both ways, unlike gantt" when both kinds convert both ways, the gantt one
+  said Mermaid was read-only when it is not, and `convert_model`'s
+  `diagram_id` promised it would default to the root on a model where the tool
+  in fact stops and asks which diagram you mean. `create_share_link` still
+  advertised C4 models and sequence diagrams alone; it has accepted all nine
+  notations for some time. The wording is now written once and `check:mcp`
+  fails if the two copies ever differ again.
+- **The footer no longer says only C4 ships.** Every page carried "C4 today;
+  more diagram types planned" a screen below a page listing nine notations.
+- **The playground tour no longer points at buttons that were removed.** It
+  told you to press "Edit" and "Lock"; the control has been an icon-only
+  padlock with a Read-only / Editable chip since the labels came off.
+- **`/validate` and `/syntax` no longer repeat the site name in their browser
+  tab and search titles.** Both titles ended in "arch-lab" and the site-wide
+  template appended it again.
 - **A relationship no longer runs through an element when a clear lane
   exists.** The route picked its lane by looking only at the long middle
   stretch and ignoring the two runs that reach it — so it settled on the first
