@@ -23,9 +23,19 @@
  * here makes the same call.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
-import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+
+import { ZoomMenu } from "@/components/ui/zoom-menu";
+import {
+  ZOOM_BUTTON_CLASSES,
+  ZOOM_IN_TITLE,
+  ZOOM_OUT_TITLE,
+  ZOOM_PILL_CLASSES,
+} from "@/components/ui/zoom-pill";
+import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
+
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
 import type { TreeLabFile } from "@/types";
@@ -37,47 +47,31 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
   const paneRef = useRef<HTMLDivElement | null>(null);
   const layout = layoutTree(file);
   const { width } = layout;
-  /* The column band the diagram draws above the tree, plus the caption row.
-     Kept here because the pane has to RESERVE the scaled height and
-     `transform` does not affect layout: without this the pane keeps the
-     unscaled height and leaves a band of dead space under a shrunk diagram. */
-  const naturalHeight = layout.height + (layout.columns.length > 0 ? 30 : 0);
+  /* The column band the diagram draws above the tree. The camera has to be
+     told the FULL content height or "fit" would scale to the tree alone and
+     clip the headers off the top. */
+  const naturalHeight =
+    layout.height +
+    (layout.columns.length > 0 || layout.levels.length > 0 ? 30 : 0);
   const title = file.metadata?.title ?? "";
 
-  const measure = useCallback(() => {
-    const pane = paneRef.current;
-    if (pane === null) return 1;
-    /* `clientWidth` INCLUDES PADDING, and the pane has some. Fitting against
-       it would size the drawing to the padded box and let it run under its own
-       gutters — the measurement has to be the CONTENT box. */
-    const style = window.getComputedStyle(pane);
-    const available =
-      pane.clientWidth -
-      Number.parseFloat(style.paddingLeft) -
-      Number.parseFloat(style.paddingRight);
-    if (!(available > 0) || width === 0) return 1;
-    return Math.min(1, available / width);
-  }, [width]);
+  /* THE HOUSE CAMERA, not a private one. The first version of this canvas had
+     its own fit measurement and its own multiplier, which meant the tree
+     zoomed on different steps from every other diagram and its reset button
+     did not mean what the pill's does. `useCanvasZoom` owns fit, the step
+     ladder, the clamps and the pan, so 400% and a pinch behave identically
+     across the product. */
+  const camera = useCanvasZoom({
+    paneRef,
+    contentWidth: width,
+    contentHeight: naturalHeight,
+  });
+  const scale = camera.scale;
 
-  const fitScale = useMeasuredScale(paneRef, measure);
-
-  /* ZOOM IS A MULTIPLIER ON FIT, not an absolute scale. "Fit" is the state a
-     reader returns to, and it changes whenever the pane does — a numeric zoom
-     would drift away from it on every resize and the reset would land
-     somewhere the reader did not leave. 1 is always exactly fit. */
-  const [zoom, setZoom] = useState(1);
-  const scale = fitScale * zoom;
-
-  /* A FOCUS, NOT A SELECTION: clicking a node lights it, everything it is part
-     of, and everything under it, and dims the rest. Clicking it again — or the
-     backdrop — clears it. Nothing is edited, so there is no selected state to
-     keep beyond the look. */
+  /* A FOCUS, NOT A SELECTION: pressing a node lights it, everything it is part
+     of, and everything under it, and dims the rest. Nothing is edited, so
+     there is no selected state to keep beyond the look. */
   const [focusedId, setFocusedId] = useState<string | null>(null);
-
-  const step = (by: number) =>
-    setZoom((current) =>
-      Math.min(3, Math.max(0.4, Math.round((current + by) * 10) / 10)),
-    );
 
   return (
     /* THE GROUND GOES ON THE PANE, never inside the drawing: on the drawing
@@ -93,6 +87,11 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
          diagram needs a way out that is not hunting for the node they pressed,
          and the empty pane is the largest target on screen. */
       onClick={(event) => {
+        /* `consumePanClick` READS AND CLEARS, so it must be called exactly
+           once per click. Without it, the click that ends a pan would clear
+           the reader's focus every time they dragged the canvas. */
+        const wasPan = camera.consumePanClick();
+        if (wasPan) return;
         if (event.target === event.currentTarget) setFocusedId(null);
       }}
     >
@@ -101,31 +100,8 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
           the pane measures the STAGE, so a caption within it pushed the last
           row past the clip. A title is chrome rather than diagram, and chrome
           does not zoom. */}
-      <div className="aft-tree-chrome">
-        {title === "" ? null : <p className="aft-tree-title">{title}</p>}
-        <div className="aft-tree-zoom">
-          <button
-            type="button"
-            onClick={() => step(-0.2)}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          {/* The label reads the EFFECTIVE scale, not the multiplier: a reader
-              wants to know how big the drawing is, and on a narrow pane fit is
-              already well under 1. */}
-          <button
-            type="button"
-            onClick={() => setZoom(1)}
-            aria-label="Reset zoom to fit"
-          >
-            {Math.round(scale * 100)}%
-          </button>
-          <button type="button" onClick={() => step(0.2)} aria-label="Zoom in">
-            +
-          </button>
-        </div>
-      </div>
+      {title === "" ? null : <p className="aft-tree-title">{title}</p>}
+
       {/* The box that RESERVES the scaled height. `transform` does not affect
           layout, so without this the shrunk drawing would still hold its full
           height open and leave a band of dead space under it. */}
@@ -140,6 +116,50 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
             focusedId={focusedId}
             onFocus={setFocusedId}
           />
+        </div>
+      </div>
+
+      {/* THE HOUSE ZOOM PILL — the same control, classes and gesture hints
+          every other canvas mounts, in the same corner, so the tree does not
+          teach a reader a second way to zoom. */}
+      <div className="pointer-events-auto absolute right-3 bottom-3 z-20">
+        <div className={ZOOM_PILL_CLASSES}>
+          <button
+            type="button"
+            onClick={camera.zoomOut}
+            title={ZOOM_OUT_TITLE}
+            aria-label="Zoom out"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomOut aria-hidden="true" className="size-4" />
+          </button>
+          <ZoomMenu
+            percent={camera.percent}
+            isFit={camera.isFit}
+            maxZoom={ZOOM_MAX}
+            onFit={camera.fit}
+            onZoomTo={camera.zoomTo}
+            title="Zoom level"
+            keyboardHint=""
+          />
+          <button
+            type="button"
+            onClick={camera.zoomIn}
+            title={ZOOM_IN_TITLE}
+            aria-label="Zoom in"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomIn aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={camera.fit}
+            title="Fit the diagram to the pane"
+            aria-label="Fit to pane"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <Scan aria-hidden="true" className="size-4" />
+          </button>
         </div>
       </div>
     </div>

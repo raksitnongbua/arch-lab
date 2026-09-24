@@ -275,41 +275,10 @@
   overflow: visible;
 }
 
-/* The chrome row: the title and the zoom control share one line above the
-   drawing, both outside the camera so neither scales with it. */
-.aft-tree-chrome {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  width: 100%;
-}
-
-.aft-tree-zoom {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.aft-tree-zoom button {
-  min-width: 2rem;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 2px);
-  background: var(--card);
-  color: var(--muted-foreground);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  line-height: 1.6;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    border-color 120ms ease;
-}
-
-.aft-tree-zoom button:hover {
-  color: var(--foreground);
-  border-color: var(--muted-foreground);
+/* The pane hosts the house zoom pill in its corner, so it has to be the
+   positioning context for it. */
+.aft-tree-pane {
+  position: relative;
 }
 
 /* A node is a button now, so it needs the button reset — without this the UA
