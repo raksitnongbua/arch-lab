@@ -39,7 +39,7 @@
  * same header, or the header is not a header.
  */
 
-import type { TreeFile, TreeNode } from "@/types/tree";
+import type { TreeLabFile, TreeNode } from "@/types/tree";
 
 /* -------------------------------------------------------------------------- */
 /* Tunables                                                                    */
@@ -51,8 +51,16 @@ import type { TreeFile, TreeNode } from "@/types/tree";
  * number proves the number, not the layout.
  */
 export const TREE_METRICS = {
-  /** Height of one leaf row, and so the vertical rhythm of the whole tree. */
-  rowHeight: 44,
+  /**
+   * Height of one leaf row, and so the vertical rhythm of the whole tree.
+   *
+   * SIZED FOR A CELL, NOT FOR A LABEL. A node box holds a short name and would
+   * sit comfortably at 44, but a cell under a column holds the author's prose —
+   * a precondition is a sentence, not a word — and at 44 the third line of one
+   * is clipped. Clipped text in a column is worse than a taller row: the reader
+   * cannot tell a truncated precondition from a complete one.
+   */
+  rowHeight: 68,
   /** Gap between two sibling rows. */
   rowGap: 8,
   /** Width of a node box at any depth. */
@@ -60,7 +68,7 @@ export const TREE_METRICS = {
   /** Horizontal gap between one depth's column and the next. */
   depthGap: 40,
   /** Width of one cell column, when the document declares any. */
-  cellWidth: 240,
+  cellWidth: 264,
   /** Gap between the deepest node column and the first cell column. */
   cellGap: 24,
   /** Padding around the whole drawing. */
@@ -142,9 +150,16 @@ function childrenOf(node: TreeNode): TreeNode[] {
  * the parent can centre itself — which is rule 2 expressed as a return value
  * rather than as a second traversal over a half-built map.
  */
-export function layoutTree(file: TreeFile): TreeLayout {
-  const { rowHeight, rowGap, nodeWidth, depthGap, cellWidth, cellGap, padding } =
-    TREE_METRICS;
+export function layoutTree(file: TreeLabFile): TreeLayout {
+  const {
+    rowHeight,
+    rowGap,
+    nodeWidth,
+    depthGap,
+    cellWidth,
+    cellGap,
+    padding,
+  } = TREE_METRICS;
 
   const columnCount = file.columns?.length ?? 0;
   const placements: TreePlacement[] = [];
@@ -153,16 +168,11 @@ export function layoutTree(file: TreeFile): TreeLayout {
   let nextRow = 0;
   let maxDepth = 0;
 
-  const xForDepth = (depth: number) =>
-    padding + depth * (nodeWidth + depthGap);
+  const xForDepth = (depth: number) => padding + depth * (nodeWidth + depthGap);
 
   /* Returns the node's centre on the vertical axis, which is what its parent
      needs and the only thing it needs. */
-  function place(
-    node: TreeNode,
-    depth: number,
-    branch: number | null,
-  ): number {
+  function place(node: TreeNode, depth: number, branch: number | null): number {
     if (depth > maxDepth) maxDepth = depth;
 
     const kids = childrenOf(node);

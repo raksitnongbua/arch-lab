@@ -164,7 +164,7 @@ export interface TreeNode {
 /* -------------------------------------------------------------------------- */
 
 /** A whole `.alab` tree document. */
-export interface TreeFile {
+export interface TreeLabFile {
   /** `archlab <major>.<minor> tree` — the header line, parsed. */
   version: string;
   /** Document metadata, shared with every other kind. */
