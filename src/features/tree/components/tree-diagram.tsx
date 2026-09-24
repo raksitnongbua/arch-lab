@@ -112,7 +112,19 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
                 text === "" ? null : (
                   <div
                     key={`${node.id}-c${index}`}
-                    className={`aft-tree-cell${index % 2 === 1 ? "is-alt" : ""}`}
+                    /* JOINED, NEVER CONCATENATED. This line shipped as a
+                       template literal whose space went missing, making the
+                       class `aft-tree-cellis-alt` — which matches no rule, so
+                       every odd cell lost `position: absolute` and fell into
+                       normal flow at the left edge. A CSS selector that
+                       matches nothing is not an error, so nothing reported it.
+                       `new-diagram-type.md` names this exact failure. */
+                    className={[
+                      "aft-tree-cell",
+                      index % 2 === 1 ? "is-alt" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     style={{
                       left: layout.columns[index]?.x ?? 0,
                       top: node.y + headBand,

@@ -42,6 +42,7 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
      `transform` does not affect layout: without this the pane keeps the
      unscaled height and leaves a band of dead space under a shrunk diagram. */
   const naturalHeight = layout.height + (layout.columns.length > 0 ? 30 : 0);
+  const title = file.metadata?.title ?? "";
 
   const measure = useCallback(() => {
     const pane = paneRef.current;
@@ -62,13 +63,24 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
     <div
       ref={paneRef}
       className={cn("aft-tree-pane", CANVAS_RULE_CLASS)}
-      style={{ ...groundFieldCss(scale), height: naturalHeight * scale }}
+      style={groundFieldCss(scale)}
     >
-      <div
-        className="aft-tree-camera"
-        style={{ transform: `scale(${scale})`, width }}
-      >
-        <TreeDiagram file={file} />
+      {/* THE CAPTION SITS OUTSIDE THE CAMERA, at full size. Inside it, it both
+          shrank with the drawing and stole height the pane had not reserved —
+          the pane measures the STAGE, so a caption within it pushed the last
+          row past the clip. A title is chrome rather than diagram, and chrome
+          does not zoom. */}
+      {title === "" ? null : <p className="aft-tree-title">{title}</p>}
+      {/* The box that RESERVES the scaled height. `transform` does not affect
+          layout, so without this the shrunk drawing would still hold its full
+          height open and leave a band of dead space under it. */}
+      <div style={{ height: naturalHeight * scale }}>
+        <div
+          className="aft-tree-camera"
+          style={{ transform: `scale(${scale})`, width }}
+        >
+          <TreeDiagram file={file} showTitle={false} />
+        </div>
       </div>
     </div>
   );

@@ -198,8 +198,12 @@
    piece, so every rule, gap and elbow shrinks by the same factor — scaling the
    boxes individually would leave the connectors behind. */
 .aft-tree-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   width: 100%;
   min-width: 0;
+  padding: 1rem 1.25rem;
   overflow: hidden;
 }
 
