@@ -121,12 +121,29 @@ export interface TreeConnector {
   branch: number | null;
 }
 
+/** One header above a column, whether that column is a depth or a cell. */
+export interface TreeHeader {
+  label: string;
+  x: number;
+  width: number;
+}
+
 /** The whole solved drawing. */
 export interface TreeLayout {
   placements: TreePlacement[];
   connectors: TreeConnector[];
   /** Header positions, empty when the document declares no columns. */
-  columns: { label: string; x: number; width: number }[];
+  columns: TreeHeader[];
+  /**
+   * Headers above the DEPTH columns, empty when the document names none.
+   *
+   * A SEPARATE LIST FROM `columns` because the two are positioned by different
+   * rules: a depth header sits over `xForDepth(n)` and is one node wide, where
+   * a cell header sits right of the deepest node column and is a cell wide.
+   * One list would have to carry which rule placed each entry, which is the
+   * discriminant this absence removes.
+   */
+  levels: TreeHeader[];
   width: number;
   height: number;
   /** The deepest depth present, so callers can size a column rule. */
@@ -247,6 +264,16 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
     width: cellWidth,
   }));
 
+  /* Named depths beyond the tree's actual depth are refused by the parser, so
+     this never draws a header over a column that does not exist. */
+  const levels = (file.levels ?? [])
+    .slice(0, maxDepth + 1)
+    .map((label, depth) => ({
+      label,
+      x: xForDepth(depth),
+      width: nodeWidth,
+    }));
+
   const contentRight =
     columnCount > 0
       ? cellsStart + columnCount * cellWidth
@@ -256,8 +283,52 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
     placements,
     connectors,
     columns,
+    levels,
     width: contentRight + padding,
     height: padding + nextRow * (rowHeight + rowGap) - rowGap + padding,
     maxDepth,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Focus                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The ids lit when `id` is focused: the node itself, every ancestor up to the
+ * root, and every descendant under it.
+ *
+ * ANCESTORS AND DESCENDANTS, NOT SIBLINGS — the lit set is exactly what a
+ * connector can be followed to and from. A reader clicking a leaf is asking
+ * "what is this part of, and what is under it"; lighting its siblings would
+ * answer a question they did not ask and would put the whole branch back on
+ * screen, which is the dimming undone.
+ *
+ * Derived from the connectors rather than from the model, so this cannot
+ * disagree with what is drawn: the lines are the relationship.
+ */
+export function relatedTo(layout: TreeLayout, id: string): Set<string> {
+  const parentOf = new Map<string, string>();
+  const childrenOf = new Map<string, string[]>();
+  for (const wire of layout.connectors) {
+    parentOf.set(wire.childId, wire.parentId);
+    const kids = childrenOf.get(wire.parentId) ?? [];
+    kids.push(wire.childId);
+    childrenOf.set(wire.parentId, kids);
+  }
+
+  const lit = new Set<string>([id]);
+  for (let at = parentOf.get(id); at !== undefined; at = parentOf.get(at)) {
+    lit.add(at);
+  }
+  const queue = [id];
+  while (queue.length > 0) {
+    const next = queue.pop() as string;
+    for (const kid of childrenOf.get(next) ?? []) {
+      if (lit.has(kid)) continue;
+      lit.add(kid);
+      queue.push(kid);
+    }
+  }
+  return lit;
 }

@@ -179,6 +179,23 @@ export interface TreeLabFile {
    */
   columns?: string[];
   /**
+   * What each DEPTH is called, outermost first — "Test suite", "Test
+   * condition", "Test case".
+   *
+   * SEPARATE FROM `columns` BECAUSE THEY NAME DIFFERENT AXES. A `columns`
+   * header sits above a cell, which every node fills at the same x whatever
+   * its depth; a `levels` header sits above a DEPTH, which is a position in
+   * the nesting. Folding them into one list would mean the reader could not
+   * tell which headers move with depth and which do not, and the parser could
+   * not check either count.
+   *
+   * OPTIONAL, AND SHORTER THAN THE TREE IS DEEP IS LEGAL: a document may name
+   * the first two depths and leave the rest unnamed, which is what an author
+   * doing it incrementally writes. Longer than the tree is deep is refused —
+   * a header over a depth that does not exist labels nothing.
+   */
+  levels?: string[];
+  /**
    * The single root. See the file header: a forest is a document per tree.
    */
   root: TreeNode;

@@ -70,6 +70,7 @@ import {
   DESC_KEYWORD,
   EMPTY_CELL_TOKEN,
   INDENT_STEP,
+  LEVELS_KEYWORD,
   NODE_KEYWORD,
   TREE_BLOCK_MARKER,
   TREE_HEADER_WORD,
@@ -132,6 +133,9 @@ export function parseTreeText(source: string): TreeLabFile {
 
   let columns: string[] | undefined;
   let columnsLoc: Loc | null = null;
+  let levels: string[] | undefined;
+  let levelsLoc: Loc | null = null;
+  let maxDepth = 0;
   let root: PendNode | null = null;
   /** Open ancestors, outermost first. The last entry is the node a `cell` or
    * a deeper `node` belongs to. */
@@ -311,6 +315,49 @@ export function parseTreeText(source: string): TreeLabFile {
       continue;
     }
 
+    if (word === LEVELS_KEYWORD) {
+      if (level !== 0) {
+        failAt(
+          wordLoc.line,
+          wordLoc.column,
+          `"${LEVELS_KEYWORD}" belongs directly under "${TREE_BLOCK_MARKER}", at ${INDENT_STEP} spaces`,
+          word,
+        );
+      }
+      if (levels !== undefined) {
+        failAt(
+          wordLoc.line,
+          wordLoc.column,
+          `duplicate "${LEVELS_KEYWORD}" line — the depth names are declared once for the whole document`,
+          word,
+        );
+      }
+      if (root !== null) {
+        failAt(
+          wordLoc.line,
+          wordLoc.column,
+          `"${LEVELS_KEYWORD}" must come before the first "${NODE_KEYWORD}"`,
+          word,
+        );
+      }
+      const names: string[] = [];
+      while (!cursor.atEnd()) {
+        names.push(cursor.readQuoted("a depth name"));
+        cursor.skipSpaces();
+      }
+      if (names.length === 0) {
+        failAt(
+          wordLoc.line,
+          wordLoc.column,
+          `"${LEVELS_KEYWORD}" needs at least one quoted name, e.g. ${LEVELS_KEYWORD} "Area"`,
+          word,
+        );
+      }
+      levels = names;
+      levelsLoc = wordLoc;
+      continue;
+    }
+
     if (word === NODE_KEYWORD) {
       /* Pop every ancestor at or below this level. Dedenting several levels
          at once is ordinary — it is what closing three branches looks like. */
@@ -375,6 +422,7 @@ export function parseTreeText(source: string): TreeLabFile {
         column: wordLoc.column,
       };
       idAt.set(id, wordLoc);
+      if (level > maxDepth) maxDepth = level;
       if (level === 0) root = node;
       else parent!.children.push(node);
       stack.push(node);
@@ -461,7 +509,20 @@ export function parseTreeText(source: string): TreeLabFile {
     );
   }
 
-  return buildFile(header, columns, root);
+  /* A HEADER OVER A DEPTH THAT DOES NOT EXIST LABELS NOTHING, and is the one
+     mistake a `levels` line can make that the reader would see as a stray
+     column. Shorter than the tree is deep is fine — that is a document being
+     named incrementally. */
+  if (levels !== undefined && levels.length > maxDepth + 1) {
+    failAt(
+      levelsLoc?.line ?? 1,
+      levelsLoc?.column ?? 1,
+      `"${LEVELS_KEYWORD}" names ${levels.length} depths but the tree is only ${maxDepth + 1} deep — a name over a depth that does not exist labels nothing`,
+      LEVELS_KEYWORD,
+    );
+  }
+
+  return buildFile(header, columns, levels, root);
 }
 
 /** A node's depth, derived from the indent its line sat at. */
@@ -654,6 +715,7 @@ function buildNode(node: PendNode): Record<string, unknown> {
 function buildFile(
   header: Header,
   columns: string[] | undefined,
+  levels: string[] | undefined,
   root: PendNode,
 ): TreeLabFile {
   /* THE METADATA KEY NAMES ARE THE MODEL'S, NOT THE KEYWORD'S. The text says
@@ -691,6 +753,7 @@ function buildFile(
   file.version = header.version;
   file.kind = TREE_HEADER_WORD;
   file.metadata = metadata;
+  if (levels !== undefined) file.levels = levels;
   if (columns !== undefined) file.columns = columns;
   file.root = buildNode(root);
 

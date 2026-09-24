@@ -25,6 +25,7 @@ title "Account recovery reviews"
 description "A supervisor review queue, decomposed into the cases that prove it."
 
 @tree
+  levels "Test suite" "Test condition" "Test case"
   columns "Preconditions" "Expected result"
   node suite "Account recovery reviews"
     node list "Reviews list"
@@ -55,6 +56,7 @@ title "Platform team, by what it owns"
 description "An ownership breakdown with no columns — the plain shape of the notation."
 
 @tree
+  levels "Team" "Area" "Service" "Component"
   node platform "Platform"
     node runtime "Runtime"
       node compute "Compute"

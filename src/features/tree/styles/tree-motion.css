@@ -256,3 +256,71 @@
 .aft-tree-camera .aft-tree-scroll {
   overflow: visible;
 }
+
+/* The chrome row: the title and the zoom control share one line above the
+   drawing, both outside the camera so neither scales with it. */
+.aft-tree-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+
+.aft-tree-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.aft-tree-zoom button {
+  min-width: 2rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 2px);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.aft-tree-zoom button:hover {
+  color: var(--foreground);
+  border-color: var(--muted-foreground);
+}
+
+/* A node is a button now, so it needs the button reset — without this the UA
+   stylesheet gives it a centred text block and its own font. */
+button.aft-tree-node {
+  align-items: stretch;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* FOCUS DIMS, IT DOES NOT REPAINT. Nothing here changes a stroke, a fill, a
+   width or an arrowhead in either direction — the standing rule in
+   `new-diagram-type.md`, which two kinds broke before it was written down.
+   Only opacity moves. */
+.aft-tree-node.is-dim,
+.aft-tree-cell.is-dim {
+  opacity: 0.25;
+}
+
+.aft-tree-wire.is-dim {
+  opacity: 0.15;
+}
+
+/* The hover dim is the resting behaviour and must not fight an explicit
+   focus: once a node is pressed, the lit set is the answer and passing the
+   pointer over a dimmed node should not relight it. */
+.aft-tree-stage:hover .aft-tree-node.is-dim:hover {
+  opacity: 0.25;
+}

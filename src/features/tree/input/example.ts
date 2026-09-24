@@ -16,6 +16,7 @@ export const TREE_EXAMPLE = `archlab 1.0 tree
 title "Checkout, broken down"
 
 @tree
+  levels "Area" "Part"
   columns "Owner" "State"
   node checkout "Checkout"
     node cart "Cart"

@@ -20,6 +20,7 @@ export const TREE_FILE_KEYS = [
   "version",
   "kind",
   "metadata",
+  "levels",
   "columns",
   "root",
 ] as const;

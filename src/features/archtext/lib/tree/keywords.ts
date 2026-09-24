@@ -98,6 +98,16 @@ export const INDENT_STEP = 2;
 /** Declares the leaf columns, once, for the whole document. */
 export const COLUMNS_KEYWORD = "columns";
 
+/**
+ * Declares what each DEPTH is called, outermost first.
+ *
+ * A SECOND KEYWORD RATHER THAN A LONGER `columns` LINE, because the two name
+ * different axes — see `src/types/tree.ts`. One list that meant "the first
+ * three are depths and the rest are cells" would be a rule the author has to
+ * remember and the parser cannot check.
+ */
+export const LEVELS_KEYWORD = "levels";
+
 /** Opens a node. The only keyword that nests. */
 export const NODE_KEYWORD = "node";
 

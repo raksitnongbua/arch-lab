@@ -23,7 +23,7 @@
 
 import type { TreeLabFile } from "@/types";
 
-import { layoutTree } from "../lib/layout";
+import { layoutTree, relatedTo } from "../lib/layout";
 
 /** How many distinct branch accents the stylesheet defines. */
 const ACCENT_COUNT = 6;
@@ -35,14 +35,29 @@ export interface TreeDiagramProps {
   file: TreeLabFile;
   /** Rendered above the drawing when the document carries a title. */
   showTitle?: boolean;
+  /** The focused node, or `null` for the resting state where all are lit. */
+  focusedId?: string | null;
+  /** Called with a node id, or `null` when the backdrop clears the focus. */
+  onFocus?: (id: string | null) => void;
 }
 
-export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
+export function TreeDiagram({
+  file,
+  showTitle = true,
+  focusedId = null,
+  onFocus,
+}: TreeDiagramProps) {
   const layout = layoutTree(file);
+  /* The lit set is derived from the CONNECTORS (see `relatedTo`), so what is
+     lit and what is drawn cannot disagree. `null` means nothing is focused and
+     everything is lit, which is the resting state a no-JS reader also gets. */
+  const lit = focusedId === null ? null : relatedTo(layout, focusedId);
+  const dimmed = (id: string) => lit !== null && !lit.has(id);
   const title = file.metadata?.title ?? "";
   /* The column band sits above the drawing, so everything below it shifts by
      its height. One number, used by both layers, so they cannot disagree. */
-  const headBand = layout.columns.length > 0 ? 30 : 0;
+  const headBand =
+    layout.columns.length > 0 || layout.levels.length > 0 ? 30 : 0;
 
   return (
     <figure
@@ -66,12 +81,28 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
             {layout.connectors.map((wire) => (
               <path
                 key={`${wire.parentId}->${wire.childId}`}
-                className={`aft-tree-wire ${accentClass(wire.branch)}`}
+                className={[
+                  "aft-tree-wire",
+                  accentClass(wire.branch),
+                  dimmed(wire.childId) ? "is-dim" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 d={`M ${wire.fromX} ${wire.fromY + headBand} H ${wire.elbowX} V ${wire.toY + headBand} H ${wire.toX}`}
                 fill="none"
               />
             ))}
           </svg>
+
+          {layout.levels.map((level) => (
+            <div
+              key={`level-${level.x}`}
+              className="aft-tree-colhead"
+              style={{ left: level.x, top: 6, width: level.width }}
+            >
+              {level.label}
+            </div>
+          ))}
 
           {layout.columns.map((column) => (
             <div
@@ -85,7 +116,12 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
 
           {layout.placements.map((node) => (
             <div key={node.id}>
-              <div
+              <button
+                type="button"
+                aria-pressed={focusedId === node.id}
+                onClick={() =>
+                  onFocus?.(focusedId === node.id ? null : node.id)
+                }
                 className={[
                   "aft-tree-node",
                   node.depth === 0
@@ -94,7 +130,10 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
                       ? "is-leaf"
                       : "is-branch",
                   accentClass(node.branch),
-                ].join(" ")}
+                  dimmed(node.id) ? "is-dim" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 style={{
                   left: node.x,
                   top: node.y + headBand,
@@ -106,7 +145,7 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
                   <span className="aft-tree-id">{node.id}</span>
                 ) : null}
                 <span className="aft-tree-label">{node.label}</span>
-              </div>
+              </button>
 
               {node.cells.map((text, index) =>
                 text === "" ? null : (
@@ -122,6 +161,7 @@ export function TreeDiagram({ file, showTitle = true }: TreeDiagramProps) {
                     className={[
                       "aft-tree-cell",
                       index % 2 === 1 ? "is-alt" : "",
+                      dimmed(node.id) ? "is-dim" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}

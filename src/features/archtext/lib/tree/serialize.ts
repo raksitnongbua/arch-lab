@@ -38,6 +38,7 @@ import {
   DESC_KEYWORD,
   EMPTY_CELL_TOKEN,
   INDENT_STEP,
+  LEVELS_KEYWORD,
   NODE_KEYWORD,
   TREE_BLOCK_MARKER,
   TREE_HEADER_WORD,
@@ -181,6 +182,13 @@ export function serializeTreeText(file: TreeLabFile): string {
 
   lines.push("");
   lines.push(TREE_BLOCK_MARKER);
+
+  const levels = file.levels;
+  if (Array.isArray(levels) && levels.length > 0) {
+    lines.push(
+      `${pad(1)}${LEVELS_KEYWORD} ${levels.map((name) => JSON.stringify(name)).join(" ")}`,
+    );
+  }
 
   const columns = file.columns;
   if (Array.isArray(columns) && columns.length > 0) {
