@@ -98,7 +98,7 @@ export function TreeDiagram({
             <div
               key={`level-${level.x}`}
               className="aft-tree-colhead"
-              style={{ left: level.x, top: 6, width: level.width }}
+              style={{ left: level.x, top: 8, width: level.width }}
             >
               {level.label}
             </div>
@@ -108,7 +108,7 @@ export function TreeDiagram({
             <div
               key={column.label}
               className="aft-tree-colhead"
-              style={{ left: column.x, top: 6, width: column.width }}
+              style={{ left: column.x, top: 8, width: column.width }}
             >
               {column.label}
             </div>

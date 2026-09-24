@@ -46,9 +46,25 @@
   background: transparent;
 }
 
+/* THE DRAWING GETS A SURFACE; THE PANE KEEPS ITS GROUND. Two earlier attempts
+   were both wrong in opposite directions: a card on the scroll container
+   covered the ruled ground and made this the one canvas of the ten on its own
+   colour, and no surface at all left the grid running through the header row
+   and between every box, so the diagram read as floating on graph paper
+   rather than as one table.
+
+   This is the middle: a panel the size of the DRAWING, so the ground still
+   rules the pane around it and the reader can still see they are on the same
+   canvas as the other nine. It is mixed rather than opaque, so the ground
+   stays faintly visible THROUGH it — the drawing sits ON the grid rather than
+   punching a hole in it. */
 .aft-tree-stage {
   position: relative;
   font-size: 13px;
+  padding: 0;
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: var(--radius-sm, 2px);
 }
 
 .aft-tree-wires {
@@ -83,8 +99,10 @@
   text-transform: uppercase;
   font-weight: 600;
   color: var(--muted-foreground);
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  /* The rule under a header is the table's own line, so it reads against the
+     drawing's surface rather than against the pane's ground. */
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
 }
 
 .aft-tree-node {
@@ -152,7 +170,7 @@
      the node beside it sat on `--card`, which reads as two materials on one
      row — and on the ruled pane the mismatch is exactly what made this canvas
      look unlike the other nine. */
-  background: var(--card);
+  background: color-mix(in oklab, var(--card) 55%, transparent);
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--muted-foreground);
@@ -160,7 +178,7 @@
 }
 
 .aft-tree-cell.is-alt {
-  background: var(--muted);
+  background: color-mix(in oklab, var(--muted) 62%, transparent);
 }
 
 /* The six branch accents, cycled by index. Shared chart tokens, so every
