@@ -8,6 +8,7 @@ import { listErExampleIds } from "@/features/er/service/example-service";
 import { listDictExampleIds } from "@/features/dict/service/example-service";
 import { listGanttExampleIds } from "@/features/gantt/service/example-service";
 import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
+import { listTreeExampleIds } from "@/features/tree";
 import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { listViewerModelIds } from "@/features/viewer";
 
@@ -62,7 +63,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/faq",
   ];
 
-  // All NINE example registries, so a new example is in the sitemap the moment
+  // All TEN example registries, so a new example is in the sitemap the moment
   // it is registered — the same reason the model routes are derived rather than
   // typed out above. `check:seo` derives its coverage expectation from what
   // this function returns, so a registry left out here is a page nothing
@@ -86,6 +87,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lifecycleRoutes = listLifecycleExampleIds().map(
     (id) => `/live/lifecycle/${id}`,
   );
+  const treeRoutes = listTreeExampleIds().map((id) => `/live/tree/${id}`);
 
   return [
     ...staticRoutes,
@@ -98,6 +100,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...ganttRoutes,
     ...timelineRoutes,
     ...lifecycleRoutes,
+    ...treeRoutes,
   ].map((path) => ({
     url: `${origin}${path === "" ? "/" : path}`,
     // The homepage is the page search should surface first; everything else

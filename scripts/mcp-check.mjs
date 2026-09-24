@@ -190,6 +190,8 @@ const { validateDict } = await load("src/features/mcp/tools/dict.ts");
 const { validateGantt } = await load("src/features/mcp/tools/gantt.ts");
 const { validateTimeline } = await load("src/features/mcp/tools/timeline.ts");
 const { validateLifecycle } = await load("src/features/mcp/tools/lifecycle.ts");
+const { validateTree } = await load("src/features/mcp/tools/tree.ts");
+const { parseTreeText } = await load("src/features/archtext/lib/tree/parse.ts");
 const { EXAMPLE_KINDS, listBundledExamples, loadBundledExample } = await load(
   "src/features/playground/lib/example-registry.ts",
 );
@@ -2447,6 +2449,7 @@ check("no bundled example raises an ask through its own validator", () => {
     gantt: validateGantt,
     timeline: validateTimeline,
     lifecycle: validateLifecycle,
+    tree: validateTree,
   };
   assert.deepEqual(
     Object.keys(validators).sort(),
@@ -2495,6 +2498,7 @@ check("every notation reports the size of what it just validated", () => {
     gantt: validateGantt,
     timeline: validateTimeline,
     lifecycle: validateLifecycle,
+    tree: validateTree,
   };
   assert.deepEqual(
     Object.keys(validators).sort(),
@@ -2562,6 +2566,33 @@ check("every notation reports the size of what it just validated", () => {
  * named.
  */
 const UNDOCUMENTED_VOCABULARY = {
+  /* The tree has no syntax-reference section yet, so its whole vocabulary has
+     to be carried by the bundled examples instead: what an agent cannot read
+     about, it has to be able to copy. Depth is not listed as a "possible"
+     because it is unbounded — there is no set to cover — so what is checked is
+     that every KEYWORD appears somewhere in the pair. */
+  tree: (text) => {
+    const file = parseTreeText(text);
+    const nodes = [];
+    const walk = (node) => {
+      nodes.push(node);
+      for (const child of node.children ?? []) walk(child);
+    };
+    walk(file.root);
+    const seen = [];
+    if ((file.levels ?? []).length > 0) seen.push("levels");
+    if ((file.columns ?? []).length > 0) seen.push("columns");
+    if (nodes.some((node) => (node.cells ?? []).length > 0)) seen.push("cell");
+    if (nodes.some((node) => node.description !== undefined)) seen.push("desc");
+    if (nodes.length > 0) seen.push("node");
+    return {
+      "tree keyword": {
+        possible: ["node", "cell", "desc", "columns", "levels"],
+        used: seen,
+      },
+    };
+  },
+
   flowchart: (text) => {
     const file = parseFlowchartText(text);
     return {

@@ -28,6 +28,7 @@ description "A supervisor review queue, decomposed into the cases that prove it.
   levels "Test suite" "Test condition" "Test case"
   columns "Preconditions" "Expected result"
   node suite "Account recovery reviews"
+    desc "Supervisor-only queue. Every case below is runnable today."
     node list "Reviews list"
       node L-01 "A supervisor can open Reviews"
         cell "A supervisor account"

@@ -55,6 +55,7 @@ const KINDS = [
   { name: "Gantt", phase: "af-hero-kind-7" },
   { name: "Timeline", phase: "af-hero-kind-8" },
   { name: "Lifecycle", phase: "af-hero-kind-9" },
+  { name: "Tree", phase: "af-hero-kind-10" },
 ];
 
 let assertions = 0;

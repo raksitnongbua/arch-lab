@@ -390,6 +390,17 @@ const LIFECYCLE_SOURCE_ARG: McpArgDoc = {
  * SEQUENCE_SOURCE_ARG, FLOWCHART_SOURCE_ARG and USECASE_SOURCE_ARG each name
  * only their own.
  */
+const TREE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    `The tree text: \`.alab\` tree (first line \`archlab 1.0 tree\`) ` +
+    `(${MAX_SOURCE_CHARS_TEXT}). There is no Mermaid dialect accepted here ` +
+    "yet: Mermaid's `mindmap` is a tree, but it carries labels with no ids " +
+    "and no columns, so importing it can only ever be one-way and it is not " +
+    "built. This tool answers in `.alab`.",
+};
+
 const SHARE_SOURCE_ARG: McpArgDoc = {
   name: "source",
   required: true,
@@ -441,6 +452,7 @@ export const MCP_ARG_DOCS = {
   ganttSource: GANTT_SOURCE_ARG,
   timelineSource: TIMELINE_SOURCE_ARG,
   lifecycleSource: LIFECYCLE_SOURCE_ARG,
+  treeSource: TREE_SOURCE_ARG,
   shareSource: SHARE_SOURCE_ARG,
   format: FORMAT_ARG,
 } as const;
@@ -1029,6 +1041,29 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       },
     ],
   },
+  {
+    name: "validate_tree",
+    title: "Validate a decomposition tree",
+    description:
+      "Check whether `.alab` tree text is valid, and if not, exactly where it " +
+      "breaks. On success, reports the shape — how many nodes, how many are " +
+      "leaves, how deep it runs — plus the defects a parse cannot see: a " +
+      "branch with one child, which is a rename rather than a breakdown; a " +
+      "leaf that fills none of the columns the document promised; depths left " +
+      "unnamed when others are named; and one branch far deeper than its " +
+      `siblings. ${KIND_BLURB.tree}.`,
+    args: [TREE_SOURCE_ARG],
+  },
+  {
+    name: "format_tree",
+    title: "Format a decomposition tree",
+    description:
+      "Rewrite `.alab` tree text into its canonical form — one indent step " +
+      "per level, continuations in schema order, trailing empty cells " +
+      "trimmed. Byte-identical on text that is already canonical, so it is " +
+      "safe to run on every save.",
+    args: [TREE_SOURCE_ARG],
+  },
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -1199,6 +1234,16 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "list_example_models",
       "get_example_model",
     ),
+  },
+  {
+    id: "tree",
+    title: "Decomposition trees",
+    blurb:
+      "The same check-and-format loop for a breakdown of any depth — plus the " +
+      "findings only this tool can make: a level that splits nothing, a row " +
+      "that fills none of the columns the document promised, and a branch far " +
+      "deeper than its siblings. No Mermaid dialect is accepted yet.",
+    tools: toolsNamed("validate_tree", "format_tree"),
   },
   {
     id: "share",
