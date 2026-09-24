@@ -47,8 +47,15 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
   const measure = useCallback(() => {
     const pane = paneRef.current;
     if (pane === null) return 1;
-    const available = pane.clientWidth;
-    if (available === 0 || width === 0) return 1;
+    /* `clientWidth` INCLUDES PADDING, and the pane has some. Fitting against
+       it would size the drawing to the padded box and let it run under its own
+       gutters — the measurement has to be the CONTENT box. */
+    const style = window.getComputedStyle(pane);
+    const available =
+      pane.clientWidth -
+      Number.parseFloat(style.paddingLeft) -
+      Number.parseFloat(style.paddingRight);
+    if (!(available > 0) || width === 0) return 1;
     return Math.min(1, available / width);
   }, [width]);
 

@@ -55,12 +55,23 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Under the boxes, not over them: a connector arriving at a node should stop
+     at its edge, and letting it cross the fill would put a line through the
+     label. The boxes are opaque for exactly this reason. */
+  z-index: 0;
 }
 
+/* READS AGAINST THE GROUND, which is the whole reason these numbers are not
+   the obvious ones. A connector at 1.25px and 0.75 opacity is the same weight
+   as the pane's ruled ground, so the two lines blended and a reader had to
+   hunt for which line was the diagram. The ground is fixed, thin and regular;
+   a connector has to be none of those. It is heavier, fully opaque, and
+   carries its branch's accent — so it separates by WEIGHT and by COLOUR at
+   once, and still reads when the camera shrinks it. */
 .aft-tree-wire {
-  stroke: var(--ac, var(--border));
-  stroke-width: 1.25;
-  opacity: 0.75;
+  stroke: var(--ac, var(--muted-foreground));
+  stroke-width: 1.9;
+  opacity: 1;
   transition: opacity 180ms ease;
 }
 
@@ -78,6 +89,7 @@
 
 .aft-tree-node {
   position: absolute;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -204,14 +216,35 @@
 /* The camera. The stage is laid out at its natural size and scaled down as one
    piece, so every rule, gap and elbow shrinks by the same factor — scaling the
    boxes individually would leave the connectors behind. */
+/* THE PANE FILLS THE WELL, and that is what makes the ground right rather
+   than a band. It was sized to its content, so the ruled ground stopped where
+   the drawing stopped and the rest of the well sat bare — the ground belongs
+   to the PANE (see the viewer), and a pane that only covers its content is a
+   pane that only rules part of what the reader sees. `flex: 1` with
+   `min-height: 0` is the arrangement the lifecycle pane next door uses.
+
+   CENTRED, because a solved layout has no reason to sit in a corner: the
+   drawing's size is whatever the text implies, so anchoring it top-left makes
+   a small tree look like a mistake in a large pane. */
 .aft-tree-pane {
   display: flex;
+  flex: 1;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 0.6rem;
   width: 100%;
   min-width: 0;
-  padding: 1rem 1.25rem;
-  overflow: hidden;
+  min-height: 0;
+  padding: 1.5rem 1.25rem;
+  overflow: auto;
+}
+
+/* The height box must not be stretched by the centring above, or the drawing
+   would be pulled back to the top of a tall pane. */
+.aft-tree-pane > * {
+  flex: none;
+  max-width: 100%;
 }
 
 .aft-tree-camera {
