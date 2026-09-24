@@ -39,6 +39,7 @@ import {
   serializeFlowchartText,
   serializeGanttText,
   serializeLifecycleText,
+  serializeTreeText,
   serializeSequenceText,
   serializeTimelineText,
   serializeUseCaseText,
@@ -63,6 +64,10 @@ import {
   loadLifecycleExample,
   listLifecycleExamples,
 } from "@/features/lifecycle/service/example-service";
+import {
+  listTreeExamples,
+  loadTreeExample,
+} from "@/features/tree/service/example-service";
 import {
   loadSequenceExample,
   listSequenceExamples,
@@ -328,6 +333,7 @@ const REGISTRIES: Record<SeedKind, KindRegistry> = {
     serializeLifecycleText,
     listLifecycleExamples,
   ),
+  tree: textRegistry(loadTreeExample, serializeTreeText, listTreeExamples),
 };
 
 /** The notations, in the order every consumer of this module renders them. */

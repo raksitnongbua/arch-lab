@@ -45,6 +45,7 @@ import type {
   GanttLabFile,
   TimelineLabFile,
   LifecycleLabFile,
+  TreeLabFile,
   UseCaseLabFile,
 } from "@/types";
 
@@ -58,6 +59,7 @@ import {
   serializeGanttText,
   serializeTimelineText,
   serializeLifecycleText,
+  serializeTreeText,
 } from "@/features/archtext";
 import {
   detectMermaidUseCase,
@@ -133,6 +135,13 @@ import {
   type LifecycleSourceFormat,
 } from "@/features/lifecycle/input/parse";
 import { LIFECYCLE_EXAMPLE } from "@/features/lifecycle/input/example";
+import {
+  parseTreeInput,
+  TREE_FORMAT_LABEL,
+  type TreeParseErrorDetail,
+  type TreeSourceFormat,
+} from "@/features/tree/input/parse";
+import { TREE_EXAMPLE } from "@/features/tree/input/example";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -192,6 +201,11 @@ export type ViewDocument =
       kind: "lifecycle";
       format: LifecycleSourceFormat;
       file: LifecycleLabFile;
+    }
+  | {
+      kind: "tree";
+      format: TreeSourceFormat;
+      file: TreeLabFile;
     };
 
 /**
@@ -214,6 +228,7 @@ export type ViewSourceError =
   | GanttParseErrorDetail
   | TimelineParseErrorDetail
   | LifecycleParseErrorDetail
+  | TreeParseErrorDetail
   | { kind: "unknown-format"; message: string };
 
 export type ViewParseResult =
@@ -276,6 +291,26 @@ export function parseViewSource(text: string): ViewParseResult {
   }
   if (lifecycle.error.kind === "parse") {
     return { status: "error", error: lifecycle.error };
+  }
+
+  /* The tree reader runs on the same terms and is as cheap as the lifecycle's:
+     one header word, `archlab 1.0 tree`, claimed by nothing else. There is no
+     Mermaid half to sniff YET — `mindmap` is a tree Mermaid really does have,
+     and `features/tree/input/parse.ts` records why importing it can only ever
+     be one-way and why it is not built. */
+  const tree = parseTreeInput(text);
+  if (tree.status === "ok") {
+    return {
+      status: "ok",
+      value: {
+        kind: "tree",
+        format: tree.value.format,
+        file: tree.value.file,
+      },
+    };
+  }
+  if (tree.error.kind === "parse") {
+    return { status: "error", error: tree.error };
   }
 
   const timeline = parseTimelineInput(text);
@@ -482,8 +517,8 @@ export function parseViewSource(text: string): ViewParseResult {
       // of first lines that would have worked.
       message:
         text.trim() === ""
-          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline` or `archlab 1.0 lifecycle`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, an erDiagram, a gantt, or a timeline)."
-          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline`, `archlab 1.0 lifecycle`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph`, `erDiagram`, `gantt` or `timeline`.",
+          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline` or `archlab 1.0 lifecycle` or `archlab 1.0 tree`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, an erDiagram, a gantt, or a timeline)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline`, `archlab 1.0 lifecycle`, `archlab 1.0 tree`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph`, `erDiagram`, `gantt` or `timeline`.",
     },
   };
 }
@@ -619,6 +654,7 @@ export function sourceTextFor(doc: ViewDocument): string {
      (`features/lifecycle/input/parse.ts`). Same shape as the dictionary
      branch above. */
   if (doc.kind === "lifecycle") return serializeLifecycleText(doc.file);
+  if (doc.kind === "tree") return serializeTreeText(doc.file);
   switch (doc.format) {
     case "alab":
       return doc.synced.aftText;
@@ -676,6 +712,7 @@ export function convertedSourceText(
      converted INTO (`features/lifecycle/input/parse.ts` argues why
      `stateDiagram-v2` is not one). */
   if (doc.kind === "lifecycle") return serializeLifecycleText(doc.file);
+  if (doc.kind === "tree") return serializeTreeText(doc.file);
   return to === "mermaid"
     ? serializeMermaidC4(doc.synced.file)
     : doc.synced.aftText;
@@ -714,12 +751,18 @@ export function describeDocument(doc: ViewDocument): string {
       return `a timeline (${TIMELINE_FORMAT_LABEL[doc.format]})`;
     case "lifecycle":
       return `a lifecycle (${LIFECYCLE_FORMAT_LABEL[doc.format]})`;
+    case "tree":
+      return `a decomposition tree (${TREE_FORMAT_LABEL[doc.format]})`;
   }
 }
 
 /** The document's own title — file stems and the Web Share sheet. */
 export function documentTitle(doc: ViewDocument): string {
-  return doc.kind === "c4" ? doc.synced.model.title : doc.file.metadata.title;
+  if (doc.kind === "c4") return doc.synced.model.title;
+  /* `TreeLabFile.metadata` is optional where the other nine require it — a
+     tree with no `title` line is a legitimate document, so this reads through
+     rather than asserting. */
+  return doc.file.metadata?.title ?? "";
 }
 
 /** Download extension for the pane's current format. */
@@ -751,6 +794,14 @@ export const JSON_EXTENSION = ".archlab.json";
  * moment it lands rather than greeting a new document with a parse error.
  */
 export const VIEW_STARTER_TEXT: Record<SeedKind, string> = {
+  tree: `archlab 1.0 tree
+title "What it breaks down into"
+
+@tree
+  node whole "The whole thing"
+    node part-a "First part"
+    node part-b "Second part"
+`,
   c4: `archlab 1.0
 title "Your system"
 
@@ -894,6 +945,7 @@ export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   gantt: GANTT_EXAMPLE,
   timeline: TIMELINE_EXAMPLE,
   lifecycle: LIFECYCLE_EXAMPLE,
+  tree: TREE_EXAMPLE,
 };
 
 function mustParse(text: string): ViewDocument {
@@ -918,4 +970,5 @@ export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
   gantt: mustParse(GANTT_EXAMPLE),
   timeline: mustParse(TIMELINE_EXAMPLE),
   lifecycle: mustParse(LIFECYCLE_EXAMPLE),
+  tree: mustParse(TREE_EXAMPLE),
 };

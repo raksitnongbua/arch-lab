@@ -90,16 +90,33 @@ export const KIND_MARK: Record<
     accent: "var(--edge)",
     Glyph: LifecycleGlyph,
   },
+  tree: {
+    short: "Trees",
+    accent: "var(--edge)",
+    Glyph: TreeGlyph,
+  },
 };
 
 /**
- * The one running order for the nine notations.
+ * The one running order for the ten notations.
  *
  * `satisfies` rather than a `readonly SeedKind[]` annotation, so the tuple
  * keeps its literal member types and `KindsMissingFromOrder` below can see
  * which kinds are in it. Annotating it widens every member to `SeedKind` and
  * the guard silently becomes vacuous.
  */
+/** A root and two children joined by the elbow the canvas itself draws. */
+function TreeGlyph() {
+  return (
+    <>
+      <rect x="1.5" y="6.5" width="4" height="3" rx="0.5" />
+      <rect x="10.5" y="2.5" width="4" height="3" rx="0.5" />
+      <rect x="10.5" y="10.5" width="4" height="3" rx="0.5" />
+      <path d="M5.5 8 H8 V4 H10.5 M8 8 V12 H10.5" fill="none" />
+    </>
+  );
+}
+
 export const KIND_ORDER = [
   "c4",
   "sequence",
@@ -110,6 +127,7 @@ export const KIND_ORDER = [
   "gantt",
   "timeline",
   "lifecycle",
+  "tree",
 ] as const satisfies readonly SeedKind[];
 
 /**

@@ -75,6 +75,7 @@ const KIND_VALIDATOR: Record<OtherKind, string> = {
   gantt: "validate_gantt",
   timeline: "validate_timeline",
   lifecycle: "validate_lifecycle",
+  tree: "validate_tree",
 };
 
 /**
@@ -113,6 +114,10 @@ const C4_REWRITE_COST: Record<OtherKind, string> = {
     "You would be rewriting one subject's states as structure: `ends`, " +
     "`exit` and `when` have no C4 counterpart, so every branch becomes an " +
     "unlabelled line.",
+  tree:
+    "You would be rewriting a breakdown as structure: a tree says what is " +
+    "INSIDE what, to whatever depth the author nested it, and a C4 model has " +
+    "four fixed levels and no way to hold a fifth.",
 };
 
 /**

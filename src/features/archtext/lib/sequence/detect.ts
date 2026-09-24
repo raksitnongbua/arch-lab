@@ -1,5 +1,5 @@
 /**
- * Document-type sniffing for `.alab` text — which of the nine grammars a
+ * Document-type sniffing for `.alab` text — which of the ten grammars a
  * source belongs to, decided from the FIRST MEANINGFUL LINE only, because
  * that is all `src/features/validate/lib/check.ts` and
  * `src/features/viewer/input/detect.ts` ever look at:
@@ -29,6 +29,7 @@ import { USECASE_HEADER_WORD } from "../usecase/keywords";
 import { GANTT_HEADER_WORD } from "../gantt/keywords";
 import { LIFECYCLE_HEADER_WORD } from "../lifecycle/keywords";
 import { TIMELINE_HEADER_WORD } from "../timeline/keywords";
+import { TREE_HEADER_WORD } from "../tree/keywords";
 import { SEQUENCE_HEADER_WORD } from "./keywords";
 
 export type AlabDocumentKind =
@@ -40,7 +41,8 @@ export type AlabDocumentKind =
   | "dict"
   | "gantt"
   | "timeline"
-  | "lifecycle";
+  | "lifecycle"
+  | "tree";
 
 /* Anchored to the whole line: `archlab 1.0 sequenced` or a trailing token
    must NOT detect — a wrong-but-confident answer routes the text to the
@@ -78,6 +80,10 @@ const LIFECYCLE_HEADER_RE = new RegExp(
   `^archlab\\s+\\d+\\.\\d+\\s+${LIFECYCLE_HEADER_WORD}$`,
 );
 
+const TREE_HEADER_RE = new RegExp(
+  `^archlab\\s+\\d+\\.\\d+\\s+${TREE_HEADER_WORD}$`,
+);
+
 /**
  * Which `.alab` grammar the text belongs to, or `null` when its first
  * meaningful line is not an `archlab` header at all. Skips blank lines and
@@ -95,6 +101,7 @@ export function detectAlabKind(source: string): AlabDocumentKind | null {
     if (GANTT_HEADER_RE.test(line)) return "gantt";
     if (TIMELINE_HEADER_RE.test(line)) return "timeline";
     if (LIFECYCLE_HEADER_RE.test(line)) return "lifecycle";
+    if (TREE_HEADER_RE.test(line)) return "tree";
     if (C4_HEADER_RE.test(line)) return "c4";
     return null;
   }

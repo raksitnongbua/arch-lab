@@ -8,6 +8,7 @@
 @import "../features/gantt/styles/gantt-motion.css";
 @import "../features/timeline/styles/timeline-motion.css";
 @import "../features/lifecycle/styles/lifecycle-motion.css";
+@import "../features/tree/styles/tree-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------

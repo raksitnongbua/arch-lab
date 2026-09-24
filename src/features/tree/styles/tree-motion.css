@@ -1,0 +1,195 @@
+/*
+ * The decomposition-tree canvas: paint and motion.
+ *
+ * PAINTS FROM SHARED TOKENS ONLY. There is no per-kind theme token here, which
+ * is why this kind owes no `check:tree-palette`: the six branch accents are
+ * the shared chart accents every theme already defines and measures, cycled by
+ * branch index. An author writes no colour, so a palette cannot ship
+ * half-populated (`purpose.md`).
+ *
+ * MOTION: none at rest, by the standing test in `new-diagram-type.md` — "would
+ * removing this motion lose information?" A tree's connectors carry nothing
+ * along them. A child is INSIDE its parent, not after it, so there is no order
+ * for an entrance to trace and no traffic for an ambient pulse to represent.
+ * The ER canvas is the precedent and the cautionary tale: motion was forced
+ * onto lines nothing travels, which cost a glow, an SVG filter and three
+ * commits chasing the bands that filter painted.
+ *
+ * What IS animated is the one thing that says something: hovering or focusing
+ * a node dims what is unrelated to it. That is a reader's own act, it carries
+ * information (which subtree am I in), and it is a fade rather than a repaint —
+ * no stroke, fill, width or arrowhead changes in either direction.
+ */
+
+.aft-tree {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.aft-tree-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+/* Wide content scrolls in its own container; the page never scrolls sideways. */
+.aft-tree-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 2px);
+  background: var(--card);
+}
+
+.aft-tree-stage {
+  position: relative;
+  font-size: 13px;
+}
+
+.aft-tree-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.aft-tree-wire {
+  stroke: var(--ac, var(--border));
+  stroke-width: 1.25;
+  opacity: 0.75;
+  transition: opacity 180ms ease;
+}
+
+.aft-tree-colhead {
+  position: absolute;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.aft-tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition:
+    opacity 180ms ease,
+    background-color 180ms ease;
+}
+
+.aft-tree-node.is-root {
+  border-left-width: 3px;
+  border-color: var(--border);
+  background: var(--muted);
+}
+
+.aft-tree-node.is-root .aft-tree-label {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.aft-tree-node.is-branch {
+  border-color: color-mix(in oklab, var(--ac) 38%, transparent);
+  border-left: 3px solid var(--ac);
+  background: color-mix(in oklab, var(--ac) 9%, var(--card));
+}
+
+.aft-tree-node.is-branch .aft-tree-label {
+  color: var(--ac);
+  font-weight: 600;
+}
+
+.aft-tree-node.is-leaf {
+  border-color: color-mix(in oklab, var(--ac) 30%, var(--border));
+}
+
+.aft-tree-label {
+  line-height: 1.34;
+  font-weight: 500;
+}
+
+.aft-tree-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ac, var(--muted-foreground));
+}
+
+.aft-tree-cell {
+  position: absolute;
+  padding: 6px 11px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-left: 0;
+  background: var(--background);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  transition: opacity 180ms ease;
+}
+
+.aft-tree-cell.is-alt {
+  background: var(--muted);
+}
+
+/* The six branch accents, cycled by index. Shared chart tokens, so every
+   theme has already defined and contrast-measured them. */
+.aft-b0 {
+  --ac: var(--chart-1);
+}
+.aft-b1 {
+  --ac: var(--chart-2);
+}
+.aft-b2 {
+  --ac: var(--chart-3);
+}
+.aft-b3 {
+  --ac: var(--chart-4);
+}
+.aft-b4 {
+  --ac: var(--chart-5);
+}
+.aft-b5 {
+  --ac: var(--chart-1);
+}
+.aft-root {
+  --ac: var(--border);
+}
+
+/* Hover dims what is unrelated. Opacity only — see the file header on why
+   nothing here repaints a stroke. */
+.aft-tree-stage:hover .aft-tree-node:not(:hover),
+.aft-tree-stage:focus-within .aft-tree-node:not(:focus-visible) {
+  opacity: 0.55;
+}
+
+.aft-tree-stage:hover .aft-tree-node:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aft-tree-node,
+  .aft-tree-cell,
+  .aft-tree-wire {
+    transition: none;
+  }
+}
+
+/* The app-wide idle-motion toggle, the second opt-out. */
+:root[data-motion="off"] .aft-tree-node,
+:root[data-motion="off"] .aft-tree-cell,
+:root[data-motion="off"] .aft-tree-wire {
+  transition: none;
+}

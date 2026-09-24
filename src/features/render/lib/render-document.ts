@@ -237,5 +237,18 @@ function draw(
       return renderTimelineSvg(document_.file, theme);
     case "lifecycle":
       return renderLifecycleSvg(document_.file, theme);
+    case "tree":
+      /* NO EXPORT RENDERER YET, and this throw is the honest shape of that.
+         Every other kind renders from its model rather than from the live DOM,
+         so a tree owes a `features/tree/export/render-svg.ts` that shares
+         `layoutTree` — the same seam, not a screenshot. Until it exists the
+         image routes must FAIL LOUDLY rather than return a blank card: a
+         silently empty export is the bug a reader only finds after they have
+         pasted it into a deck. Step 2 in `new-diagram-type.md`; unticked in
+         the pull request. */
+      throw new Error(
+        "rendering a decomposition tree to an image is not built yet — open " +
+          "it at /live?d=tree instead",
+      );
   }
 }

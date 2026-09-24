@@ -63,6 +63,7 @@
  *   - `parseTimelineText` / `serializeTimelineText` — `.alab` timeline text ⇄
  *     `TimelineLabFile`, same lossless and error contract.
  *   - `parseLifecycleText` / `serializeLifecycleText` — `.alab` lifecycle text
+ *   - `parseTreeText` / `serializeTreeText` — `.alab` decomposition-tree text
  *     ⇄ `LifecycleLabFile`, same lossless and error contract. It has NO
  *     Mermaid counterpart, deliberately: `stateDiagram-v2` is a state MACHINE
  *     (every transition that COULD happen) rather than one subject's ordered
@@ -214,3 +215,13 @@ export {
   SUBJECT_KEYWORD,
   WHEN_KEYWORD,
 } from "./lib/lifecycle/keywords";
+export { parseTreeText } from "./lib/tree/parse";
+export { serializeTreeText } from "./lib/tree/serialize";
+export {
+  CELL_KEYWORD,
+  COLUMNS_KEYWORD,
+  INDENT_STEP,
+  NODE_KEYWORD,
+  TREE_BLOCK_MARKER,
+  TREE_HEADER_WORD,
+} from "./lib/tree/keywords";

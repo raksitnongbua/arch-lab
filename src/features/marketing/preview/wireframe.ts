@@ -791,6 +791,12 @@ const ADAPTERS: Record<SeedKind, (id: string) => Wireframe | null> = {
   gantt: ganttWireframe,
   timeline: timelineWireframe,
   lifecycle: lifecycleWireframe,
+  /* NO WIREFRAME YET. The table's value type already admits `null`, which is
+     the honest answer for a notation whose marketing preview has not been
+     drawn — a placeholder box would be a preview of nothing, and
+     `new-diagram-type.md` calls a half-populated option worse than no option.
+     This is step 4 work and is listed unticked in the pull request. */
+  tree: () => null,
 };
 
 /**

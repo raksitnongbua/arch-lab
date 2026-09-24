@@ -19,6 +19,7 @@ import { listErExamples } from "@/features/er/service/example-service";
 import { listDictExamples } from "@/features/dict/service/example-service";
 import { listGanttExamples } from "@/features/gantt/service/example-service";
 import { listTimelineExamples } from "@/features/timeline/service/example-service";
+import { listTreeExamples } from "@/features/tree";
 import { listLifecycleExamples } from "@/features/lifecycle/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 import { KIND_MARK, KIND_ORDER } from "@/components/ui/kind-mark";
@@ -360,6 +361,32 @@ export default function DemoPage(): React.JSX.Element {
         },
   );
 
+  const tree: ExampleRow[] = listTreeExamples().map((listing) =>
+    listing.status === "invalid"
+      ? listing
+      : {
+          status: "ok",
+          id: listing.summary.id,
+          title: listing.summary.title,
+          description: listing.summary.description,
+          meta: [
+            /* DEPTH FIRST, where the other kinds lead with a population count.
+               Unbounded depth is the fact this notation has that none of the
+               others do (`src/types/tree.ts`), so a card that led with
+               "24 items" would describe a data dictionary. */
+            `${listing.summary.depth} levels deep`,
+            `${listing.summary.leafCount} of ${listing.summary.nodeCount} are leaves`,
+            /* ZERO IS A REAL ANSWER, not a missing one: a breakdown with no
+               columns is the plain shape of the notation, and one of the two
+               bundled examples is deliberately that. */
+            listing.summary.columnCount === 0
+              ? "no columns"
+              : `${listing.summary.columnCount} columns`,
+          ],
+          readOnlyHref: `/live/tree/${listing.summary.id}`,
+        },
+  );
+
   const byKind: Record<Kind, ExampleRow[]> = {
     c4,
     sequence,
@@ -370,6 +397,7 @@ export default function DemoPage(): React.JSX.Element {
     gantt,
     timeline,
     lifecycle,
+    tree,
   };
 
   /*
