@@ -9,7 +9,7 @@ import type { SeedKind } from "../input/parse";
  * which they want cannot pick from a list of labels; they can pick from a list
  * of jobs. Each line names the QUESTION the diagram answers rather than the
  * shapes it draws, because the shapes are what you see once you have already
- * chosen. There are NINE now, which only sharpens the point: nine nouns is a
+ * chosen. There are TEN now, which only sharpens the point: ten nouns is a
  * list nobody reads to the end of.
  *
  * IT LIVES HERE, not beside the starter buttons, because `/demo` needs exactly
@@ -80,6 +80,35 @@ export const KIND_BLURB: Record<SeedKind, string> = {
      demo index, `/faq` and the MCP catalogue, so reword it here and nowhere
      else. */
   lifecycle: "What one thing went through, and where it can end up",
+  /* CHECKED AGAINST ALL NINE LINES ABOVE, and the check mattered more here
+     than for any kind before it: a tree is the shape every other notation can
+     be BENT into, so the job has to be the one thing none of them asks. Three
+     neighbours are close, and each is kept apart by one word:
+
+       - the C4 line is the dangerous one, because it already says
+         "drillable level by level" — a hierarchy in so many words. What
+         separates them is the SUBJECT and who chooses the depth: C4 draws
+         SYSTEMS through a fixed vocabulary of four levels it did not invent,
+         and a reader cannot add a fifth. This one names no subject at all and
+         the depth is the author's, which is why the phrase is "all the way
+         down" rather than anything counting levels. The word "level" is
+         deliberately absent from this line for that reason.
+       - the DICT line is about "what each field means" — also a container
+         holding named things, and the kind whose PICTURE most nearly
+         duplicates this one once leaf columns are drawn. Two words separate
+         them: a dictionary is exactly two deep and is about MEANING, this is
+         any depth and is about CONTAINMENT. "Breaks down into" is the phrase
+         a dictionary can never use, because a field does not break down.
+       - the FLOWCHART line is about "steps, decisions and the loops back" —
+         also boxes joined by lines, but joined by ORDER. This one has no
+         order and no loops: a child is INSIDE its parent, not after it.
+
+     "breaks down into what" rather than "what contains what": containment is
+     the static fact, and the thing an author comes here to do is the act of
+     splitting something too big to hold in one piece. Quoted verbatim on the
+     home page, the demo index, `/faq` and the MCP catalogue, so reword it here
+     and nowhere else. */
+  tree: "What breaks down into what, all the way down",
 };
 
 /**
@@ -100,4 +129,5 @@ export const EXAMPLE_NOTATION_LABEL: Record<SeedKind, string> = {
   gantt: "gantt chart",
   timeline: "milestone timeline",
   lifecycle: "lifecycle",
+  tree: "decomposition tree",
 };

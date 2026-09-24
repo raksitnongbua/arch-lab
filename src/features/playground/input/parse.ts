@@ -158,7 +158,8 @@ export type SeedKind =
   | "dict"
   | "gantt"
   | "timeline"
-  | "lifecycle";
+  | "lifecycle"
+  | "tree";
 
 /** The languages a C4 document can sit in the pane as. */
 export type C4SourceFormat = "alab" | "json" | "mermaid";
