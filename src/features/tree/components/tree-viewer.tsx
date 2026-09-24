@@ -90,9 +90,17 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
         /* `consumePanClick` READS AND CLEARS, so it must be called exactly
            once per click. Without it, the click that ends a pan would clear
            the reader's focus every time they dragged the canvas. */
-        const wasPan = camera.consumePanClick();
-        if (wasPan) return;
-        if (event.target === event.currentTarget) setFocusedId(null);
+        if (camera.consumePanClick()) return;
+        /* ANY EMPTY SPACE CLEARS, not just the pane element itself. The first
+           version compared `target` to `currentTarget`, which meant only the
+           bare pane counted — and the drawing's own panel covers most of the
+           pane, so the largest empty area on screen did nothing. What a reader
+           means by "somewhere else" is anywhere that is not a control, so the
+           test is whether the click landed on one. */
+        const onControl =
+          event.target instanceof Element &&
+          event.target.closest("button") !== null;
+        if (!onControl) setFocusedId(null);
       }}
     >
       {/* THE CAPTION SITS OUTSIDE THE CAMERA, at full size. Inside it, it both
