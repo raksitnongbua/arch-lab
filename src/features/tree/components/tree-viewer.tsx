@@ -99,7 +99,10 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
            test is whether the click landed on one. */
         const onControl =
           event.target instanceof Element &&
-          event.target.closest("button") !== null;
+          /* THE WIRE IS NOT A BUTTON but it is a control: it is an SVG path,
+             so `closest("button")` misses it and the backdrop would clear the
+             focus the same click that the wire had just set. */
+          event.target.closest("button, .aft-tree-wire-hit") !== null;
         if (!onControl) setFocusedId(null);
       }}
     >

@@ -149,8 +149,17 @@ export function TreeDiagram({
 
               {node.cells.map((text, index) =>
                 text === "" ? null : (
-                  <div
+                  <button
+                    type="button"
                     key={`${node.id}-c${index}`}
+                    /* A CELL PRESSES AS ITS NODE. It is the same row and says
+                       the same thing, so giving it a different answer — or no
+                       answer — would leave half the table inert for a reader
+                       who aimed at the words they were reading. */
+                    onClick={() =>
+                      onFocus?.(focusedId === node.id ? null : node.id)
+                    }
+                    aria-pressed={focusedId === node.id}
                     /* JOINED, NEVER CONCATENATED. This line shipped as a
                        template literal whose space went missing, making the
                        class `aft-tree-cellis-alt` — which matches no rule, so
@@ -173,7 +182,7 @@ export function TreeDiagram({
                     }}
                   >
                     {text}
-                  </div>
+                  </button>
                 ),
               )}
             </div>

@@ -311,3 +311,30 @@ button.aft-tree-node {
 .aft-tree-stage:hover .aft-tree-node.is-dim:hover {
   opacity: 0.25;
 }
+
+/* A cell is a button now, on the same terms as a node: the UA stylesheet would
+   otherwise centre its text, give it its own font and drop the wrapping. */
+button.aft-tree-cell {
+  display: block;
+  margin: 0;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+/* The connectors' hit targets. The wire layer itself takes no pointer events —
+   it spans the whole stage and would otherwise swallow every click meant for
+   the pane — so the two hit paths opt back in individually. */
+.aft-tree-wires {
+  pointer-events: none;
+}
+
+.aft-tree-wire-hit {
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
