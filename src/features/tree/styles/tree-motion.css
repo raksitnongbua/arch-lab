@@ -34,13 +34,16 @@
   color: var(--foreground);
 }
 
-/* Wide content scrolls in its own container; the page never scrolls sideways. */
+/* Wide content scrolls in its own container; the page never scrolls sideways.
+   IT PAINTS NO GROUND. The first draft gave this a card background and a
+   border, which covered the pane's ruled ground and made this the one canvas
+   of the ten sitting on its own colour. The ground belongs to the pane
+   (`components/tree-viewer.tsx`); everything here is transparent so it shows
+   through. */
 .aft-tree-scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 2px);
-  background: var(--card);
+  background: transparent;
 }
 
 .aft-tree-stage {
@@ -133,7 +136,11 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-left: 0;
-  background: var(--background);
+  /* THE SAME SURFACE TOKEN THE NODES USE. A cell sat on `--background` while
+     the node beside it sat on `--card`, which reads as two materials on one
+     row — and on the ruled pane the mismatch is exactly what made this canvas
+     look unlike the other nine. */
+  background: var(--card);
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--muted-foreground);

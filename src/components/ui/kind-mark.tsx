@@ -105,15 +105,34 @@ export const KIND_MARK: Record<
  * which kinds are in it. Annotating it widens every member to `SeedKind` and
  * the guard silently becomes vacuous.
  */
-/** A root and two children joined by the elbow the canvas itself draws. */
-function TreeGlyph() {
+/**
+ * A root and two children joined by the elbow the canvas itself draws.
+ *
+ * ITS OWN `<svg>`, like every glyph beside it. The first draft returned a bare
+ * fragment of `<rect>`s, which inherited no `stroke` and no `viewBox` and drew
+ * nothing recognisable — the wrapper is where `fill="none"` and
+ * `stroke="currentColor"` live, so a glyph without one is invisible geometry.
+ */
+function TreeGlyph(): React.JSX.Element {
   return (
-    <>
-      <rect x="1.5" y="6.5" width="4" height="3" rx="0.5" />
-      <rect x="10.5" y="2.5" width="4" height="3" rx="0.5" />
-      <rect x="10.5" y="10.5" width="4" height="3" rx="0.5" />
-      <path d="M5.5 8 H8 V4 H10.5 M8 8 V12 H10.5" fill="none" />
-    </>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="1.2" y="6.2" width="4.2" height="3.6" rx="0.6" />
+      <rect x="10.6" y="1.8" width="4.2" height="3.6" rx="0.6" />
+      <rect x="10.6" y="10.6" width="4.2" height="3.6" rx="0.6" />
+      {/* The bracket: out of the root, down the shared turn, into each child —
+          the same elbow `lib/layout.ts` solves for the real canvas. */}
+      <path d="M5.4 8H8v-4.4h2.6" />
+      <path d="M8 8v4.4h2.6" />
+    </svg>
   );
 }
 
