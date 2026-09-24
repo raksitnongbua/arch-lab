@@ -193,3 +193,22 @@
 :root[data-motion="off"] .aft-tree-wire {
   transition: none;
 }
+
+/* The camera. The stage is laid out at its natural size and scaled down as one
+   piece, so every rule, gap and elbow shrinks by the same factor — scaling the
+   boxes individually would leave the connectors behind. */
+.aft-tree-pane {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.aft-tree-camera {
+  transform-origin: top left;
+}
+
+/* Inside the camera the drawing is already sized to fit, so the scroller that
+   the standalone diagram needs would only ever add a dead scrollbar. */
+.aft-tree-camera .aft-tree-scroll {
+  overflow: visible;
+}

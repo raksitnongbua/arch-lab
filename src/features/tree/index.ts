@@ -4,6 +4,8 @@
  */
 
 export { TreeDiagram } from "./components/tree-diagram";
+export { TreeExampleView } from "./components/tree-example-view";
+export { TreeViewer } from "./components/tree-viewer";
 export type { TreeDiagramProps } from "./components/tree-diagram";
 export { TREE_EXAMPLE } from "./input/example";
 export {

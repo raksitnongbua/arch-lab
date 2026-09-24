@@ -170,7 +170,7 @@ import {
   LifecycleShareButton,
   LifecycleViewer,
 } from "@/features/lifecycle";
-import { TreeDiagram } from "@/features/tree";
+import { TreeViewer } from "@/features/tree";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SEQUENCE_MOUSE_GESTURES,
@@ -2427,7 +2427,7 @@ export function ViewPlayground({
                      revealed content for a live region to announce. The
                      drawing carries one accessible name saying what it is and
                      how many items it holds. */
-                  <TreeDiagram file={doc.file} />
+                  <TreeViewer file={doc.file} />
                 )}
                 {/* THE DIAGRAM'S OWN STRIP, UNDER the diagram, where the C4
                     shell has always put its equivalent: the drawing is what the
