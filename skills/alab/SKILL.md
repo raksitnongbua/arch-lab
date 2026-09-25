@@ -9,8 +9,8 @@ The `.alab` grammar for the C4 model, sequence diagram, gantt chart, milestone t
 generated from the same source the arch-lab MCP server serves and verified
 against the real parser on every build.
 
-**arch-lab draws 4 more notations this file does not cover** — the
-flowchart, use-case diagram, ER diagram and data dictionary. That is deliberate rather than a
+**arch-lab draws 5 more notations this file does not cover** — the
+flowchart, use-case diagram, ER diagram, data dictionary and decomposition tree. That is deliberate rather than a
 gap: their constructs are arrows and named rows, and one worked example teaches
 them faster than a grammar would. Ask the MCP server's `get_example_model` for
 one, or read a bundled document at https://arch-lab.dev/demo — every one is

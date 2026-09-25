@@ -19,7 +19,7 @@ import { listErExamples } from "@/features/er/service/example-service";
 import { listDictExamples } from "@/features/dict/service/example-service";
 import { listGanttExamples } from "@/features/gantt/service/example-service";
 import { listTimelineExamples } from "@/features/timeline/service/example-service";
-import { listTreeExamples } from "@/features/tree";
+import { listTreeExamples } from "@/features/tree/service/example-service";
 import { listLifecycleExamples } from "@/features/lifecycle/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 import { KIND_MARK, KIND_ORDER } from "@/components/ui/kind-mark";

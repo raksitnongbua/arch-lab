@@ -8,7 +8,7 @@ import { listErExampleIds } from "@/features/er/service/example-service";
 import { listDictExampleIds } from "@/features/dict/service/example-service";
 import { listGanttExampleIds } from "@/features/gantt/service/example-service";
 import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
-import { listTreeExampleIds } from "@/features/tree";
+import { listTreeExampleIds } from "@/features/tree/service/example-service";
 import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { listViewerModelIds } from "@/features/viewer";
 

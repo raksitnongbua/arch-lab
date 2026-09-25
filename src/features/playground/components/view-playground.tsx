@@ -285,6 +285,11 @@ const MERMAID_KIND_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
   dict: "Mermaid has no data-dictionary notation, so there is nothing to convert to",
   lifecycle:
     "Mermaid has no lifecycle notation — stateDiagram-v2 draws every transition that could happen, not one subject's actual ordered history",
+  /* MERMAID DOES HAVE A TREE — `mindmap` — so this refusal is narrower than
+     the two above it and says so: the notation exists, the conversion does
+     not. It carries labels with no ids and no columns, so it can only ever be
+     a one-way import, and that import is not built. */
+  tree: "Mermaid `mindmap` is a tree, but it carries no ids and no columns, so the conversion can only go one way and reading one in is not built yet",
 };
 
 /** The mirror of `MERMAID_IMPORT_CAVEATS`: what leaving for Mermaid drops. */
