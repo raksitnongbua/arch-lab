@@ -131,3 +131,53 @@ export const EXAMPLE_NOTATION_LABEL: Record<SeedKind, string> = {
   lifecycle: "lifecycle",
   tree: "decomposition tree",
 };
+
+/* -------------------------------------------------------------------------- */
+/* The count, derived                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many document kinds there are, and the word for it.
+ *
+ * WRITTEN ONCE HERE because the hand-typed version went stale in fourteen
+ * places at a time. `check:seo` already derived the number from the capability
+ * grid and stayed right through two notations being added, while the prose
+ * beside it said "nine" for a release after the tenth shipped — twice, in the
+ * OG card, the demo index, `llms.txt` and the MCP handshake. The count is a
+ * fact about this table, so it is computed from this table.
+ *
+ * THE WORD, NOT JUST THE DIGIT, because every one of those sentences reads
+ * "ten notations" rather than "10 notations" — a digit in running prose is a
+ * different register, and the copy was written in words.
+ */
+export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+
+const COUNT_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+] as const;
+
+/** The count as the word the copy uses, falling back to the digits past the
+ *  table — a sentence reading "13 notations" is odd but correct, where a
+ *  missing entry would be a crash on a page. */
+export const DOCUMENT_KIND_COUNT_WORD: string =
+  COUNT_WORDS[DOCUMENT_KIND_COUNT] ?? String(DOCUMENT_KIND_COUNT);
+
+/** The kinds' names as a sentence list: "C4 models, … and decomposition trees". */
+export function notationNameList(): string {
+  const names = (Object.keys(KIND_BLURB) as SeedKind[]).map(
+    (kind) => EXAMPLE_NOTATION_LABEL[kind],
+  );
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}

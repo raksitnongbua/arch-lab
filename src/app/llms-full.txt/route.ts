@@ -25,6 +25,7 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
    the landing page, `/faq` and `/llms.txt` — the reason stated for the editing
    passage above applies unchanged. */
 import { THEMES_PASSAGE } from "@/lib/theme-copy";
+import { DOCUMENT_KIND_COUNT_WORD } from "@/features/playground/lib/kind-copy";
 
 /**
  * `/llms-full.txt` — the whole thing, in one plain-text read.
@@ -95,7 +96,7 @@ Source: ${origin} · Index: ${origin}/llms.txt
 ## What ${APP_NAME} is
 
 ${APP_NAME} is a browser-based tool for writing software architecture diagrams
-as plain text. It reads nine kinds of document — C4 models (context, container,
+as plain text. It reads ${DOCUMENT_KIND_COUNT_WORD} kinds of document — C4 models (context, container,
 component and code levels), UML-style sequence diagrams, flowcharts, use-case
 diagrams, entity-relationship diagrams, data dictionaries, gantt charts,
 milestone timelines and lifecycles — and renders every
@@ -164,7 +165,7 @@ leaves the browser; it is one key in localStorage.
   would present a subtraction as a superset.
 
 Paste any of them into ${origin}/live and the format is detected for you — one
-page for all nine document kinds, and the one page a canvas gesture is
+page for all ${DOCUMENT_KIND_COUNT_WORD} document kinds, and the one page a canvas gesture is
 available
 on. \`?d=\` chooses which example it starts from (\`c4\`, \`seq\`, \`flow\`, \`uc\`,
 \`er\`, \`dict\`, \`gt\`, \`tl\`, \`lc\`), and \`?e=<id>\` opens a bundled one.

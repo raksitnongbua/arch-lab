@@ -493,6 +493,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
  * one.
  */
 function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
+  const { lead, rest } = splitLead(tool.description);
   return (
     <div className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -501,9 +502,24 @@ function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
         </h4>
         <span className="text-sm text-muted-foreground">{tool.title}</span>
       </div>
-      <p className="mt-2 leading-relaxed text-muted-foreground">
-        {tool.description}
-      </p>
+      {/* THE LEAD SENTENCE, THEN THE REST ON REQUEST. These descriptions are
+          agent-facing contracts and they are long on purpose — they have to be,
+          because a model reads them BEFORE it calls and cannot ask a follow-up.
+          Printing all of them made this page 20,000 characters of specification
+          a human had to wade through to find one tool, which is the opposite of
+          what a reference page is for. The first sentence is already the
+          summary in every one of them; the remainder is the contract, and it
+          stays one click away rather than being cut, because a reader deciding
+          whether to wire a tool into a loop needs the whole thing. */}
+      <p className="mt-2 leading-relaxed text-muted-foreground">{lead}</p>
+      {rest === null ? null : (
+        <details className="group mt-2">
+          <summary className="cursor-pointer text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Full text the agent receives
+          </summary>
+          <p className="mt-2 leading-relaxed text-muted-foreground">{rest}</p>
+        </details>
+      )}
       {/* A ROW OF ITS OWN, not a sentence buried in the description above.
           Whether a tool can stop and hand its human a question is the thing
           a reader deciding to wire this into an automated loop needs to see
@@ -551,4 +567,21 @@ function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
       )}
     </div>
   );
+}
+
+/**
+ * The first sentence, and everything after it.
+ *
+ * SPLIT ON A SENTENCE END FOLLOWED BY WHITESPACE, not on the first full stop:
+ * these descriptions are full of `archlab 1.0 gantt` and `0.1.0`, and a naive
+ * split would cut a version number in half and print the remainder as a
+ * heading. If no sentence boundary is found the whole description is the lead,
+ * which is the right answer for the handful of short ones.
+ */
+function splitLead(description: string): { lead: string; rest: string | null } {
+  const boundary = /[.?!](\s)/.exec(description);
+  if (boundary === null) return { lead: description, rest: null };
+  const at = boundary.index + 1;
+  const rest = description.slice(at).trim();
+  return { lead: description.slice(0, at), rest: rest === "" ? null : rest };
 }

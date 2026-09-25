@@ -7,6 +7,9 @@ import {
   OgKindMix,
 } from "@/features/marketing/og/card";
 import { APP_NAME } from "@/lib/constants";
+import {
+  DOCUMENT_KIND_COUNT_WORD,
+} from "@/features/playground/lib/kind-copy";
 
 /**
  * The playground's social card — and now the card EVERY share link previews
@@ -51,7 +54,7 @@ export const contentType = OG_CONTENT_TYPE;
 export default function OpenGraphImage() {
   return new ImageResponse(
     <OgCard
-      eyebrow="NINE NOTATIONS · TEXT OR CANVAS"
+      eyebrow={`${DOCUMENT_KIND_COUNT_WORD.toUpperCase()} NOTATIONS · TEXT OR CANVAS`}
       headline="Write the diagram"
       headlineTail="as text."
       footer=".alab, JSON or Mermaid · never uploaded"

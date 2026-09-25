@@ -23,6 +23,7 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
    reference contained the word "theme" — so "does arch-lab have a dark mode"
    had nothing on this site to quote. */
 import { THEMES_PASSAGE } from "@/lib/theme-copy";
+import { DOCUMENT_KIND_COUNT_WORD } from "@/features/playground/lib/kind-copy";
 
 /**
  * `/llms.txt` — what this site is, for a model reading it rather than a person.
@@ -63,7 +64,7 @@ export function GET(): Response {
 
 > ${APP_DESCRIPTION}
 
-${APP_NAME} reads and writes nine kinds of architecture document as plain
+${APP_NAME} reads and writes ${DOCUMENT_KIND_COUNT_WORD} kinds of architecture document as plain
 text: C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams,
 entity-relationship diagrams, data dictionaries, gantt charts, milestone
 timelines and lifecycles. The text format is \`.alab\`; arch-lab JSON and
@@ -167,7 +168,7 @@ ${THEMES_PASSAGE}
 
 Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote — there is a
-validate and a format tool for each of the nine document kinds. There is no
+validate and a format tool for each of the ${DOCUMENT_KIND_COUNT_WORD} document kinds. There is no
 mutation API — you edit \`.alab\` files yourself.
 
 If you only need to WRITE \`.alab\`, the skill is enough and costs nothing until
@@ -183,7 +184,7 @@ you need the server, or the validator at ${origin}/validate.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/live — the playground: paste or write any of the nine kinds and
+- ${origin}/live — the playground: paste or write any of the ${DOCUMENT_KIND_COUNT_WORD} kinds and
   see it rendered live, and the one page where a canvas gesture is available.
   \`?d=seq\` starts from a sequence example, \`?d=er\` from an ER one,
   \`?d=gt\` from a gantt, \`?d=tl\` from a milestone timeline and \`?d=lc\`
@@ -194,7 +195,7 @@ you need the server, or the validator at ${origin}/validate.
 - ${origin}/mcp — how to connect an MCP client, and what each tool does
 - ${origin}/skill — the same grammar as an Agent Skill, installed as files
   in your repository with no server involved
-- ${origin}/demo — finished examples of all nine kinds
+- ${origin}/demo — finished examples of all ${DOCUMENT_KIND_COUNT_WORD} kinds
 - ${origin}/faq — what this is, what it exports, what leaves the browser, and
   what an agent may do over MCP, as short self-contained answers
 `;
