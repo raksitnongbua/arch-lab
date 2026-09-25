@@ -49,6 +49,16 @@ export interface ExportTheme {
    * exported dictionary carries the same badge colours the reader saw.
    */
   accent: string;
+  /**
+   * `--chart-1` … `--chart-5`, the shared categorical accents.
+   *
+   * ADDED FOR THE TREE, whose branch colour is derived from the index of the
+   * top-level branch a node descends from and cycles these five. Without them
+   * an exported tree would be one colour where the screen has five, and the
+   * file would stop being the picture the reader framed — which is the whole
+   * contract of these exporters.
+   */
+  chartAccents: readonly string[];
   destructive: string;
   destructiveForeground: string;
   mutedForeground: string;
@@ -175,6 +185,11 @@ const TOKEN_VARS = {
   criticalCap: "--gantt-critical",
   foreground: "--foreground",
   accent: "--accent",
+  chart1: "--seq-lane-1",
+  chart2: "--seq-lane-2",
+  chart3: "--seq-lane-3",
+  chart4: "--seq-lane-4",
+  chart5: "--seq-lane-5",
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
   roleTextureInk: "--role-texture-ink",
@@ -303,7 +318,22 @@ export function resolveExportTheme(): ExportTheme {
 
   const canvasGrid = resolve(TOKEN_VARS.canvasGrid, nodeBorder);
 
+  /* THE FIVE CATEGORICAL ACCENTS, in order, each falling back to `--accent` so
+     a theme that has not defined one exports a colour rather than an empty
+     fill. Read as a list because the tree cycles them by index; nothing here
+     assigns a meaning to any single one. */
+  const chartAccents = [
+    TOKEN_VARS.chart1,
+    TOKEN_VARS.chart2,
+    TOKEN_VARS.chart3,
+    TOKEN_VARS.chart4,
+    TOKEN_VARS.chart5,
+  ].map((variable) =>
+    resolve(variable, resolve(TOKEN_VARS.accent, nodeBorder)),
+  );
+
   return {
+    chartAccents,
     roleTexture: {
       ink: resolveExpression(`var(${TOKEN_VARS.roleTextureInk})`, nodeBorder),
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,

@@ -188,12 +188,26 @@ check(
 /* ----------------------------------------------------------------------- */
 console.log("\n5. Colour is derived, never declared");
 
-check(
-  "the branch accents come from shared chart tokens",
-  /--ac:\s*var\(--chart-1\)/.test(css),
-  "a per-kind palette would have to be completed in every theme; the shared " +
-    "chart tokens already are",
-);
+/* THE ASSERTION THAT WAS NOT ENOUGH, kept and strengthened. It used to check
+   that the stylesheet REFERENCED `--chart-1`, which it did — while nothing in
+   the project defined that token, so every branch accent resolved to its
+   fallback and the whole tree drew in the border colour. A custom property
+   that resolves to nothing is not an error. Now the accents are checked
+   against tokens that are actually declared, in every theme. */
+{
+  const globals = fs.readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+  const referenced = [...css.matchAll(/--ac:\s*var\((--[a-z0-9-]+)\)/g)].map(
+    (match) => match[1],
+  );
+  const unique = [...new Set(referenced)];
+  check(
+    "every branch accent names a token this project defines",
+    unique.length >= 5 &&
+      unique.every((token) => globals.includes(`${token}:`)),
+    `referenced ${unique.join(", ")} — one of them is declared nowhere, so it ` +
+      "resolves to its fallback and the branch colour silently disappears",
+  );
+}
 check(
   "no literal colour is written into this stylesheet",
   !/#[0-9a-fA-F]{3,8}\b/.test(css) && !/\brgb\(/.test(css),
