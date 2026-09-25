@@ -273,14 +273,25 @@ export default function RootLayout({
             the tag is bare again, where `location.hash` is read while the
             parser is still in `<head>`.
 
-            THE REACT WARNING IS EXPECTED HERE, and is dev-only: "Encountered a
-            script tag while rendering React component" exists only in
-            react-dom's development build. React logs it whenever it renders a
-            script element on the CLIENT, and the root layout is client-rendered
-            by Fast Refresh. On that path the tag is indeed inert — but that
-            path is a dev re-render of a document whose parser already ran this
-            script, so nothing is lost by it. Production never logs it and
-            never needs to: the tag is parsed, not rendered. */}
+            THE REACT WARNING IS EXPECTED HERE, AND CANNOT BE REMOVED WITHOUT
+            LOSING THE GUARANTEE ABOVE. It has been investigated twice; this
+            paragraph exists so there is not a third time.
+
+            "Encountered a script tag while rendering React component" lives
+            only in react-dom's DEVELOPMENT build, is guarded by a module-level
+            `didWarnScriptTags` so it fires once per session rather than per
+            render, and is logged whenever React renders a script element on the
+            CLIENT — which the root layout does on Fast Refresh. Production
+            neither logs it nor needs to: the tag is parsed, not rendered.
+
+            The only escape React offers is `isScriptDataBlock`, which suppresses
+            the warning exclusively for a `type` the browser will NOT execute —
+            every JavaScript mime type, plus `module`, `importmap` and
+            `speculationrules`, still warns. An `async src` script would be
+            hoisted as a resource instead of warning, but `async` is precisely
+            the deferral this tag cannot have. So: executable at parse time and
+            one dev log, or silent and too late. This file chooses the former,
+            deliberately. */}
         <script
           id="share-forward-flag"
           dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
