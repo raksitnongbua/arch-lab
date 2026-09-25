@@ -120,7 +120,8 @@
     "check:skill": "node scripts/skill-check.mjs",
     "check:tree": "node scripts/tree-check.mjs",
     "check:tree-layout": "node scripts/tree-layout-check.mjs",
-    "check:tree-motion": "node scripts/tree-motion-check.mjs"
+    "check:tree-motion": "node scripts/tree-motion-check.mjs",
+    "check:client-boundary": "node scripts/client-boundary-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

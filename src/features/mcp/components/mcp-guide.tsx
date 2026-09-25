@@ -22,7 +22,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { NAV_LINKS } from "@/components/layout/header";
+import { NAV_LINKS } from "@/lib/nav-links";
 
 import { Badge } from "@/components/ui/badge";
 
