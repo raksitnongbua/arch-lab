@@ -79,54 +79,61 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
        It is told the camera's scale because the ladder is a question about
        SCREEN size — a rung chosen for the unscaled drawing lands below the
        legible floor once the camera shrinks it. */
-    <div
-      ref={paneRef}
-      className={cn("aft-tree-pane", CANVAS_RULE_CLASS)}
-      style={groundFieldCss(scale)}
-      /* THE BACKDROP CLEARS THE FOCUS. A reader who has dimmed most of the
+    /* THE FRAME DOES NOT SCROLL; THE PANE INSIDE IT DOES. The zoom pill used
+       to sit inside the pane, which becomes a scroll container the moment the
+       drawing outgrows it — so the pill scrolled away with the diagram instead
+       of staying in its corner. Anchoring it to a frame that never scrolls is
+       what keeps it where every other canvas puts it. */
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={paneRef}
+        className={cn("aft-tree-pane", CANVAS_RULE_CLASS)}
+        style={groundFieldCss(scale)}
+        /* THE BACKDROP CLEARS THE FOCUS. A reader who has dimmed most of the
          diagram needs a way out that is not hunting for the node they pressed,
          and the empty pane is the largest target on screen. */
-      onClick={(event) => {
-        /* `consumePanClick` READS AND CLEARS, so it must be called exactly
+        onClick={(event) => {
+          /* `consumePanClick` READS AND CLEARS, so it must be called exactly
            once per click. Without it, the click that ends a pan would clear
            the reader's focus every time they dragged the canvas. */
-        if (camera.consumePanClick()) return;
-        /* ANY EMPTY SPACE CLEARS, not just the pane element itself. The first
+          if (camera.consumePanClick()) return;
+          /* ANY EMPTY SPACE CLEARS, not just the pane element itself. The first
            version compared `target` to `currentTarget`, which meant only the
            bare pane counted — and the drawing's own panel covers most of the
            pane, so the largest empty area on screen did nothing. What a reader
            means by "somewhere else" is anywhere that is not a control, so the
            test is whether the click landed on one. */
-        const onControl =
-          event.target instanceof Element &&
-          /* THE WIRE IS NOT A BUTTON but it is a control: it is an SVG path,
+          const onControl =
+            event.target instanceof Element &&
+            /* THE WIRE IS NOT A BUTTON but it is a control: it is an SVG path,
              so `closest("button")` misses it and the backdrop would clear the
              focus the same click that the wire had just set. */
-          event.target.closest("button, .aft-tree-wire-hit") !== null;
-        if (!onControl) setFocusedId(null);
-      }}
-    >
-      {/* THE CAPTION SITS OUTSIDE THE CAMERA, at full size. Inside it, it both
+            event.target.closest("button, .aft-tree-wire-hit") !== null;
+          if (!onControl) setFocusedId(null);
+        }}
+      >
+        {/* THE CAPTION SITS OUTSIDE THE CAMERA, at full size. Inside it, it both
           shrank with the drawing and stole height the pane had not reserved —
           the pane measures the STAGE, so a caption within it pushed the last
           row past the clip. A title is chrome rather than diagram, and chrome
           does not zoom. */}
-      {title === "" ? null : <p className="aft-tree-title">{title}</p>}
+        {title === "" ? null : <p className="aft-tree-title">{title}</p>}
 
-      {/* The box that RESERVES the scaled height. `transform` does not affect
+        {/* The box that RESERVES the scaled height. `transform` does not affect
           layout, so without this the shrunk drawing would still hold its full
           height open and leave a band of dead space under it. */}
-      <div style={{ height: naturalHeight * scale }}>
-        <div
-          className="aft-tree-camera"
-          style={{ transform: `scale(${scale})`, width }}
-        >
-          <TreeDiagram
-            file={file}
-            showTitle={false}
-            focusedId={focusedId}
-            onFocus={setFocusedId}
-          />
+        <div style={{ height: naturalHeight * scale }}>
+          <div
+            className="aft-tree-camera"
+            style={{ transform: `scale(${scale})`, width }}
+          >
+            <TreeDiagram
+              file={file}
+              showTitle={false}
+              focusedId={focusedId}
+              onFocus={setFocusedId}
+            />
+          </div>
         </div>
       </div>
 
