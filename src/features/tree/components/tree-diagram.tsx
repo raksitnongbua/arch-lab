@@ -79,18 +79,32 @@ export function TreeDiagram({
             aria-hidden="true"
           >
             {layout.connectors.map((wire) => (
-              <path
-                key={`${wire.parentId}->${wire.childId}`}
-                className={[
-                  "aft-tree-wire",
-                  accentClass(wire.branch),
-                  dimmed(wire.childId) ? "is-dim" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                d={`M ${wire.fromX} ${wire.fromY + headBand} H ${wire.elbowX} V ${wire.toY + headBand} H ${wire.toX}`}
-                fill="none"
-              />
+              <g key={`${wire.parentId}->${wire.childId}`}>
+                {/* A SECOND, INVISIBLE PATH CARRIES THE CLICK. The drawn line
+                    is under 2px, far below what a pointer reliably hits and
+                    hopeless on touch; widening the visible stroke to catch a
+                    press would make the diagram heavier for everyone. Both
+                    paths trace one geometry string, so the target cannot drift
+                    from the line a reader aimed at. */}
+                <path
+                  className="aft-tree-wire-hit"
+                  d={elbow(wire, headBand)}
+                  fill="none"
+                  onClick={() => onFocus?.(wire.childId)}
+                  aria-hidden="true"
+                />
+                <path
+                  className={[
+                    "aft-tree-wire",
+                    accentClass(wire.branch),
+                    dimmed(wire.childId) ? "is-dim" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  d={elbow(wire, headBand)}
+                  fill="none"
+                />
+              </g>
             ))}
           </svg>
 
@@ -103,7 +117,9 @@ export function TreeDiagram({
           {layout.lanes.map((lane, index) => (
             <div
               key={`lane-${lane.depth ?? "c"}-${lane.x}`}
-              className={`aft-tree-lane${index % 2 === 1 ? "is-alt" : ""}`}
+              className={["aft-tree-lane", index % 2 === 1 ? "is-alt" : ""]
+                .filter(Boolean)
+                .join(" ")}
               style={{ left: lane.x, width: lane.width, top: 0, bottom: 0 }}
               aria-hidden="true"
             />
@@ -206,6 +222,21 @@ export function TreeDiagram({
       </div>
     </figure>
   );
+}
+
+/** The elbow, as one path — shared by the drawn line and its hit target so the
+ *  two can never trace different geometry. */
+function elbow(
+  wire: {
+    fromX: number;
+    fromY: number;
+    elbowX: number;
+    toX: number;
+    toY: number;
+  },
+  headBand: number,
+): string {
+  return `M ${wire.fromX} ${wire.fromY + headBand} H ${wire.elbowX} V ${wire.toY + headBand} H ${wire.toX}`;
 }
 
 /** The one sentence a screen reader gets in place of the drawing. */

@@ -2,7 +2,7 @@
   "name": "arch-lab",
   "version": "2.0.0",
   "private": true,
-  "description": "Architecture diagrams as plain text — C4 models and UML-style sequence diagrams, written in a small text format and rendered live in the browser.",
+  "description": "Architecture diagrams as plain text \u2014 C4 models and UML-style sequence diagrams, written in a small text format and rendered live in the browser.",
   "keywords": [
     "architecture",
     "diagrams",
@@ -117,7 +117,10 @@
     "check:eink": "node scripts/eink-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",
-    "check:skill": "node scripts/skill-check.mjs"
+    "check:skill": "node scripts/skill-check.mjs",
+    "check:tree": "node scripts/tree-check.mjs",
+    "check:tree-layout": "node scripts/tree-layout-check.mjs",
+    "check:tree-motion": "node scripts/tree-motion-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
