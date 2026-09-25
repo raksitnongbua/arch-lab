@@ -91,16 +91,26 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
      * do". Constraining the container instead makes every section share the
      * same centred measure and makes that class of drift impossible.
      */
-    <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8 sm:py-20">
-      {/* ---- intro ---------------------------------------------------------- */}
-      <div className="af-mcp-fade mb-6 flex flex-wrap items-center gap-2">
-        <Badge variant="accent">
-          <span className="af-mcp-pulse size-1.5 rounded-full bg-accent" />
-          Integration · Model Context Protocol
-        </Badge>
-      </div>
+    <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-20 lg:grid lg:grid-cols-[15rem_minmax(0,44rem)] lg:justify-center lg:gap-x-12">
+      {/* THE RAIL. Sticky, so it is still there when the question "what else is
+          on this page" arrives — which on a page this long is three screens
+          down, where a list in the flow has already gone. Hidden below `lg`
+          because at that width it would be a column of links above the content
+          rather than beside it, which is what the in-flow card is for. */}
+      <aside className="hidden lg:block">
+        <Contents className="af-mcp-fade af-mcp-d6 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2" />
+      </aside>
 
-      {/* NAMES THE CATEGORY, not the product. "Use arch-lab from your AI
+      <div className="min-w-0">
+        {/* ---- intro ---------------------------------------------------------- */}
+        <div className="af-mcp-fade mb-6 flex flex-wrap items-center gap-2">
+          <Badge variant="accent">
+            <span className="af-mcp-pulse size-1.5 rounded-full bg-accent" />
+            Integration · Model Context Protocol
+          </Badge>
+        </div>
+
+        {/* NAMES THE CATEGORY, not the product. "Use arch-lab from your AI
           agent" was the heading here, and it identifies the page only to a
           reader who already knows what arch-lab is — which is nobody arriving
           from a search or from an agent's answer. The opening sentence below
@@ -108,174 +118,128 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           check pinning that one): a sentence of the form "X runs a Y, so Z can
           do W" is the shape a model quotes when asked what this is. Both are
           load-bearing wording; rewrite them together or not at all. */}
-      <h1 className="af-mcp-rise af-mcp-d1 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
-        An MCP server for architecture diagrams
-      </h1>
-      <p className="af-mcp-rise af-mcp-d2 mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
-        arch-lab runs an{" "}
-        <a
-          href="https://modelcontextprotocol.io"
-          target="_blank"
-          rel="noreferrer noopener"
-          className="font-medium text-primary hover:underline"
-        >
-          MCP
-        </a>{" "}
-        server, so Claude Code, Claude Desktop, Cursor and anything else
-        speaking the protocol can read, write and check C4 models and sequence
-        diagrams as <Code>.alab</Code> text. It is hosted — nothing to install,
-        no key to configure.
-      </p>
+        <h1 className="af-mcp-rise af-mcp-d1 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+          An MCP server for architecture diagrams
+        </h1>
+        <p className="af-mcp-rise af-mcp-d2 mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
+          arch-lab runs an{" "}
+          <a
+            href="https://modelcontextprotocol.io"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-medium text-primary hover:underline"
+          >
+            MCP
+          </a>{" "}
+          server, so Claude Code, Claude Desktop, Cursor and anything else
+          speaking the protocol can read, write and check C4 models and sequence
+          diagrams as <Code>.alab</Code> text. It is hosted — nothing to
+          install, no key to configure.
+        </p>
 
-      {/* THE ENDPOINT NOW FOLLOWS THE OPENING SENTENCE DIRECTLY. A beta callout
+        {/* THE ENDPOINT NOW FOLLOWS THE OPENING SENTENCE DIRECTLY. A beta callout
           used to sit between them, spending five lines of the page's most
           valuable space on a status that told a reader nothing they could act
           on. The commitment it was standing in for is one bullet under Privacy
           & limits, where it sits beside the other things worth knowing before
           you depend on this. */}
-      <div className="af-mcp-rise af-mcp-d3 mt-6">
-        <CopySnippet
-          snippet={endpoint}
-          caption="endpoint"
-          label="MCP endpoint URL"
-        />
-      </div>
+        <div className="af-mcp-rise af-mcp-d3 mt-6">
+          <CopySnippet
+            snippet={endpoint}
+            caption="endpoint"
+            label="MCP endpoint URL"
+          />
+        </div>
 
-      {/* The figure sits UNDER the endpoint, not above it: someone who came
+        {/* The figure sits UNDER the endpoint, not above it: someone who came
           here to copy a URL should reach it before anything decorative. The
           tool name comes from the catalogue, so the picture cannot advertise a
           call the server does not have. */}
-      <McpRoundTrip
-        toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
-        className="af-mcp-rise af-mcp-d4 mt-6"
-      />
+        <McpRoundTrip
+          toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
+          className="af-mcp-rise af-mcp-d4 mt-6"
+        />
 
-      <div className="af-mcp-card af-mcp-rise af-mcp-d5 mt-8 rounded-lg border border-border bg-card px-5 py-4">
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">
-          What this is for
-        </h2>
-        <p className="mt-2 leading-relaxed text-muted-foreground">
-          Your agent can already read and write files — let it edit{" "}
-          <Code>.alab</Code> directly. This server is for the two things it
-          cannot do alone:{" "}
-          <strong className="text-foreground">know the grammar exactly</strong>{" "}
-          and{" "}
-          <strong className="text-foreground">
-            get the real parser&apos;s verdict
-          </strong>
-          . A compiler and a reference, not a filesystem.
-        </p>
-      </div>
-
-      {/* ---- on this page ---------------------------------------------------- */}
-      <nav
-        aria-label="On this page"
-        className="af-mcp-fade af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4"
-      >
-        <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          On this page
-        </p>
-        {/* TWO LEVELS, because one was the problem. A flat list of six links
-            told a reader the page had a tools section and nothing about what
-            was in it — and the tools section is most of the page, twelve
-            groups of it. The second level is derived from the catalogue, so a
-            group added there appears here without an edit, and the counts are
-            the real ones rather than a number somebody typed. */}
-        <ul className="mt-3 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-          {SECTIONS.map((section) => (
-            <li key={section.id}>
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <a
-                  href={`#${section.id}`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {section.label}
-                </a>
-                <span className="text-xs text-muted-foreground">
-                  {section.hint}
-                </span>
-              </div>
-              {section.id !== "tools" ? null : (
-                <ul className="mt-2 ml-3 space-y-1 border-l border-border pl-3">
-                  {MCP_TOOL_GROUPS.map((group) => (
-                    <li key={group.id} className="flex items-baseline gap-x-2">
-                      <a
-                        href={`#tools-${group.id}`}
-                        className="text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        {group.title}
-                      </a>
-                      <span className="font-mono text-xs text-muted-foreground/70">
-                        {group.tools.length}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      {/* ---- connect --------------------------------------------------------- */}
-      <Section id="connect" title="Connect">
-        <P>
-          One transport, Streamable HTTP, at the URL above. Open yours — each
-          entry is the whole setup:
-        </P>
-        {/*
-         * One <details> per client, because seven recipes stacked open meant
-         * scrolling past six irrelevant configs to reach yours — the client
-         * names are the index, and they were buried under their own snippets.
-         * details/summary is the disclosure widget that costs no client
-         * component, which this page is not allowed to have (the route reads
-         * headers(); see the file comment).
-         *
-         * The first recipe ships open: it shows what a row expands into, so a
-         * closed list does not read as a menu with nothing behind it — and it
-         * keeps a copyable snippet on the page for anyone skimming past the
-         * summaries.
-         */}
-        <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">
-          {CONNECT_RECIPES.map((recipe, index) => (
-            <details
-              key={recipe.client}
-              open={index === 0}
-              className="group border-b border-border/60 last:border-b-0"
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
-                <ChevronRight
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
-                />
-                <h3 className="min-w-0 flex-1 text-sm font-semibold tracking-tight text-foreground">
-                  {recipe.client}
-                </h3>
-                <span
-                  aria-hidden="true"
-                  className="shrink-0 font-mono text-xs text-muted-foreground"
-                >
-                  {recipe.language}
-                </span>
-              </summary>
-              <div className="min-w-0 px-5 pt-0.5 pb-5">
-                <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-                  {recipe.note}
-                </p>
-                <CopySnippet
-                  snippet={recipe.snippet(endpoint)}
-                  caption={recipe.language}
-                  label={`${recipe.client} setup`}
-                />
-              </div>
-            </details>
-          ))}
+        <div className="af-mcp-card af-mcp-rise af-mcp-d5 mt-8 rounded-lg border border-border bg-card px-5 py-4">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
+            What this is for
+          </h2>
+          <p className="mt-2 leading-relaxed text-muted-foreground">
+            Your agent can already read and write files — let it edit{" "}
+            <Code>.alab</Code> directly. This server is for the two things it
+            cannot do alone:{" "}
+            <strong className="text-foreground">
+              know the grammar exactly
+            </strong>{" "}
+            and{" "}
+            <strong className="text-foreground">
+              get the real parser&apos;s verdict
+            </strong>
+            . A compiler and a reference, not a filesystem.
+          </p>
         </div>
-      </Section>
 
-      {/* ---- the skill ------------------------------------------------------- */}
-      <Section id="skill" title="Or use the skill">
-        {/* A POINTER, NOT THE ARGUMENT. This section carried the whole case
+        <Contents className="af-mcp-fade af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4 lg:hidden" />
+
+        {/* ---- connect --------------------------------------------------------- */}
+        <Section id="connect" title="Connect">
+          <P>
+            One transport, Streamable HTTP, at the URL above. Open yours — each
+            entry is the whole setup:
+          </P>
+          {/*
+           * One <details> per client, because seven recipes stacked open meant
+           * scrolling past six irrelevant configs to reach yours — the client
+           * names are the index, and they were buried under their own snippets.
+           * details/summary is the disclosure widget that costs no client
+           * component, which this page is not allowed to have (the route reads
+           * headers(); see the file comment).
+           *
+           * The first recipe ships open: it shows what a row expands into, so a
+           * closed list does not read as a menu with nothing behind it — and it
+           * keeps a copyable snippet on the page for anyone skimming past the
+           * summaries.
+           */}
+          <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">
+            {CONNECT_RECIPES.map((recipe, index) => (
+              <details
+                key={recipe.client}
+                open={index === 0}
+                className="group border-b border-border/60 last:border-b-0"
+              >
+                <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
+                  />
+                  <h3 className="min-w-0 flex-1 text-sm font-semibold tracking-tight text-foreground">
+                    {recipe.client}
+                  </h3>
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 font-mono text-xs text-muted-foreground"
+                  >
+                    {recipe.language}
+                  </span>
+                </summary>
+                <div className="min-w-0 px-5 pt-0.5 pb-5">
+                  <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+                    {recipe.note}
+                  </p>
+                  <CopySnippet
+                    snippet={recipe.snippet(endpoint)}
+                    caption={recipe.language}
+                    label={`${recipe.client} setup`}
+                  />
+                </div>
+              </details>
+            ))}
+          </div>
+        </Section>
+
+        {/* ---- the skill ------------------------------------------------------- */}
+        <Section id="skill" title="Or use the skill">
+          {/* A POINTER, NOT THE ARGUMENT. This section carried the whole case
             for the skill — two commands, what lands on disk, why the folder
             has several files, and the boundary — which meant the cheaper of
             the two integrations was documented only on the page you reach by
@@ -283,228 +247,230 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
             duplicating it here would split the canonical between two URLs
             competing for the same reader. What stays is the one command and
             the one sentence that makes someone click. */}
-        <P>
-          Most of what this server gives an agent is <em>knowledge</em> — the
-          grammar, in exact detail — and knowledge travels fine as a file. If
-          you would rather not add a connector, the same grammar installs as an
-          Agent Skill:
-        </P>
-        <div className="mt-5">
-          <CopySnippet
-            snippet={SKILL_INSTALL}
-            caption="bash"
-            label="Install the .alab skill"
-          />
-        </div>
-        <P className="mt-4">
-          It carries the grammar, but not the verdict: a file in your repository
-          cannot tell you whether the model your agent just wrote parses, and
-          that is what this server is for.{" "}
-          <Link
-            href="/skill"
-            className="font-medium text-primary hover:underline"
-          >
-            What the skill installs, and what it cannot do
-          </Link>
-          .
-        </P>
-      </Section>
-
-      {/* ---- tools ----------------------------------------------------------- */}
-      <Section id="tools" title="What it can do">
-        <P>
-          {MCP_TOOLS.length} tools, all read-only — nothing here mutates
-          anything, on your machine or ours:
-        </P>
-        {/*
-         * Grouped, not a flat list: ten identical cards gave a reader no way
-         * to skim for "the sharing one" without reading all ten. The grouping
-         * comes from the catalogue like everything else — the component still
-         * knows no tool names.
-         */}
-        <div className="mt-6 space-y-10">
-          {MCP_TOOL_GROUPS.map((group) => (
-            <div
-              key={group.id}
-              id={`tools-${group.id}`}
-              className="scroll-mt-24"
+          <P>
+            Most of what this server gives an agent is <em>knowledge</em> — the
+            grammar, in exact detail — and knowledge travels fine as a file. If
+            you would rather not add a connector, the same grammar installs as
+            an Agent Skill:
+          </P>
+          <div className="mt-5">
+            <CopySnippet
+              snippet={SKILL_INSTALL}
+              caption="bash"
+              label="Install the .alab skill"
+            />
+          </div>
+          <P className="mt-4">
+            It carries the grammar, but not the verdict: a file in your
+            repository cannot tell you whether the model your agent just wrote
+            parses, and that is what this server is for.{" "}
+            <Link
+              href="/skill"
+              className="font-medium text-primary hover:underline"
             >
-              <h3 className="text-base font-semibold tracking-tight text-foreground">
-                {group.title}
-              </h3>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {group.blurb}
-              </p>
-              <div className="mt-4 space-y-4">
-                {group.tools.map((tool) => (
-                  <ToolCard key={tool.name} tool={tool} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
+              What the skill installs, and what it cannot do
+            </Link>
+            .
+          </P>
+        </Section>
 
-      {/* ---- resources & prompts --------------------------------------------- */}
-      <Section id="context" title="Resources & prompts">
-        <P>
-          Clients that would rather pin reference material than call for it can
-          read the grammar as a resource:
-        </P>
-        <ul className="mt-4 space-y-3">
-          {MCP_RESOURCES.map((resource) => (
-            <li
-              key={resource.uri}
-              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
-            >
-              <p className="font-mono text-sm font-semibold text-foreground">
-                {resource.uri}
-              </p>
-              <p className="mt-1.5 leading-relaxed text-muted-foreground">
-                {resource.description}
-              </p>
-            </li>
-          ))}
-        </ul>
-        <P className="mt-6">
-          And one prompt, for the whole authoring procedure rather than a single
-          call:
-        </P>
-        <ul className="mt-4 space-y-3">
-          {MCP_PROMPTS.map((prompt) => (
-            <li
-              key={prompt.name}
-              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
-            >
-              <p className="font-mono text-sm font-semibold text-foreground">
-                {prompt.name}
-              </p>
-              <p className="mt-1.5 leading-relaxed text-muted-foreground">
-                {prompt.description}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Arguments:{" "}
-                {prompt.args
-                  .map(
-                    (arg) => `${arg.name}${arg.required ? "" : " (optional)"}`,
-                  )
-                  .join(", ")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      {/* ---- workflow -------------------------------------------------------- */}
-      <Section id="workflow" title="A good workflow">
-        <P>
-          The order that avoids rework, whether you drive it yourself or use the{" "}
-          <Code>author_c4_model</Code> prompt:
-        </P>
-        <ol className="mt-4 space-y-3 text-muted-foreground">
-          {[
-            <>
-              <Code>get_syntax_reference</Code> first. <Code>.alab</Code> has
-              significant indentation and order-free attributes; writing it from
-              memory produces plausible, invalid files.
-            </>,
-            <>
-              <Code>get_example_model</Code> to see idiomatic structure at a
-              real scale before inventing one.
-            </>,
-            <>
-              Write the file with your own editing tools. Omit geometry — the
-              defaults are deterministic and lossless.
-            </>,
-            <>
-              <Code>validate_model</Code> until it passes. Every failure comes
-              back with a line, a column and the offending source line.
-            </>,
-            <>
-              <Code>format_model</Code> so the committed file is canonical and
-              diffs cleanly, then <Code>create_share_link</Code> so a human can
-              actually look at the diagram.
-            </>,
-          ].map((step, index) => (
-            <li key={index} className="flex gap-3 leading-relaxed">
-              <span
-                aria-hidden="true"
-                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border bg-secondary/60 font-mono text-xs text-foreground"
+        {/* ---- tools ----------------------------------------------------------- */}
+        <Section id="tools" title="What it can do">
+          <P>
+            {MCP_TOOLS.length} tools, all read-only — nothing here mutates
+            anything, on your machine or ours:
+          </P>
+          {/*
+           * Grouped, not a flat list: ten identical cards gave a reader no way
+           * to skim for "the sharing one" without reading all ten. The grouping
+           * comes from the catalogue like everything else — the component still
+           * knows no tool names.
+           */}
+          <div className="mt-6 space-y-10">
+            {MCP_TOOL_GROUPS.map((group) => (
+              <div
+                key={group.id}
+                id={`tools-${group.id}`}
+                className="scroll-mt-24"
               >
-                {index + 1}
-              </span>
-              <span className="min-w-0">{step}</span>
-            </li>
-          ))}
-        </ol>
-      </Section>
+                <h3 className="text-base font-semibold tracking-tight text-foreground">
+                  {group.title}
+                </h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  {group.blurb}
+                </p>
+                <div className="mt-4 space-y-4">
+                  {group.tools.map((tool) => (
+                    <ToolCard key={tool.name} tool={tool} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
 
-      {/* ---- limits ---------------------------------------------------------- */}
-      <Section id="limits" title="Privacy & limits">
-        <ul className="mt-2 space-y-3 text-muted-foreground">
-          <Bullet>
-            <strong className="text-foreground">Nothing is stored.</strong>{" "}
-            Every tool is a pure function of the text you send it — no database,
-            no account, no history.
-          </Bullet>
-          <Bullet>
-            <strong className="text-foreground">
-              Share links do not upload your model.
-            </strong>{" "}
-            It is compressed into the URL <em>fragment</em> (after{" "}
-            <Code>#</Code>), which browsers never transmit. Opening one renders
-            entirely in the recipient&apos;s browser.
-          </Bullet>
-          <Bullet>
-            <strong className="text-foreground">No authentication.</strong> The
-            endpoint holds no secrets and reads nothing but its arguments, so
-            there is no key to manage. Do not send a model you would not paste
-            into a public form.
-          </Bullet>
-          <Bullet>
-            <strong className="text-foreground">
-              {MAX_SOURCE_CHARS.toLocaleString("en-US")}-character ceiling
-            </strong>{" "}
-            on a single model — several times larger than anything anyone has
-            authored. Past it, split it with <Code>childRef</Code>.
-          </Bullet>
-          <Bullet>
-            <strong className="text-foreground">Mermaid is one-way.</strong>{" "}
-            Importing Mermaid C4 and <Code>sequenceDiagram</Code> works;
-            exporting drops geometry, tags, icons, drill-down links and
-            traceability, and for sequence there is no export at all. Keep{" "}
-            <Code>.alab</Code> or <Code>.archlab.json</Code> as the source of
-            truth.
-          </Bullet>
-          {/* WHERE THE BETA CALLOUT WENT. It was a box above the endpoint
+        {/* ---- resources & prompts --------------------------------------------- */}
+        <Section id="context" title="Resources & prompts">
+          <P>
+            Clients that would rather pin reference material than call for it
+            can read the grammar as a resource:
+          </P>
+          <ul className="mt-4 space-y-3">
+            {MCP_RESOURCES.map((resource) => (
+              <li
+                key={resource.uri}
+                className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
+              >
+                <p className="font-mono text-sm font-semibold text-foreground">
+                  {resource.uri}
+                </p>
+                <p className="mt-1.5 leading-relaxed text-muted-foreground">
+                  {resource.description}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <P className="mt-6">
+            And one prompt, for the whole authoring procedure rather than a
+            single call:
+          </P>
+          <ul className="mt-4 space-y-3">
+            {MCP_PROMPTS.map((prompt) => (
+              <li
+                key={prompt.name}
+                className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
+              >
+                <p className="font-mono text-sm font-semibold text-foreground">
+                  {prompt.name}
+                </p>
+                <p className="mt-1.5 leading-relaxed text-muted-foreground">
+                  {prompt.description}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Arguments:{" "}
+                  {prompt.args
+                    .map(
+                      (arg) =>
+                        `${arg.name}${arg.required ? "" : " (optional)"}`,
+                    )
+                    .join(", ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        {/* ---- workflow -------------------------------------------------------- */}
+        <Section id="workflow" title="A good workflow">
+          <P>
+            The order that avoids rework, whether you drive it yourself or use
+            the <Code>author_c4_model</Code> prompt:
+          </P>
+          <ol className="mt-4 space-y-3 text-muted-foreground">
+            {[
+              <>
+                <Code>get_syntax_reference</Code> first. <Code>.alab</Code> has
+                significant indentation and order-free attributes; writing it
+                from memory produces plausible, invalid files.
+              </>,
+              <>
+                <Code>get_example_model</Code> to see idiomatic structure at a
+                real scale before inventing one.
+              </>,
+              <>
+                Write the file with your own editing tools. Omit geometry — the
+                defaults are deterministic and lossless.
+              </>,
+              <>
+                <Code>validate_model</Code> until it passes. Every failure comes
+                back with a line, a column and the offending source line.
+              </>,
+              <>
+                <Code>format_model</Code> so the committed file is canonical and
+                diffs cleanly, then <Code>create_share_link</Code> so a human
+                can actually look at the diagram.
+              </>,
+            ].map((step, index) => (
+              <li key={index} className="flex gap-3 leading-relaxed">
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border bg-secondary/60 font-mono text-xs text-foreground"
+                >
+                  {index + 1}
+                </span>
+                <span className="min-w-0">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
+        {/* ---- limits ---------------------------------------------------------- */}
+        <Section id="limits" title="Privacy & limits">
+          <ul className="mt-2 space-y-3 text-muted-foreground">
+            <Bullet>
+              <strong className="text-foreground">Nothing is stored.</strong>{" "}
+              Every tool is a pure function of the text you send it — no
+              database, no account, no history.
+            </Bullet>
+            <Bullet>
+              <strong className="text-foreground">
+                Share links do not upload your model.
+              </strong>{" "}
+              It is compressed into the URL <em>fragment</em> (after{" "}
+              <Code>#</Code>), which browsers never transmit. Opening one
+              renders entirely in the recipient&apos;s browser.
+            </Bullet>
+            <Bullet>
+              <strong className="text-foreground">No authentication.</strong>{" "}
+              The endpoint holds no secrets and reads nothing but its arguments,
+              so there is no key to manage. Do not send a model you would not
+              paste into a public form.
+            </Bullet>
+            <Bullet>
+              <strong className="text-foreground">
+                {MAX_SOURCE_CHARS.toLocaleString("en-US")}-character ceiling
+              </strong>{" "}
+              on a single model — several times larger than anything anyone has
+              authored. Past it, split it with <Code>childRef</Code>.
+            </Bullet>
+            <Bullet>
+              <strong className="text-foreground">Mermaid is one-way.</strong>{" "}
+              Importing Mermaid C4 and <Code>sequenceDiagram</Code> works;
+              exporting drops geometry, tags, icons, drill-down links and
+              traceability, and for sequence there is no export at all. Keep{" "}
+              <Code>.alab</Code> or <Code>.archlab.json</Code> as the source of
+              truth.
+            </Bullet>
+            {/* WHERE THE BETA CALLOUT WENT. It was a box above the endpoint
               saying "expect this to move" without saying which part, which is
               the least useful thing a status can do. As a bullet it sits with
               the other four things worth knowing before you depend on this,
               and it now draws the line the pill never did. */}
-          <Bullet>
-            <strong className="text-foreground">What you may pin.</strong>{" "}
-            {MCP_STABILITY_NOTICE}
-          </Bullet>
-        </ul>
+            <Bullet>
+              <strong className="text-foreground">What you may pin.</strong>{" "}
+              {MCP_STABILITY_NOTICE}
+            </Bullet>
+          </ul>
 
-        <P className="mt-8">
-          The grammar is documented at{" "}
-          <Link
-            href="/syntax"
-            className="font-medium text-primary hover:underline"
-          >
-            /syntax
-          </Link>
-          , and you can check a model by hand at{" "}
-          <Link
-            href="/validate"
-            className="font-medium text-primary hover:underline"
-          >
-            /validate
-          </Link>{" "}
-          — the same checker this server calls.
-        </P>
-      </Section>
+          <P className="mt-8">
+            The grammar is documented at{" "}
+            <Link
+              href="/syntax"
+              className="font-medium text-primary hover:underline"
+            >
+              /syntax
+            </Link>
+            , and you can check a model by hand at{" "}
+            <Link
+              href="/validate"
+              className="font-medium text-primary hover:underline"
+            >
+              /validate
+            </Link>{" "}
+            — the same checker this server calls.
+          </P>
+        </Section>
+      </div>
     </div>
   );
 }
@@ -616,4 +582,73 @@ function splitLead(description: string): { lead: string; rest: string | null } {
   const at = boundary.index + 1;
   const rest = description.slice(at).trim();
   return { lead: description.slice(0, at), rest: rest === "" ? null : rest };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Contents                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The page's contents list, rendered twice — as a sticky left rail from `lg`
+ * up, and as a card in the flow below it.
+ *
+ * TWO PLACEMENTS, ONE COMPONENT, and only ever one of them in the
+ * accessibility tree: the hidden one is hidden with `display: none`, which
+ * removes it outright rather than leaving a second "On this page" landmark for
+ * a screen-reader user to walk past.
+ *
+ * IT MOVED TO A RAIL because a contents list in the flow is only useful at the
+ * moment a reader passes it. This page is long and its tools section is most
+ * of it, so the question "what else is here" arrives while they are three
+ * screens down — which is exactly where an in-flow list has already scrolled
+ * away. Every docs site puts it on the left for that reason.
+ */
+function Contents({ className }: { className?: string }): React.JSX.Element {
+  return (
+    <nav aria-label="On this page" className={className}>
+      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        On this page
+      </p>
+      {/* TWO LEVELS, because one was the problem. A flat list of six links
+            told a reader the page had a tools section and nothing about what
+            was in it — and the tools section is most of the page, twelve
+            groups of it. The second level is derived from the catalogue, so a
+            group added there appears here without an edit, and the counts are
+            the real ones rather than a number somebody typed. */}
+      <ul className="mt-3 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-1">
+        {SECTIONS.map((section) => (
+          <li key={section.id}>
+            <div className="flex flex-wrap items-baseline gap-x-2 lg:block">
+              <a
+                href={`#${section.id}`}
+                className="font-medium text-primary hover:underline"
+              >
+                {section.label}
+              </a>
+              <span className="text-xs text-muted-foreground">
+                {section.hint}
+              </span>
+            </div>
+            {section.id !== "tools" ? null : (
+              <ul className="mt-2 ml-3 space-y-1 border-l border-border pl-3">
+                {MCP_TOOL_GROUPS.map((group) => (
+                  <li key={group.id} className="flex items-baseline gap-x-2">
+                    <a
+                      href={`#tools-${group.id}`}
+                      className="text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      {group.title}
+                    </a>
+                    <span className="font-mono text-xs text-muted-foreground/70">
+                      {group.tools.length}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
 }
