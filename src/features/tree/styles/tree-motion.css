@@ -115,6 +115,14 @@
   padding: 6px 10px;
   overflow: hidden;
   border: 1px solid var(--border);
+  /* THE LEFT EDGE IS THICKER THAN THE OTHER THREE, on every node rather than
+     only on a branch. It is the one stroke that says "this box starts here" in
+     a drawing where boxes sit in columns and the eye is travelling left to
+     right, and carrying the node's own accent makes the branch a node belongs
+     to readable without following the wire back. Faint on purpose: at full
+     strength ten of these become a second set of connectors. */
+  border-left: 3px solid
+    color-mix(in oklab, var(--ac, var(--border)) 45%, transparent);
   background: var(--card);
   transition:
     opacity 180ms ease,
@@ -122,8 +130,15 @@
 }
 
 .aft-tree-node.is-root {
-  border-left-width: 3px;
   border-color: var(--border);
+  /* The root has no branch, so its stripe is the neutral token at the same
+     weight — it still reads as the start of a box without claiming an accent
+     that would put it inside one of its own children's branches. */
+  border-left-color: color-mix(
+    in oklab,
+    var(--muted-foreground) 45%,
+    transparent
+  );
   background: var(--muted);
 }
 
@@ -134,7 +149,6 @@
 
 .aft-tree-node.is-branch {
   border-color: color-mix(in oklab, var(--ac) 38%, transparent);
-  border-left: 3px solid var(--ac);
   background: color-mix(in oklab, var(--ac) 9%, var(--card));
 }
 
