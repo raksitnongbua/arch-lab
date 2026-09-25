@@ -9,6 +9,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A tenth notation: the decomposition tree.** `archlab 1.0 tree` draws what
+  breaks down into what, to whatever depth you nested — a test plan, a work
+  breakdown, an ownership tree, a taxonomy. Two things separate it from the
+  nine: depth is unbounded where every existing container stops at a fixed
+  level (C4 at four, the data dictionary at two), and a `columns` line declares
+  leaf headers that align across the whole document, so a four-deep item and a
+  two-deep one put their prose under the same heading. A `levels` line names
+  the depth columns. Containment is nesting and nothing else: there is no edge
+  keyword, because a set of node-to-node edges is the flowchart arch-lab
+  already has.
+- **The tree canvas.** Press any box, cell or connector to light what it is
+  part of and everything under it; the rest dims. Zoom and fit use the same
+  control every other canvas mounts. No Mermaid dialect is accepted: Mermaid
+  `mindmap` is a tree, but it carries no ids and no columns, so the conversion
+  could only ever go one way and that import is not built — the pane says so
+  rather than offering a button that does nothing.
+- **`choose_notation` over MCP.** Which of the ten notations answers a request:
+  the question each one asks, the header line it opens with, the validator to
+  check it, and the fact that settles the pairs readers confuse. It does not
+  rank — the server has one sentence and the agent has the conversation behind
+  it, so a confident wrong ranking would be worse than none.
+- **`validate_tree` and `format_tree`.** The validator reports what a parse
+  cannot see: a branch with one child, a leaf filling none of the columns the
+  document promised, depths left unnamed when others are named, and one branch
+  far deeper than its siblings.
+
+### Fixed
+
+- **The MCP handshake named nine notations after the tenth shipped.** The list
+  is now derived from the same table the count already came from.
+
 - **`direction=fit` — let the diagram choose its own shape.** A third value
   beside `tb` and `lr`, on a diagram's line or in the file header. It names no
   direction: the diagram is laid out top-down, left-to-right, and top-down
