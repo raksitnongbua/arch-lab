@@ -36,7 +36,10 @@ import { ICON_CATEGORY_ORDER } from "@/features/editor/lib/icons/categories";
    must stay pure data, and the playground barrel pulls in the editor. The
    module is server-safe by its own contract — its header says so — so nothing
    client-side rides along. */
-import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import {
+  EXAMPLE_NOTATION_LABEL,
+  KIND_BLURB,
+} from "@/features/playground/lib/kind-copy";
 import {
   GANTT_DATE_FORMAT,
   REFUSED_GANTT_DURATION_UNITS,
@@ -67,6 +70,24 @@ const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} c
  * is read by something that cannot look around and notice.
  */
 export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+
+/**
+ * Every notation's name, as a sentence list.
+ *
+ * DERIVED, because the hand-written one went stale exactly as its own comment
+ * warned: `/api/mcp`'s handshake enumerated nine notations for a release after
+ * the tenth shipped, and the handshake is the first thing a connecting client
+ * reads — so an agent asked for a breakdown learned there that this server
+ * does not draw one. The COUNT beside it was derived and stayed right, which
+ * is the whole argument for deriving the list too.
+ */
+export function notationSentenceList(): string {
+  const names = (Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]).map(
+    (kind) => EXAMPLE_NOTATION_LABEL[kind],
+  );
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(", ")} and ${last}`;
+}
 
 /**
  * The notations `get_syntax_reference` does NOT teach.
@@ -1042,6 +1063,21 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     ],
   },
   {
+    name: "choose_notation",
+    title: "Choose a notation",
+    description:
+      `Which of the ${DOCUMENT_KIND_COUNT} notations answers this request. ` +
+      "Returns the QUESTION each one answers, the fact that separates the " +
+      "pairs readers actually confuse (C4 against a tree, a gantt against a " +
+      "timeline, a flowchart against a lifecycle), the header line each " +
+      "document opens with, and the validator to check it with. Call this " +
+      "BEFORE writing any `.alab`, when a request could fit more than one " +
+      "kind. It deliberately does not rank: it has one sentence and you have " +
+      "the conversation behind it, so a confident wrong ranking would be " +
+      "worse than none. If two still fit, put both to your human.",
+    args: [],
+  },
+  {
     name: "validate_tree",
     title: "Validate a decomposition tree",
     description:
@@ -1244,6 +1280,14 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "that fills none of the columns the document promised, and a branch far " +
       "deeper than its siblings. No Mermaid dialect is accepted yet.",
     tools: toolsNamed("validate_tree", "format_tree"),
+  },
+  {
+    id: "choose",
+    title: "Choosing a notation",
+    blurb:
+      "Which document kind answers the request, and what separates the ones " +
+      "readers confuse. Read before writing, not after.",
+    tools: toolsNamed("choose_notation"),
   },
   {
     id: "share",

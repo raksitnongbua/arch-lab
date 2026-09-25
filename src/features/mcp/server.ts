@@ -41,6 +41,7 @@ import { formatGantt, validateGantt } from "./tools/gantt";
 import { formatTimeline, validateTimeline } from "./tools/timeline";
 import { formatLifecycle, validateLifecycle } from "./tools/lifecycle";
 import { formatTree, validateTree } from "./tools/tree";
+import { chooseNotation } from "./tools/choose";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -375,6 +376,12 @@ export function registerArchLabMcp(server: McpServer): void {
       inputSchema: { source: TREE_SOURCE_SCHEMA },
     },
     ({ source }) => formatTree(source),
+  );
+
+  server.registerTool(
+    "choose_notation",
+    { ...config("choose_notation"), inputSchema: {} },
+    () => chooseNotation(),
   );
 
   /* ---- convert ----------------------------------------------------------- */
