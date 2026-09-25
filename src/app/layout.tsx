@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 
 import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
@@ -257,33 +256,48 @@ export default function RootLayout({
             opts in. Same technique and same reason as the next-themes script
             above it.
 
-            WHY `next/script` AND NOT A BARE `<script>`. Moving the tag up here
-            was not enough. React 19 warns "Encountered a script tag while
-            rendering React component" for ANY script element it renders on the
-            client, and the root layout does get re-rendered client-side — a
-            Fast Refresh in dev is enough, and the warning fired on
-            `/live/sequence` with no share link in sight. The warning is also
-            correct: a client-rendered script tag is inserted and never
-            executed, so on that path the tag was pure noise.
-            `strategy="beforeInteractive"` is the sanctioned way to say what
-            this needs — Next injects the source into the initial HTML, where
-            it runs before hydration, and renders nothing into the React tree
-            at all. `beforeInteractive` is only legal in the root layout, which
-            is a second reason the tag lives here. */}
-        <Script
+            WHY A BARE `<script>` AND NOT `next/script`. This was a
+            `<Script strategy="beforeInteractive">` for a while, on the belief
+            that Next injected the source into the initial HTML and rendered
+            nothing into the React tree. THAT IS NOT WHAT IT DOES for an inline
+            script in the app directory. `next/dist/client/script.js` returns a
+            real `<script>` element whose body is
+            `(self.__next_s=self.__next_s||[]).push(...)`, so the code is
+            QUEUED for Next's runtime rather than run by the parser — which was
+            visible in the built HTML — and a script element is rendered
+            either way.
+
+            That cost the thing this tag exists for. The flag has to be set
+            BEFORE THE FIRST PAINT of a fresh document, and only the parser can
+            promise that; a queue drained by the framework runtime cannot. So
+            the tag is bare again, where `location.hash` is read while the
+            parser is still in `<head>`.
+
+            THE REACT WARNING IS EXPECTED HERE, and is dev-only: "Encountered a
+            script tag while rendering React component" exists only in
+            react-dom's development build. React logs it whenever it renders a
+            script element on the CLIENT, and the root layout is client-rendered
+            by Fast Refresh. On that path the tag is indeed inert — but that
+            path is a dev re-render of a document whose parser already ran this
+            script, so nothing is lost by it. Production never logs it and
+            never needs to: the tag is parsed, not rendered. */}
+        <script
           id="share-forward-flag"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
         />
         {/* THE DEFAULT THEME, resolved from the reader's system preference
             before anything paints. It has to run before next-themes' own
             blocking script — which is inside `<Providers>`, in the body — and
-            `beforeInteractive` puts it in <head>, which is what guarantees the
-            order. The whole argument, including what it deliberately does NOT
-            do, is in `lib/theme-default.ts`. */}
-        <Script
+            being parsed here in <head> is what guarantees that order.
+
+            BARE, FOR THE REASON ABOVE, and this one needed it more: under
+            `next/script` the body was queued onto `self.__next_s` and drained
+            by the framework runtime, so it no longer reliably beat the
+            next-themes script it exists to precede — an ordering this file
+            claimed and had stopped enforcing. The whole argument, including
+            what it deliberately does NOT do, is in `lib/theme-default.ts`. */}
+        <script
           id="theme-default"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_DEFAULT_SCRIPT }}
         />
         <Providers>
