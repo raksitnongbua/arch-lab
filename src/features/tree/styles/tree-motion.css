@@ -122,7 +122,7 @@
      to readable without following the wire back. Faint on purpose: at full
      strength ten of these become a second set of connectors. */
   border-left: 3px solid
-    color-mix(in oklab, var(--ac, var(--border)) 45%, transparent);
+    color-mix(in oklab, var(--ac, var(--border)) 22%, transparent);
   background: var(--card);
   transition:
     opacity 180ms ease,
@@ -136,7 +136,7 @@
      that would put it inside one of its own children's branches. */
   border-left-color: color-mix(
     in oklab,
-    var(--muted-foreground) 45%,
+    var(--muted-foreground) 22%,
     transparent
   );
   background: var(--muted);
