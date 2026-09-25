@@ -12,7 +12,9 @@
  */
 
 import {
+  DEFAULT_THEME,
   DEFAULT_THEME_BY_SCHEME,
+  THEMES,
   THEME_FOLLOW_STORAGE_KEY,
   THEME_STORAGE_KEY,
   type Theme,
@@ -71,6 +73,31 @@ export function themeForScheme(prefersDark: boolean): Theme {
  *
  * The resolve is computed BEFORE either write, so a missing `matchMedia` leaves
  * storage exactly as it found it rather than a flag with no theme beside it.
+ *
+ * ── IT ALSO STAMPS THE CLASS NOW, WHICH WAS NEXT-THEMES' JOB ──────────────
+ *
+ * `ThemeProvider` renders its own blocking script and offers no way to turn it
+ * off, and React logs "Encountered a script tag while rendering React
+ * component" for every script ELEMENT it renders on the client — which the
+ * root layout does on each Fast Refresh. The two scripts this repo owns avoid
+ * that by being injected as raw HTML (`app/layout.tsx`); a dependency's cannot
+ * be.
+ *
+ * So the pre-paint work moved here and next-themes' copy is made inert with a
+ * non-executable `type` through `scriptProps`. React skips the warning for a
+ * script it knows the browser will not run (`isScriptDataBlock`), and nothing
+ * is lost, because the four lines below do exactly what that script did:
+ *
+ *   attribute="class", enableSystem={false}, no `value` map, and
+ *   enableColorScheme left at its default — which reduces their script to
+ *   "read the key or fall back to `defaultTheme`, swap the class, and set
+ *   `style.colorScheme` for light and dark".
+ *
+ * THE THREE VALUES BELOW ARE THE ONES `app/providers.tsx` PASSES, and they are
+ * imported rather than retyped so the two cannot disagree. If that component
+ * ever gains `enableSystem`, a `value` map, or a second attribute, this script
+ * has to grow the same branch — next-themes' script is no longer there to
+ * cover the difference.
  */
 export const THEME_DEFAULT_SCRIPT =
   `try{var t=${JSON.stringify(THEME_STORAGE_KEY)},` +
@@ -79,4 +106,11 @@ export const THEME_DEFAULT_SCRIPT =
   `var v=matchMedia(${JSON.stringify(DARK_SCHEME_QUERY)}).matches?` +
   `${JSON.stringify(DEFAULT_THEME_BY_SCHEME.dark)}:` +
   `${JSON.stringify(DEFAULT_THEME_BY_SCHEME.light)};` +
-  `localStorage.setItem(t,v);if(s===null)localStorage.setItem(f,"1")}}catch(e){}`;
+  `localStorage.setItem(t,v);if(s===null)localStorage.setItem(f,"1")}` +
+  /* THE STAMP, which used to be next-themes' job — see the block comment
+     above `THEME_STAMP` for why it moved here. */
+  `var m=document.documentElement,` +
+  `c=localStorage.getItem(t)||${JSON.stringify(DEFAULT_THEME)};` +
+  `m.classList.remove(...${JSON.stringify([...THEMES])});m.classList.add(c);` +
+  `if(c==="light"||c==="dark")m.style.colorScheme=c;` +
+  `}catch(e){}`;
