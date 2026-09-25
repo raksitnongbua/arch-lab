@@ -276,8 +276,16 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  /* SAFE centring, not plain `center`. A flex container that centres content
+     TALLER OR WIDER than itself pushes the overflow out of BOTH ends, and the
+     start edge of a scroll container is unreachable — so a shared link to a
+     big tree opened mid-diagram with the top scrolled away and no way to
+     reach it. `safe` falls back to `start` exactly when the content overflows,
+     which keeps the small-tree case centred and makes the large one
+     scrollable. It is the fix for this specific bug rather than a preference:
+     `margin: auto` on the child is the older spelling of the same thing. */
+  align-items: safe center;
+  justify-content: safe center;
   gap: 0.6rem;
   width: 100%;
   min-width: 0;
