@@ -81,7 +81,7 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
    are the proof it was the right trade: the seventh notation cost this string
    ONE character, the eighth cost it NONE and the ninth cost it NONE either,
    where the enumeration would have wanted twelve, then nineteen, then eleven
-   more it did not have. "nine notations" is one word where nine names are a
+   more it did not have. "ten notations" is one word where nine names are a
    hundred characters, and it is the half a reader can act on:
    the names are in the notation cards on the home page, in the JSON-LD
    `featureList` derived from those cards, in `/live`'s own description and in
@@ -102,7 +102,7 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
    and the sentence an assistant asked "what is arch-lab" is most likely to
    quote. */
 export const APP_DESCRIPTION =
-  "Beautiful architecture diagrams in nine notations, written as plain text or edited on the canvas. An AI agent can author them over MCP or an Agent Skill.";
+  "Beautiful architecture diagrams in ten notations, written as plain text or edited on the canvas. An AI agent can author them over MCP or an Agent Skill.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

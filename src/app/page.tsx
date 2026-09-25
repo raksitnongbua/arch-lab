@@ -8,6 +8,7 @@ import {
   Layers,
   MessagesSquare,
   MousePointerClick,
+  ListTree,
   Repeat2,
   Table2,
   TableProperties,
@@ -150,7 +151,7 @@ type Notation = keyof typeof CANVAS_EDIT_OFFERS.move;
  * is the exact claim that went stale five times on this branch.
  *
  * Two words, not a sentence: the cards are a grid a reader scans to answer "can
- * I drag this one", and `CANVAS_EDITING_PASSAGE` — in "How you actually use it",
+ * I drag this one", and `CANVAS_EDITING_PASSAGE` — in "How you use it",
  * below — has already said what a canvas gesture writes. A card that repeated it
  * nine times would bury the difference it exists to show.
  */
@@ -162,7 +163,7 @@ function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
 }
 
 /**
- * The nine notations, in the order the docs and the playground list them.
+ * The ten notations, in the order the docs and the playground list them.
  *
  * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
  * and was deliberately cut — read the note above before restoring it by
@@ -283,6 +284,14 @@ const KINDS: readonly {
     feature: "Lifecycles",
     body: KIND_BLURB.lifecycle,
     href: "/live?d=lc",
+  },
+  {
+    icon: ListTree,
+    name: "Decomposition tree",
+    notation: "tree",
+    feature: "Decomposition trees",
+    body: KIND_BLURB.tree,
+    href: "/live?d=tr",
   },
 ];
 
@@ -580,7 +589,7 @@ export default function Home() {
           comment says a newcomer should reach "what do I do with it" fast.
 
           What the page did NOT have anywhere was the plain sentence "it draws
-          these nine kinds". That is the thing a search result and an assistant
+          these ten kinds". That is the thing a search result and an assistant
           summary both need, so the space went to saying it once, in prose, with
           a link per kind. */}
       <section
@@ -588,13 +597,13 @@ export default function Home() {
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
         <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-          Nine notations
+          Ten notations
         </p>
         <h2
           id="kinds-heading"
           className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
         >
-          One text format, nine kinds of document
+          One text format, ten kinds of document
         </h2>
         <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
           The same editor, viewer, share link and export for all of them — and
@@ -623,7 +632,7 @@ export default function Home() {
                       what turns nine cards into the grid a reader came for:
                       seven say "text", two say "text or canvas", and "can I
                       drag this one" is answered without opening any of them.
-                      Nine labels pinned to the card's right edge read as a column.
+                      Ten labels pinned to the card's right edge read as a column.
 
                       IT SITS AFTER THE NAME rather than up on the icon row, and
                       that is an accessibility decision, not a visual one: the
@@ -830,7 +839,7 @@ export default function Home() {
             id="start-heading"
             className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
           >
-            How you actually use it
+            How you use it
           </h2>
           {/* THE CITATION PASSAGE LIVES HERE, not in the hero.
 

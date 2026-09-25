@@ -137,6 +137,7 @@ const KINDS: readonly { name: string; phase: string }[] = [
   { name: "Gantt", phase: "af-hero-kind-7" },
   { name: "Timeline", phase: "af-hero-kind-8" },
   { name: "Lifecycle", phase: "af-hero-kind-9" },
+  { name: "Tree", phase: "af-hero-kind-10" },
 ];
 
 /**
@@ -177,6 +178,14 @@ const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
     name: "Order lifecycle",
     meta: "5 states · 2 ways out",
     phase: "af-hero-kind-9",
+  },
+  /* TWO COUNTS, and the first of them is the depth — which is the fact this
+     notation has that none of the nine above do. "12 items" alone would
+     describe a data dictionary; the depth is what makes it a breakdown. */
+  {
+    name: "Checkout, broken down",
+    meta: "3 levels · 2 columns",
+    phase: "af-hero-kind-10",
   },
 ];
 
@@ -440,6 +449,9 @@ export function HeroDiagram({ className }: { className?: string }) {
           </div>
           <div className="af-hero-kind af-hero-kind-9 absolute inset-0">
             <LifecyclePanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-10 absolute inset-0">
+            <TreePanel />
           </div>
         </div>
       </div>
@@ -2784,6 +2796,143 @@ function LifecyclePanel() {
             >
               {row.label}
             </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tree                                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The decomposition tree's miniature — a root, three children, and the two
+ * leaf columns that are the notation's second half.
+ *
+ * HAND-SET GEOMETRY, like every panel here, and for the reason the file header
+ * gives: the hero must draw at 350×336 whatever the real solver would choose
+ * for a pane, and calling `layoutTree` would size it for a pane that does not
+ * exist. What it does copy is the SHAPE of the solve — one column per depth,
+ * one row per leaf, the parent centred on its children's centres, and the cell
+ * columns aligned right of the deepest node column — so the miniature is a
+ * small true drawing rather than an impression of one.
+ */
+const TREE_ROWS = [88, 160, 232] as const;
+const TREE_BEAT = { root: 0, kids: 0.35, cells: 0.7 } as const;
+
+function TreePanel() {
+  const rootY = (TREE_ROWS[0] + TREE_ROWS[TREE_ROWS.length - 1]) / 2;
+  const kids = [
+    { id: "cart", label: "Cart", owner: "Web" },
+    { id: "pay", label: "Payment", owner: "Payments" },
+    { id: "ship", label: "Shipping", owner: "Fulfilment" },
+  ];
+  const elbowX = 118;
+
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* The two column headers, which are what tells a reader at a glance
+          that this notation carries prose beside the tree. */}
+      <text
+        className="af-hero-fade"
+        style={delay(TREE_BEAT.cells)}
+        x={196}
+        y={52}
+        fontSize={8}
+        letterSpacing={1.1}
+        fill="var(--muted-foreground)"
+      >
+        PART
+      </text>
+      <text
+        className="af-hero-fade"
+        style={delay(TREE_BEAT.cells)}
+        x={272}
+        y={52}
+        fontSize={8}
+        letterSpacing={1.1}
+        fill="var(--muted-foreground)"
+      >
+        OWNER
+      </text>
+
+      <g className="af-hero-fade" style={delay(TREE_BEAT.root)}>
+        <rect
+          x={14}
+          y={rootY - 22}
+          width={86}
+          height={44}
+          fill="var(--muted)"
+          stroke="var(--border)"
+        />
+        <text
+          x={26}
+          y={rootY}
+          dominantBaseline="central"
+          fontSize={12}
+          fontWeight={600}
+          fill="var(--foreground)"
+        >
+          Checkout
+        </text>
+      </g>
+
+      {kids.map((kid, index) => {
+        const y = TREE_ROWS[index];
+        return (
+          <g key={kid.id}>
+            <path
+              className="af-hero-fade"
+              style={delay(TREE_BEAT.kids)}
+              d={`M 100 ${rootY} H ${elbowX} V ${y} H 136`}
+              stroke="var(--chart-1)"
+              strokeWidth={1.6}
+            />
+            <g className="af-hero-fade" style={delay(TREE_BEAT.kids)}>
+              <rect
+                x={136}
+                y={y - 21}
+                width={92}
+                height={42}
+                fill="var(--card)"
+                stroke="var(--border)"
+              />
+              <text
+                x={146}
+                y={y}
+                dominantBaseline="central"
+                fontSize={11}
+                fill="var(--foreground)"
+              >
+                {kid.label}
+              </text>
+            </g>
+            <g className="af-hero-fade" style={delay(TREE_BEAT.cells)}>
+              <rect
+                x={236}
+                y={y - 21}
+                width={100}
+                height={42}
+                fill="var(--card)"
+                stroke="var(--border)"
+                strokeOpacity={0.6}
+              />
+              <text
+                x={246}
+                y={y}
+                dominantBaseline="central"
+                fontSize={10}
+                fill="var(--muted-foreground)"
+              >
+                {kid.owner}
+              </text>
+            </g>
           </g>
         );
       })}

@@ -1,0 +1,381 @@
+/*
+ * The decomposition-tree canvas: paint and motion.
+ *
+ * PAINTS FROM SHARED TOKENS ONLY. There is no per-kind theme token here, which
+ * is why this kind owes no `check:tree-palette`: the six branch accents are
+ * the shared chart accents every theme already defines and measures, cycled by
+ * branch index. An author writes no colour, so a palette cannot ship
+ * half-populated (`purpose.md`).
+ *
+ * MOTION: none at rest, by the standing test in `new-diagram-type.md` — "would
+ * removing this motion lose information?" A tree's connectors carry nothing
+ * along them. A child is INSIDE its parent, not after it, so there is no order
+ * for an entrance to trace and no traffic for an ambient pulse to represent.
+ * The ER canvas is the precedent and the cautionary tale: motion was forced
+ * onto lines nothing travels, which cost a glow, an SVG filter and three
+ * commits chasing the bands that filter painted.
+ *
+ * What IS animated is the one thing that says something: hovering or focusing
+ * a node dims what is unrelated to it. That is a reader's own act, it carries
+ * information (which subtree am I in), and it is a fade rather than a repaint —
+ * no stroke, fill, width or arrowhead changes in either direction.
+ */
+
+.aft-tree {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.aft-tree-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+/* Wide content scrolls in its own container; the page never scrolls sideways.
+   IT PAINTS NO GROUND. The first draft gave this a card background and a
+   border, which covered the pane's ruled ground and made this the one canvas
+   of the ten sitting on its own colour. The ground belongs to the pane
+   (`components/tree-viewer.tsx`); everything here is transparent so it shows
+   through. */
+.aft-tree-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: transparent;
+}
+
+/* THE DRAWING GETS A SURFACE; THE PANE KEEPS ITS GROUND. Two earlier attempts
+   were both wrong in opposite directions: a card on the scroll container
+   covered the ruled ground and made this the one canvas of the ten on its own
+   colour, and no surface at all left the grid running through the header row
+   and between every box, so the diagram read as floating on graph paper
+   rather than as one table.
+
+   This is the middle: a panel the size of the DRAWING, so the ground still
+   rules the pane around it and the reader can still see they are on the same
+   canvas as the other nine. It is mixed rather than opaque, so the ground
+   stays faintly visible THROUGH it — the drawing sits ON the grid rather than
+   punching a hole in it. */
+.aft-tree-stage {
+  position: relative;
+  font-size: 13px;
+  padding: 0;
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: var(--radius-sm, 2px);
+}
+
+.aft-tree-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Under the boxes, not over them: a connector arriving at a node should stop
+     at its edge, and letting it cross the fill would put a line through the
+     label. The boxes are opaque for exactly this reason. */
+  z-index: 0;
+}
+
+/* READS AGAINST THE GROUND, which is the whole reason these numbers are not
+   the obvious ones. A connector at 1.25px and 0.75 opacity is the same weight
+   as the pane's ruled ground, so the two lines blended and a reader had to
+   hunt for which line was the diagram. The ground is fixed, thin and regular;
+   a connector has to be none of those. It is heavier, fully opaque, and
+   carries its branch's accent — so it separates by WEIGHT and by COLOUR at
+   once, and still reads when the camera shrinks it. */
+.aft-tree-wire {
+  stroke: var(--ac, var(--muted-foreground));
+  stroke-width: 1.9;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.aft-tree-colhead {
+  position: absolute;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding-bottom: 6px;
+  /* The rule under a header is the table's own line, so it reads against the
+     drawing's surface rather than against the pane's ground. */
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+}
+
+.aft-tree-node {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  /* THE LEFT EDGE IS THICKER THAN THE OTHER THREE, on every node rather than
+     only on a branch. It is the one stroke that says "this box starts here" in
+     a drawing where boxes sit in columns and the eye is travelling left to
+     right, and carrying the node's own accent makes the branch a node belongs
+     to readable without following the wire back. Faint on purpose: at full
+     strength ten of these become a second set of connectors. */
+  border-left: 3px solid
+    color-mix(in oklab, var(--ac, var(--border)) 22%, transparent);
+  background: var(--card);
+  transition:
+    opacity 180ms ease,
+    background-color 180ms ease;
+}
+
+.aft-tree-node.is-root {
+  border-color: var(--border);
+  /* The root has no branch, so its stripe is the neutral token at the same
+     weight — it still reads as the start of a box without claiming an accent
+     that would put it inside one of its own children's branches. */
+  border-left-color: color-mix(
+    in oklab,
+    var(--muted-foreground) 22%,
+    transparent
+  );
+  background: var(--muted);
+}
+
+.aft-tree-node.is-root .aft-tree-label {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.aft-tree-node.is-branch {
+  border-color: color-mix(in oklab, var(--ac) 38%, transparent);
+  background: color-mix(in oklab, var(--ac) 9%, var(--card));
+}
+
+.aft-tree-node.is-branch .aft-tree-label {
+  color: var(--ac);
+  font-weight: 600;
+}
+
+.aft-tree-node.is-leaf {
+  border-color: color-mix(in oklab, var(--ac) 30%, var(--border));
+}
+
+.aft-tree-label {
+  line-height: 1.34;
+  font-weight: 500;
+}
+
+.aft-tree-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ac, var(--muted-foreground));
+}
+
+.aft-tree-cell {
+  position: absolute;
+  padding: 6px 11px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-left: 0;
+  /* THE SAME SURFACE TOKEN THE NODES USE. A cell sat on `--background` while
+     the node beside it sat on `--card`, which reads as two materials on one
+     row — and on the ruled pane the mismatch is exactly what made this canvas
+     look unlike the other nine. */
+  background: color-mix(in oklab, var(--card) 55%, transparent);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  transition: opacity 180ms ease;
+}
+
+.aft-tree-cell.is-alt {
+  background: color-mix(in oklab, var(--muted) 62%, transparent);
+}
+
+/* The six branch accents, cycled by index. Shared chart tokens, so every
+   theme has already defined and contrast-measured them. */
+.aft-b0 {
+  --ac: var(--chart-1);
+}
+.aft-b1 {
+  --ac: var(--chart-2);
+}
+.aft-b2 {
+  --ac: var(--chart-3);
+}
+.aft-b3 {
+  --ac: var(--chart-4);
+}
+.aft-b4 {
+  --ac: var(--chart-5);
+}
+.aft-b5 {
+  --ac: var(--chart-1);
+}
+.aft-root {
+  --ac: var(--border);
+}
+
+/* Hover dims what is unrelated. Opacity only — see the file header on why
+   nothing here repaints a stroke. */
+.aft-tree-stage:hover .aft-tree-node:not(:hover),
+.aft-tree-stage:focus-within .aft-tree-node:not(:focus-visible) {
+  opacity: 0.55;
+}
+
+.aft-tree-stage:hover .aft-tree-node:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aft-tree-node,
+  .aft-tree-cell,
+  .aft-tree-wire {
+    transition: none;
+  }
+}
+
+/* The app-wide idle-motion toggle, the second opt-out. */
+:root[data-motion="off"] .aft-tree-node,
+:root[data-motion="off"] .aft-tree-cell,
+:root[data-motion="off"] .aft-tree-wire {
+  transition: none;
+}
+
+/* The camera. The stage is laid out at its natural size and scaled down as one
+   piece, so every rule, gap and elbow shrinks by the same factor — scaling the
+   boxes individually would leave the connectors behind. */
+/* THE PANE FILLS THE WELL, and that is what makes the ground right rather
+   than a band. It was sized to its content, so the ruled ground stopped where
+   the drawing stopped and the rest of the well sat bare — the ground belongs
+   to the PANE (see the viewer), and a pane that only covers its content is a
+   pane that only rules part of what the reader sees. `flex: 1` with
+   `min-height: 0` is the arrangement the lifecycle pane next door uses.
+
+   CENTRED, because a solved layout has no reason to sit in a corner: the
+   drawing's size is whatever the text implies, so anchoring it top-left makes
+   a small tree look like a mistake in a large pane. */
+.aft-tree-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.5rem 1.25rem;
+  overflow: auto;
+}
+
+/* The height box must not be stretched by the centring above, or the drawing
+   would be pulled back to the top of a tall pane. */
+.aft-tree-pane > * {
+  flex: none;
+  max-width: 100%;
+}
+
+.aft-tree-camera {
+  transform-origin: top left;
+}
+
+/* Inside the camera the drawing is already sized to fit, so the scroller that
+   the standalone diagram needs would only ever add a dead scrollbar. */
+.aft-tree-camera .aft-tree-scroll {
+  overflow: visible;
+}
+
+/* The pane hosts the house zoom pill in its corner, so it has to be the
+   positioning context for it. */
+.aft-tree-pane {
+  position: relative;
+}
+
+/* A node is a button now, so it needs the button reset — without this the UA
+   stylesheet gives it a centred text block and its own font. */
+button.aft-tree-node {
+  align-items: stretch;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* FOCUS DIMS, IT DOES NOT REPAINT. Nothing here changes a stroke, a fill, a
+   width or an arrowhead in either direction — the standing rule in
+   `new-diagram-type.md`, which two kinds broke before it was written down.
+   Only opacity moves. */
+.aft-tree-node.is-dim,
+.aft-tree-cell.is-dim {
+  opacity: 0.25;
+}
+
+.aft-tree-wire.is-dim {
+  opacity: 0.15;
+}
+
+/* The hover dim is the resting behaviour and must not fight an explicit
+   focus: once a node is pressed, the lit set is the answer and passing the
+   pointer over a dimmed node should not relight it. */
+.aft-tree-stage:hover .aft-tree-node.is-dim:hover {
+  opacity: 0.25;
+}
+
+/* A cell is a button now, on the same terms as a node: the UA stylesheet would
+   otherwise centre its text, give it its own font and drop the wrapping. */
+button.aft-tree-cell {
+  display: block;
+  margin: 0;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+/* The connectors' hit targets. The wire layer itself takes no pointer events —
+   it spans the whole stage and would otherwise swallow every click meant for
+   the pane — so the two hit paths opt back in individually. */
+.aft-tree-wires {
+  pointer-events: none;
+}
+
+.aft-tree-wire-hit {
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+/* The column lanes. Behind everything — the nodes, the cells and the wires all
+   sit above them — and faint enough that they read as ground rather than as a
+   second set of boxes. Alternating rather than ruled: a hairline between every
+   pair of columns would be ten more lines competing with the connectors, which
+   is the noise the ruled ground was already tuned against. */
+.aft-tree-lane {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.aft-tree-lane.is-alt {
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+
+/* The wires and boxes were already above the lanes by source order; this makes
+   it explicit so a later edit cannot reorder them into invisibility. */
+.aft-tree-wires {
+  z-index: 1;
+}
+
+.aft-tree-node,
+.aft-tree-cell {
+  z-index: 2;
+}

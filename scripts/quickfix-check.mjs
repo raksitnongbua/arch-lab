@@ -182,7 +182,7 @@ function expect(condition, label, detail) {
 /**
  * A parse/serialize pair per document kind, keyed by the `SeedKind` the
  * bundled-example registry reports. Written out because the barrel exports
- * nine named functions rather than a table; `EXAMPLE_KINDS` is a total record
+ * ten named functions rather than a table; `EXAMPLE_KINDS` is a total record
  * on the registry side, so a tenth notation shows up here as an undefined
  * lookup and fails loudly at the first example it holds.
  */
@@ -196,6 +196,7 @@ const GRAMMARS = {
   gantt: [archtext.parseGanttText, archtext.serializeGanttText],
   timeline: [archtext.parseTimelineText, archtext.serializeTimelineText],
   lifecycle: [archtext.parseLifecycleText, archtext.serializeLifecycleText],
+  tree: [archtext.parseTreeText, archtext.serializeTreeText],
 };
 
 /** `{ ok }` or `{ issue }` — a parse attempt reduced to what this script reads. */

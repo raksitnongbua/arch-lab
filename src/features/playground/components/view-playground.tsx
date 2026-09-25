@@ -126,6 +126,7 @@ import {
   serializeGanttText,
   serializeTimelineText,
   serializeLifecycleText,
+  serializeTreeText,
 } from "@/features/archtext";
 import type { ArchTextIssue, FixCandidate } from "@/features/archtext";
 import {
@@ -169,6 +170,7 @@ import {
   LifecycleShareButton,
   LifecycleViewer,
 } from "@/features/lifecycle";
+import { TreeViewer } from "@/features/tree";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SEQUENCE_MOUSE_GESTURES,
@@ -283,6 +285,11 @@ const MERMAID_KIND_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
   dict: "Mermaid has no data-dictionary notation, so there is nothing to convert to",
   lifecycle:
     "Mermaid has no lifecycle notation — stateDiagram-v2 draws every transition that could happen, not one subject's actual ordered history",
+  /* MERMAID DOES HAVE A TREE — `mindmap` — so this refusal is narrower than
+     the two above it and says so: the notation exists, the conversion does
+     not. It carries labels with no ids and no columns, so it can only ever be
+     a one-way import, and that import is not built. */
+  tree: "Mermaid `mindmap` is a tree, but it carries no ids and no columns, so the conversion can only go one way and reading one in is not built yet",
 };
 
 /** The mirror of `MERMAID_IMPORT_CAVEATS`: what leaving for Mermaid drops. */
@@ -390,6 +397,7 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   gantt: "gantt",
   timeline: "timeline",
   lifecycle: "lifecycle",
+  tree: "tree",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -403,6 +411,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   gantt: "Gantt",
   timeline: "Timeline",
   lifecycle: "Lifecycle",
+  tree: "Tree",
 };
 
 export function ViewPlayground({
@@ -926,7 +935,9 @@ export function ViewPlayground({
                         ? serializeGanttText(doc.file)
                         : doc.kind === "timeline"
                           ? serializeTimelineText(doc.file)
-                          : serializeLifecycleText(doc.file),
+                          : doc.kind === "lifecycle"
+                            ? serializeLifecycleText(doc.file)
+                            : serializeTreeText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -2406,7 +2417,7 @@ export function ViewPlayground({
                      focusing one uncovers nothing a reader could be told
                      about. */
                   <TimelineViewer file={doc.file} />
-                ) : (
+                ) : doc.kind === "lifecycle" ? (
                   /* Nor this one, on the same terms: focusing a state lights
                      it and its own departures, all of which are already
                      drawn, so there is no revealed content for a live region
@@ -2415,6 +2426,13 @@ export function ViewPlayground({
                      its condition — which is more than an announcement could
                      say and is available to a keyboard user on tab. */
                   <LifecycleViewer file={doc.file} />
+                ) : (
+                  /* Nor this one, and for the plainest reason of the ten:
+                     nothing on this canvas moves at rest, so there is no
+                     revealed content for a live region to announce. The
+                     drawing carries one accessible name saying what it is and
+                     how many items it holds. */
+                  <TreeViewer file={doc.file} />
                 )}
                 {/* THE DIAGRAM'S OWN STRIP, UNDER the diagram, where the C4
                     shell has always put its equivalent: the drawing is what the

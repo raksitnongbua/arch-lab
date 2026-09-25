@@ -19,7 +19,7 @@ export const VIEW_SEED_PARAM = "d";
  * the flowchart one, `?d=uc`/`?d=usecase` the use-case one, `?d=er`/`?d=erd`
  * the ER one, `?d=dict`/`?d=dictionary` the dictionary one and
  * `?d=gt`/`?d=gantt` the gantt one, `?d=tl`/`?d=timeline` the milestone
- * timeline and `?d=lc`/`?d=lifecycle` the lifecycle; anything else seeds C4. Both spellings per kind because the short
+ * timeline and `?d=lc`/`?d=lifecycle` the lifecycle and `?d=tr`/`?d=tree` the decomposition tree; anything else seeds C4. Both spellings per kind because the short
  * one is what gets minted (`/live/seq`, `/live/flow`, `/live/uc`, `/live/er`,
  * `/live/gt`, `/live/tl`, `/live/lc` forward to it) and the long one is what gets typed
  * from memory. */
@@ -33,5 +33,6 @@ export function seedFromParam(value: string | string[] | undefined): SeedKind {
   if (first === "gt" || first === "gantt") return "gantt";
   if (first === "tl" || first === "timeline") return "timeline";
   if (first === "lc" || first === "lifecycle") return "lifecycle";
+  if (first === "tr" || first === "tree") return "tree";
   return "c4";
 }

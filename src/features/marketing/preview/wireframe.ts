@@ -38,6 +38,8 @@ import { loadGanttExample } from "@/features/gantt/service/example-service";
 import { loadLifecycleExample } from "@/features/lifecycle/service/example-service";
 import { loadSequenceExample } from "@/features/sequence/service/example-service";
 import { loadTimelineExample } from "@/features/timeline/service/example-service";
+import { loadTreeExample } from "@/features/tree/service/example-service";
+import { layoutTree } from "@/features/tree/lib/layout";
 import { loadUseCaseExample } from "@/features/usecase/service/example-service";
 /* Deep-imported for the reason the demo page states about its own imports:
    these features' barrels re-export `"use client"` canvases, and this module
@@ -765,6 +767,63 @@ function lifecycleWireframe(id: string): Wireframe | null {
 }
 
 /**
+ * The tree's preview, drawn from the real solver.
+ *
+ * THE ELBOWS ARE THE TELL. A preview of boxes alone would be indistinguishable
+ * from the dictionary's table next door; what says "tree" at thumbnail size is
+ * the bracket — one shared turn per parent, fanning into its children — so the
+ * connectors get the accent and the boxes stay quiet.
+ *
+ * The cell columns are drawn as `link`-toned rects rather than being left out:
+ * a preview showing only the nesting would sell the notation short by exactly
+ * the half that separates it from a mind map.
+ */
+function treeWireframe(id: string): Wireframe | null {
+  const result = loadTreeExample(id);
+  if (result.status !== "ok") return null;
+  const layout = layoutTree(result.file);
+  const shapes: WireShape[] = [];
+
+  for (const wire of layout.connectors) {
+    shapes.push({
+      s: "line",
+      points: [
+        { x: wire.fromX, y: wire.fromY },
+        { x: wire.elbowX, y: wire.fromY },
+        { x: wire.elbowX, y: wire.toY },
+        { x: wire.toX, y: wire.toY },
+      ],
+      tone: "accent",
+    });
+  }
+
+  for (const node of layout.placements) {
+    shapes.push({
+      s: "rect",
+      x: node.x,
+      y: node.y,
+      w: node.width,
+      h: node.height,
+      tone: node.depth === 0 ? "accent" : "body",
+    });
+    node.cells.forEach((text: string, index: number) => {
+      const column = layout.columns[index];
+      if (text === "" || column === undefined) return;
+      shapes.push({
+        s: "rect",
+        x: column.x,
+        y: node.y,
+        w: column.width,
+        h: node.height,
+        tone: "link",
+      });
+    });
+  }
+
+  return frame(shapes);
+}
+
+/**
  * The footprint a dropped label would have occupied.
  *
  * Not a measurement — this module draws no text and needs none. It is the
@@ -791,6 +850,7 @@ const ADAPTERS: Record<SeedKind, (id: string) => Wireframe | null> = {
   gantt: ganttWireframe,
   timeline: timelineWireframe,
   lifecycle: lifecycleWireframe,
+  tree: treeWireframe,
 };
 
 /**

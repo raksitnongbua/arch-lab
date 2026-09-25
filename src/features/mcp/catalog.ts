@@ -36,7 +36,10 @@ import { ICON_CATEGORY_ORDER } from "@/features/editor/lib/icons/categories";
    must stay pure data, and the playground barrel pulls in the editor. The
    module is server-safe by its own contract — its header says so — so nothing
    client-side rides along. */
-import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import {
+  EXAMPLE_NOTATION_LABEL,
+  KIND_BLURB,
+} from "@/features/playground/lib/kind-copy";
 import {
   GANTT_DATE_FORMAT,
   REFUSED_GANTT_DURATION_UNITS,
@@ -67,6 +70,24 @@ const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} c
  * is read by something that cannot look around and notice.
  */
 export const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+
+/**
+ * Every notation's name, as a sentence list.
+ *
+ * DERIVED, because the hand-written one went stale exactly as its own comment
+ * warned: `/api/mcp`'s handshake enumerated nine notations for a release after
+ * the tenth shipped, and the handshake is the first thing a connecting client
+ * reads — so an agent asked for a breakdown learned there that this server
+ * does not draw one. The COUNT beside it was derived and stayed right, which
+ * is the whole argument for deriving the list too.
+ */
+export function notationSentenceList(): string {
+  const names = (Object.keys(KIND_BLURB) as (keyof typeof KIND_BLURB)[]).map(
+    (kind) => EXAMPLE_NOTATION_LABEL[kind],
+  );
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(", ")} and ${last}`;
+}
 
 /**
  * The notations `get_syntax_reference` does NOT teach.
@@ -390,6 +411,17 @@ const LIFECYCLE_SOURCE_ARG: McpArgDoc = {
  * SEQUENCE_SOURCE_ARG, FLOWCHART_SOURCE_ARG and USECASE_SOURCE_ARG each name
  * only their own.
  */
+const TREE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    `The tree text: \`.alab\` tree (first line \`archlab 1.0 tree\`) ` +
+    `(${MAX_SOURCE_CHARS_TEXT}). There is no Mermaid dialect accepted here ` +
+    "yet: Mermaid's `mindmap` is a tree, but it carries labels with no ids " +
+    "and no columns, so importing it can only ever be one-way and it is not " +
+    "built. This tool answers in `.alab`.",
+};
+
 const SHARE_SOURCE_ARG: McpArgDoc = {
   name: "source",
   required: true,
@@ -441,6 +473,7 @@ export const MCP_ARG_DOCS = {
   ganttSource: GANTT_SOURCE_ARG,
   timelineSource: TIMELINE_SOURCE_ARG,
   lifecycleSource: LIFECYCLE_SOURCE_ARG,
+  treeSource: TREE_SOURCE_ARG,
   shareSource: SHARE_SOURCE_ARG,
   format: FORMAT_ARG,
 } as const;
@@ -1029,6 +1062,44 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       },
     ],
   },
+  {
+    name: "choose_notation",
+    title: "Choose a notation",
+    description:
+      `Which of the ${DOCUMENT_KIND_COUNT} notations answers this request. ` +
+      "Returns the QUESTION each one answers, the fact that separates the " +
+      "pairs readers actually confuse (C4 against a tree, a gantt against a " +
+      "timeline, a flowchart against a lifecycle), the header line each " +
+      "document opens with, and the validator to check it with. Call this " +
+      "BEFORE writing any `.alab`, when a request could fit more than one " +
+      "kind. It deliberately does not rank: it has one sentence and you have " +
+      "the conversation behind it, so a confident wrong ranking would be " +
+      "worse than none. If two still fit, put both to your human.",
+    args: [],
+  },
+  {
+    name: "validate_tree",
+    title: "Validate a decomposition tree",
+    description:
+      "Check whether `.alab` tree text is valid, and if not, exactly where it " +
+      "breaks. On success, reports the shape — how many nodes, how many are " +
+      "leaves, how deep it runs — plus the defects a parse cannot see: a " +
+      "branch with one child, which is a rename rather than a breakdown; a " +
+      "leaf that fills none of the columns the document promised; depths left " +
+      "unnamed when others are named; and one branch far deeper than its " +
+      `siblings. ${KIND_BLURB.tree}.`,
+    args: [TREE_SOURCE_ARG],
+  },
+  {
+    name: "format_tree",
+    title: "Format a decomposition tree",
+    description:
+      "Rewrite `.alab` tree text into its canonical form — one indent step " +
+      "per level, continuations in schema order, trailing empty cells " +
+      "trimmed. Byte-identical on text that is already canonical, so it is " +
+      "safe to run on every save.",
+    args: [TREE_SOURCE_ARG],
+  },
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -1199,6 +1270,24 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "list_example_models",
       "get_example_model",
     ),
+  },
+  {
+    id: "tree",
+    title: "Decomposition trees",
+    blurb:
+      "The same check-and-format loop for a breakdown of any depth — plus the " +
+      "findings only this tool can make: a level that splits nothing, a row " +
+      "that fills none of the columns the document promised, and a branch far " +
+      "deeper than its siblings. No Mermaid dialect is accepted yet.",
+    tools: toolsNamed("validate_tree", "format_tree"),
+  },
+  {
+    id: "choose",
+    title: "Choosing a notation",
+    blurb:
+      "Which document kind answers the request, and what separates the ones " +
+      "readers confuse. Read before writing, not after.",
+    tools: toolsNamed("choose_notation"),
   },
   {
     id: "share",

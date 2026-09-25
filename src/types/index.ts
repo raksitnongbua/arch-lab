@@ -8,3 +8,4 @@ export * from "./dict";
 export * from "./gantt";
 export * from "./timeline";
 export * from "./lifecycle";
+export * from "./tree";

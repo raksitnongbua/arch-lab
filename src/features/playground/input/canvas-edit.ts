@@ -513,6 +513,11 @@ export const CANVAS_EDIT_OFFERS: Record<
       ground: "grammar",
       because: NO_POSITION_IN_THE_TEXT,
     },
+    tree: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
   },
   revise: {
     sequence: {
@@ -773,6 +778,11 @@ export const CANVAS_EDIT_OFFERS: Record<
       ground: "surface",
       because: NO_EDITOR_ON_THIS_CANVAS,
     },
+    tree: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
   },
   create: {
     c4: {
@@ -901,6 +911,11 @@ export const CANVAS_EDIT_OFFERS: Record<
        placements, which is the change that would stop the track being
        declaration order. */
     lifecycle: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    tree: {
       offers: false,
       ground: "grammar",
       because: NO_PLACE_IN_THE_TEXT,
@@ -1042,6 +1057,18 @@ export const CANVAS_EDIT_OFFERS: Record<
         "are written in, not because of lines between them, so there is no " +
         "connection to draw.",
     },
+    /* THE REFUSAL THAT IS THE NOTATION. A drawn connection here would be an
+       edge between two nodes, and an edge is exactly what `src/types/tree.ts`
+       refuses to have: a child is INSIDE its parent because it is nested
+       under it, and the first node-to-node edge turns this into the flowchart
+       the product already has. This cell must never become `offers: true`. */
+    tree: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "A tree's lines mean containment, and containment is written by " +
+        "nesting one node under another, so there is no connection to draw.",
+    },
   },
   /* THE FIFTH ROW. Every cell is written out, including the six that give the
      same answer, so a tenth notation is a compile error with ten blanks
@@ -1122,6 +1149,11 @@ export const CANVAS_EDIT_OFFERS: Record<
       because: NO_EDITOR_ON_THE_HEADING,
     },
     lifecycle: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THE_HEADING,
+    },
+    tree: {
       offers: false,
       ground: "surface",
       because: NO_EDITOR_ON_THE_HEADING,

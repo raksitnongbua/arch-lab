@@ -40,6 +40,8 @@ import { formatDict, validateDict } from "./tools/dict";
 import { formatGantt, validateGantt } from "./tools/gantt";
 import { formatTimeline, validateTimeline } from "./tools/timeline";
 import { formatLifecycle, validateLifecycle } from "./tools/lifecycle";
+import { formatTree, validateTree } from "./tools/tree";
+import { chooseNotation } from "./tools/choose";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -86,6 +88,10 @@ const LIFECYCLE_SOURCE_SCHEMA = z
   .describe(MCP_ARG_DOCS.lifecycleSource.description);
 
 /* `create_share_link` accepts EVERY document kind — see tools/share.ts. */
+const TREE_SOURCE_SCHEMA = z
+  .string()
+  .describe(MCP_ARG_DOCS.treeSource.description);
+
 const SHARE_SOURCE_SCHEMA = z
   .string()
   .describe(MCP_ARG_DOCS.shareSource.description);
@@ -352,6 +358,30 @@ export function registerArchLabMcp(server: McpServer): void {
       inputSchema: { source: LIFECYCLE_SOURCE_SCHEMA },
     },
     ({ source }) => formatLifecycle(source),
+  );
+
+  server.registerTool(
+    "validate_tree",
+    {
+      ...config("validate_tree"),
+      inputSchema: { source: TREE_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateTree(source),
+  );
+
+  server.registerTool(
+    "format_tree",
+    {
+      ...config("format_tree"),
+      inputSchema: { source: TREE_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatTree(source),
+  );
+
+  server.registerTool(
+    "choose_notation",
+    { ...config("choose_notation"), inputSchema: {} },
+    () => chooseNotation(),
   );
 
   /* ---- convert ----------------------------------------------------------- */

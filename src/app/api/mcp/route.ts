@@ -24,6 +24,7 @@ import { createMcpHandler } from "mcp-handler";
 import { registerArchLabMcp } from "@/features/mcp";
 import {
   DOCUMENT_KIND_COUNT,
+  notationSentenceList,
   KINDS_WITH_SYNTAX_SECTIONS,
   MCP_STABILITY_NOTICE_SHORT,
   MCP_SERVER_NAME,
@@ -54,11 +55,11 @@ const handler = createMcpHandler(
       // reads — so an agent asked for a plan or a schema learned from the
       // handshake that this server draws boxes and lines, and wrote one.
       `arch-lab reads and writes ${DOCUMENT_KIND_COUNT} notations of ` +
-      "diagram as plain `.alab` text — C4 architecture models (also as " +
-      "arch-lab JSON and Mermaid C4), sequence diagrams, flowcharts, " +
-      "use-case diagrams, ER schemas, data dictionaries, gantt charts, " +
-      "milestone timelines and lifecycles. Call list_example_models when a " +
-      "request could fit more than one of them. You already have file tools, " +
+      `diagram as plain \`.alab\` text: ${notationSentenceList()}. The C4 ` +
+      "model also reads as arch-lab JSON and Mermaid C4. Call " +
+      "choose_notation BEFORE writing anything when a request could fit more " +
+      "than one of them — it gives the question each notation answers and the " +
+      "fact that separates the ones readers confuse. You already have file tools, " +
       "so read and write .alab files yourself and use this server for what " +
       "it knows that you cannot: the exact grammar (get_syntax_reference, " +
       `which covers ${KINDS_WITH_SYNTAX_SECTIONS.length} of the ` +
