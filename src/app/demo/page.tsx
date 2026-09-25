@@ -20,6 +20,10 @@ import { listDictExamples } from "@/features/dict/service/example-service";
 import { listGanttExamples } from "@/features/gantt/service/example-service";
 import { listTimelineExamples } from "@/features/timeline/service/example-service";
 import { listTreeExamples } from "@/features/tree/service/example-service";
+import {
+  DOCUMENT_KIND_COUNT_WORD,
+  notationNameList,
+} from "@/features/playground/lib/kind-copy";
 import { listLifecycleExamples } from "@/features/lifecycle/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 import { KIND_MARK, KIND_ORDER } from "@/components/ui/kind-mark";
@@ -30,7 +34,7 @@ export const metadata: Metadata = {
      date the day ER and the data dictionary shipped, with no room to add them.
      The sections on this page name all nine in prose, which is where a crawler
      reads them. 50 characters. */
-  title: "Examples — finished diagrams in nine notations",
+  title: `Examples — finished diagrams in ${DOCUMENT_KIND_COUNT_WORD} notations`,
   /* Measured at 156. The kind list survives here where the site description
      gave its own up, because this route's whole job is "which kinds are there,
      with worked documents" — and it is the enumeration that ranks for
@@ -40,7 +44,7 @@ export const metadata: Metadata = {
      became "Bundled examples" to buy the lifecycle's — the noun was the only
      thing left that said nothing a reader could not see from the page. */
   description:
-    "Bundled examples of all nine kinds — C4, sequence, flowchart, use case, ER, dictionary, gantt, timeline and lifecycle — parsed by the real reader. Open one.",
+    `Bundled examples of all ${DOCUMENT_KIND_COUNT_WORD} kinds — ${notationNameList()} — parsed by the real reader. Open one.`,
   alternates: { canonical: "/demo" },
 };
 
@@ -446,7 +450,7 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents of all nine kinds, parsed by the same reader the app uses
+        Real documents of all {DOCUMENT_KIND_COUNT_WORD} kinds, parsed by the same reader the app uses
         — every preview below is the document&apos;s own geometry, not a
         mock-up. Click a card to open it in the playground, where its text is
         yours to edit, or take the read-only page listed under each section,

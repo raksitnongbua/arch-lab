@@ -7,6 +7,9 @@ import {
   OgKindMix,
 } from "@/features/marketing/og/card";
 import { APP_NAME } from "@/lib/constants";
+import {
+  DOCUMENT_KIND_COUNT_WORD,
+} from "@/features/playground/lib/kind-copy";
 
 /**
  * The site-wide social card, generated at deploy time from JSX instead of
@@ -60,7 +63,7 @@ export default function OpenGraphImage() {
       eyebrow=".alab — plain text on disk"
       headline="Architecture diagrams"
       headlineTail="you can present."
-      footer={`${APP_NAME} · nine notations · text or canvas`}
+      footer={`${APP_NAME} · ${DOCUMENT_KIND_COUNT_WORD} notations · text or canvas`}
       art={<OgKindMix />}
     />,
     size,

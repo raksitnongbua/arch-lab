@@ -96,6 +96,9 @@ registerHooks({
 
 const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
   await load("src/features/playground/input/canvas-edit.ts");
+const { DOCUMENT_KIND_COUNT_WORD, notationNameList } = await load(
+  "src/features/playground/lib/kind-copy.ts",
+);
 
 /**
  * `/llms-full.txt` AS IT IS ACTUALLY SERVED, not as it is written.
@@ -240,7 +243,14 @@ console.log("meta descriptions (the budget is what a SERP renders)");
  * routes are collected rather than skipped, and an interpolation this table
  * does not know is a failure rather than a blank.
  */
-const INTERPOLATIONS = { CANVAS_EDITABLE_SUMMARY };
+/* The values a route's description interpolates, so its REAL length is what
+   gets measured. A meta description is budgeted in characters, and a
+   placeholder measured as its own name is a budget nobody is keeping. */
+const INTERPOLATIONS = {
+  CANVAS_EDITABLE_SUMMARY,
+  DOCUMENT_KIND_COUNT_WORD,
+  "notationNameList()": notationNameList(),
+};
 
 const unmeasured = [];
 for (const [route, file, constantName] of ROUTES) {
