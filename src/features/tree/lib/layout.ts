@@ -148,6 +148,17 @@ export interface TreeLayout {
   height: number;
   /** The deepest depth present, so callers can size a column rule. */
   maxDepth: number;
+  /**
+   * One band per vertical column — every depth, then every cell column.
+   *
+   * WHY THE DRAWING NEEDS THESE AT ALL: a tree centres its root, so the
+   * outermost column holds one box and a great deal of nothing, and the same
+   * is true of every branch column above a deep subtree. Without a band the
+   * emptiness reads as a rendering fault rather than as the shape of the
+   * document. The band gives an empty column an identity, which is what the
+   * separators in a test-plan table do.
+   */
+  lanes: { x: number; width: number; depth: number | null }[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -279,11 +290,26 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
       ? cellsStart + columnCount * cellWidth
       : xForDepth(maxDepth) + nodeWidth;
 
+  /* Depth lanes span the node column plus the gap after it, so the elbow
+     between two depths sits INSIDE the parent's lane rather than in a seam. */
+  const lanes: { x: number; width: number; depth: number | null }[] = [];
+  for (let depth = 0; depth <= maxDepth; depth += 1) {
+    lanes.push({
+      x: xForDepth(depth) - (depth === 0 ? padding : depthGap / 2),
+      width: nodeWidth + depthGap,
+      depth,
+    });
+  }
+  for (const column of columns) {
+    lanes.push({ x: column.x, width: column.width, depth: null });
+  }
+
   return {
     placements,
     connectors,
     columns,
     levels,
+    lanes,
     width: contentRight + padding,
     height: padding + nextRow * (rowHeight + rowGap) - rowGap + padding,
     maxDepth,

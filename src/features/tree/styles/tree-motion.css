@@ -338,3 +338,30 @@ button.aft-tree-cell {
   stroke-width: 14;
   cursor: pointer;
 }
+
+/* The column lanes. Behind everything — the nodes, the cells and the wires all
+   sit above them — and faint enough that they read as ground rather than as a
+   second set of boxes. Alternating rather than ruled: a hairline between every
+   pair of columns would be ten more lines competing with the connectors, which
+   is the noise the ruled ground was already tuned against. */
+.aft-tree-lane {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.aft-tree-lane.is-alt {
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+
+/* The wires and boxes were already above the lanes by source order; this makes
+   it explicit so a later edit cannot reorder them into invisibility. */
+.aft-tree-wires {
+  z-index: 1;
+}
+
+.aft-tree-node,
+.aft-tree-cell {
+  z-index: 2;
+}

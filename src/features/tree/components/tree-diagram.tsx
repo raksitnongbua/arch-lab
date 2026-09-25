@@ -94,6 +94,21 @@ export function TreeDiagram({
             ))}
           </svg>
 
+          {/* THE LANES, drawn first so everything else sits on them. A tree
+              centres its root, so the outermost column is one box and a lot of
+              nothing; a band gives that emptiness the identity of a column
+              instead of leaving it looking like a fault. Alternating, because
+              a rule between every pair would be ten hairlines competing with
+              the connectors for the reader's attention. */}
+          {layout.lanes.map((lane, index) => (
+            <div
+              key={`lane-${lane.depth ?? "c"}-${lane.x}`}
+              className={`aft-tree-lane${index % 2 === 1 ? "is-alt" : ""}`}
+              style={{ left: lane.x, width: lane.width, top: 0, bottom: 0 }}
+              aria-hidden="true"
+            />
+          ))}
+
           {layout.levels.map((level) => (
             <div
               key={`level-${level.x}`}
