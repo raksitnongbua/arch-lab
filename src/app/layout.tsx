@@ -216,6 +216,41 @@ const SHARE_FLAG_SCRIPT =
   `if(h&&new URLSearchParams(h).has(${JSON.stringify(SHARE_PARAM_MODEL)}))` +
   `document.documentElement.setAttribute(${JSON.stringify(SHARE_FORWARD_ATTRIBUTE)},"")}catch(e){}`;
 
+/**
+ * The two pre-paint scripts, as RAW HTML rather than as React elements.
+ *
+ * WHY A STRING AND NOT TWO `<script>` TAGS. React creates a real element for a
+ * rendered `<script>`, and logs "Encountered a script tag while rendering React
+ * component" whenever it does so on the client — which the root layout does on
+ * every Fast Refresh. There is no way to keep that quiet AND keep the script
+ * executable: react-dom's `isScriptDataBlock` suppresses the warning only for a
+ * `type` the browser will not run, and an `async src` script is hoisted as a
+ * resource, which is exactly the deferral these two cannot have.
+ *
+ * Handing the markup to a parent's `dangerouslySetInnerHTML` sidesteps the
+ * whole question, because the two sides behave differently in precisely the
+ * way this needs:
+ *
+ *   - ON THE SERVER the string is serialised into the document, so the PARSER
+ *     sees real `<script>` tags and runs them where it reaches them — the
+ *     parse-time execution both scripts exist for.
+ *   - ON THE CLIENT React sets `innerHTML`, and the HTML spec says scripts
+ *     inserted that way never execute. That is correct rather than a
+ *     compromise: the only client render of this layout is a dev re-render of a
+ *     document whose parser already ran both scripts.
+ *
+ * No script ELEMENT is ever created by React, so the warning has nothing to
+ * fire on.
+ *
+ * NEITHER BODY MAY CONTAIN `</script>`, which would close the tag early inside
+ * a raw string. Both are built from constants in this file and in
+ * `lib/theme-default.ts`; if either ever grows one it must be escaped as
+ * `<\/script>`.
+ */
+const PRE_PAINT_SCRIPTS_HTML =
+  `<script id="share-forward-flag">${SHARE_FLAG_SCRIPT}</script>` +
+  `<script id="theme-default">${THEME_DEFAULT_SCRIPT}</script>`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -231,85 +266,33 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
       <body className="flex min-h-full flex-col">
-        {/* PRE-PAINT SHARE FLAG. Stamps `data-share-forward` on <html> when the
-            URL carries a share payload, so the playground can hide its seeded
-            example — via CSS rules in globals.css — until the decoded document
-            replaces it, instead of flashing an example the visitor would take
-            for what they were sent.
+        {/* PRE-PAINT SCRIPTS. Two of them, injected as raw HTML for the
+            reason `PRE_PAINT_SCRIPTS_HTML` above gives at length.
 
-            IT LIVES HERE, in the root layout, and that is the whole point. It
-            used to sit inside `/live/page.tsx`, where React 19 logged
-            "Encountered a script tag while rendering React component" on every
-            client navigation to the route: a client render inserts the tag
-            without executing it, so the warning was correct and the script was
-            dead weight on that path. The root layout is rendered once, on the
-            server, and never re-rendered by client navigation — so the tag only
-            ever appears in parsed HTML, where an inline script does run.
+            THE FLAG stamps `data-share-forward` on <html> when the URL carries
+            a share payload, so the playground can hide its seeded example —
+            via CSS rules in globals.css — until the decoded document replaces
+            it, instead of flashing an example the visitor would take for what
+            they were sent. It has to be set before the FIRST PAINT of a fresh
+            document, which is how a pasted share link arrives; a client
+            navigation has already painted, and the playground's own hashchange
+            subscription handles it there.
 
-            That is also the only path that needs it. The pre-paint window
-            exists on a FRESH DOCUMENT LOAD, which is exactly how a pasted share
-            link arrives; a client navigation has already painted, and the
-            playground's own hashchange subscription handles it there.
+            THE THEME resolves the reader's system preference before anything
+            paints, and must run before next-themes' own blocking script, which
+            is inside `<Providers>` below. Being parsed above it is what
+            guarantees that order. The whole argument, including what it
+            deliberately does NOT do, is in `lib/theme-default.ts`.
 
-            Site-wide rather than route-scoped is deliberate: the flag states a
-            fact about the URL, not about a route, and nothing reads it unless it
-            opts in. Same technique and same reason as the next-themes script
-            above it.
+            SITE-WIDE RATHER THAN ROUTE-SCOPED is deliberate for the flag: it
+            states a fact about the URL, not about a route, and nothing reads
+            it unless it opts in.
 
-            WHY A BARE `<script>` AND NOT `next/script`. This was a
-            `<Script strategy="beforeInteractive">` for a while, on the belief
-            that Next injected the source into the initial HTML and rendered
-            nothing into the React tree. THAT IS NOT WHAT IT DOES for an inline
-            script in the app directory. `next/dist/client/script.js` returns a
-            real `<script>` element whose body is
-            `(self.__next_s=self.__next_s||[]).push(...)`, so the code is
-            QUEUED for Next's runtime rather than run by the parser — which was
-            visible in the built HTML — and a script element is rendered
-            either way.
-
-            That cost the thing this tag exists for. The flag has to be set
-            BEFORE THE FIRST PAINT of a fresh document, and only the parser can
-            promise that; a queue drained by the framework runtime cannot. So
-            the tag is bare again, where `location.hash` is read while the
-            parser is still in `<head>`.
-
-            THE REACT WARNING IS EXPECTED HERE, AND CANNOT BE REMOVED WITHOUT
-            LOSING THE GUARANTEE ABOVE. It has been investigated twice; this
-            paragraph exists so there is not a third time.
-
-            "Encountered a script tag while rendering React component" lives
-            only in react-dom's DEVELOPMENT build, is guarded by a module-level
-            `didWarnScriptTags` so it fires once per session rather than per
-            render, and is logged whenever React renders a script element on the
-            CLIENT — which the root layout does on Fast Refresh. Production
-            neither logs it nor needs to: the tag is parsed, not rendered.
-
-            The only escape React offers is `isScriptDataBlock`, which suppresses
-            the warning exclusively for a `type` the browser will NOT execute —
-            every JavaScript mime type, plus `module`, `importmap` and
-            `speculationrules`, still warns. An `async src` script would be
-            hoisted as a resource instead of warning, but `async` is precisely
-            the deferral this tag cannot have. So: executable at parse time and
-            one dev log, or silent and too late. This file chooses the former,
-            deliberately. */}
-        <script
-          id="share-forward-flag"
-          dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
-        />
-        {/* THE DEFAULT THEME, resolved from the reader's system preference
-            before anything paints. It has to run before next-themes' own
-            blocking script — which is inside `<Providers>`, in the body — and
-            being parsed here in <head> is what guarantees that order.
-
-            BARE, FOR THE REASON ABOVE, and this one needed it more: under
-            `next/script` the body was queued onto `self.__next_s` and drained
-            by the framework runtime, so it no longer reliably beat the
-            next-themes script it exists to precede — an ordering this file
-            claimed and had stopped enforcing. The whole argument, including
-            what it deliberately does NOT do, is in `lib/theme-default.ts`. */}
-        <script
-          id="theme-default"
-          dangerouslySetInnerHTML={{ __html: THEME_DEFAULT_SCRIPT }}
+            `hidden` on the wrapper because it is a carrier, not content — it
+            holds no rendered markup and must never take part in layout. */}
+        <div
+          hidden
+          dangerouslySetInnerHTML={{ __html: PRE_PAINT_SCRIPTS_HTML }}
         />
         <Providers>
           {/* ONE Toaster, for the whole app. It lived in `editor-shell.tsx`,
