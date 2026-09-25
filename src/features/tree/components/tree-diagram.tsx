@@ -175,7 +175,17 @@ export function TreeDiagram({
                 {node.leaf ? (
                   <span className="aft-tree-id">{node.id}</span>
                 ) : null}
-                <span className="aft-tree-label">{node.label}</span>
+                {/* THE LINES THE LAYOUT WRAPPED, not a string for the browser
+                    to break. The export has no browser and must wrap itself;
+                    drawing from one shared wrap is what keeps the exported
+                    file identical to the screen rather than merely similar. */}
+                <span className="aft-tree-label">
+                  {node.labelLines.map((line, index) => (
+                    <span key={index} className="aft-tree-line">
+                      {line}
+                    </span>
+                  ))}
+                </span>
               </button>
 
               {node.cells.map((text, index) =>
@@ -212,7 +222,11 @@ export function TreeDiagram({
                       height: node.height,
                     }}
                   >
-                    {text}
+                    {(node.cellLines[index] ?? [text]).map((line, at) => (
+                      <span key={at} className="aft-tree-line">
+                        {line}
+                      </span>
+                    ))}
                   </button>
                 ),
               )}

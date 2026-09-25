@@ -197,23 +197,37 @@
 
 /* The six branch accents, cycled by index. Shared chart tokens, so every
    theme has already defined and contrast-measured them. */
+/* THE SEQUENCE LANE RAMP, not a `--chart-N` family.
+   The first version of this file reached for `--chart-1` … `--chart-5`, which
+   THIS PROJECT DOES NOT DEFINE — they exist in no theme, so every branch
+   accent silently fell back and the whole tree drew in the border colour. A
+   custom property that resolves to nothing is not an error and nothing
+   reported it; `check:themes` has no per-kind table, and this file's own
+   motion check asserted the reference existed rather than that it resolved.
+   `check:tree-palette` now closes that.
+
+   `--seq-lane-1` … `--seq-lane-5` are the repo's real categorical ramp: five
+   hues, defined in all nine themes, already contrast-measured by
+   `check:themes` and honoured by `check:eink`. Reusing them is also the
+   honest answer to `purpose.md` — a half-populated palette ships a choice
+   that makes the diagram look broken, which is exactly what shipped. */
 .aft-b0 {
-  --ac: var(--chart-1);
+  --ac: var(--seq-lane-1);
 }
 .aft-b1 {
-  --ac: var(--chart-2);
+  --ac: var(--seq-lane-2);
 }
 .aft-b2 {
-  --ac: var(--chart-3);
+  --ac: var(--seq-lane-3);
 }
 .aft-b3 {
-  --ac: var(--chart-4);
+  --ac: var(--seq-lane-4);
 }
 .aft-b4 {
-  --ac: var(--chart-5);
+  --ac: var(--seq-lane-5);
 }
 .aft-b5 {
-  --ac: var(--chart-1);
+  --ac: var(--seq-lane-1);
 }
 .aft-root {
   --ac: var(--border);
@@ -378,4 +392,15 @@ button.aft-tree-cell {
 .aft-tree-node,
 .aft-tree-cell {
   z-index: 2;
+}
+
+/* ONE WRAPPED LINE. The layout breaks the text (`lib/layout.ts`) so the SVG
+   export can draw the same breaks, which means the browser must NOT break it
+   again — a second wrap on top of the first would put the export and the
+   screen back out of step on exactly the long Thai sentences this exists for. */
+.aft-tree-line {
+  display: block;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -39,6 +39,7 @@
  * same header, or the header is not a header.
  */
 
+import { wrapText } from "@/lib/text-metrics";
 import type { TreeLabFile, TreeNode } from "@/types/tree";
 
 /* -------------------------------------------------------------------------- */
@@ -51,16 +52,12 @@ import type { TreeLabFile, TreeNode } from "@/types/tree";
  * number proves the number, not the layout.
  */
 export const TREE_METRICS = {
-  /**
-   * Height of one leaf row, and so the vertical rhythm of the whole tree.
-   *
-   * SIZED FOR A CELL, NOT FOR A LABEL. A node box holds a short name and would
-   * sit comfortably at 44, but a cell under a column holds the author's prose —
-   * a precondition is a sentence, not a word — and at 44 the third line of one
-   * is clipped. Clipped text in a column is worse than a taller row: the reader
-   * cannot tell a truncated precondition from a complete one.
-   */
-  rowHeight: 68,
+  /* THE ROW HEIGHT IS NO LONGER A CONSTANT. It used to be 68, chosen by eye
+     for a three-line precondition, which clipped a four-line one and padded
+     every one-line document. Now that the layout wraps the text itself it can
+     measure instead: `layoutTree` derives one row height for the whole
+     document from the tallest wrapped cell. `44` survives as the floor there,
+     which is what a row of short labels wants. */
   /** Gap between two sibling rows. */
   rowGap: 8,
   /** Width of a node box at any depth. */
@@ -73,6 +70,18 @@ export const TREE_METRICS = {
   cellGap: 24,
   /** Padding around the whole drawing. */
   padding: 24,
+  /* THE TYPE SCALE, here rather than only in CSS, because the layout now wraps
+     the text itself (see `wrapAll`) and a wrap needs a font size. The
+     stylesheet and the SVG export both draw at these numbers;
+     `check:tree-motion` pins the stylesheet against them so the two cannot
+     drift. */
+  labelSize: 13,
+  idSize: 10.5,
+  cellSize: 11.5,
+  lineHeight: 1.35,
+  /** Horizontal padding inside a node box and inside a cell. */
+  boxPadX: 10,
+  cellPadX: 11,
 } as const;
 
 /* -------------------------------------------------------------------------- */
@@ -103,6 +112,19 @@ export interface TreePlacement {
   branch: number | null;
   /** The cells this node fills, padded to the document's column count. */
   cells: string[];
+  /**
+   * The label, already broken into lines, and each cell likewise.
+   *
+   * WRAPPED HERE AND NOWHERE ELSE. The canvas used to let the browser wrap its
+   * HTML boxes, which reads beautifully and cannot be reproduced by an SVG
+   * export — SVG `<text>` does not wrap, so the export would have had to
+   * estimate its own line breaks and would have disagreed with the screen on
+   * every Thai sentence. One wrap, computed from `wrapText` (which splits Thai
+   * between grapheme clusters), is what lets the exported file BE the picture
+   * rather than resemble it.
+   */
+  labelLines: string[];
+  cellLines: string[][];
 }
 
 /** One elbow, from a parent's right edge to a child's left edge. */
@@ -179,19 +201,55 @@ function childrenOf(node: TreeNode): TreeNode[] {
  * rather than as a second traversal over a half-built map.
  */
 export function layoutTree(file: TreeLabFile): TreeLayout {
-  const {
-    rowHeight,
-    rowGap,
-    nodeWidth,
-    depthGap,
-    cellWidth,
-    cellGap,
-    padding,
-  } = TREE_METRICS;
+  const { rowGap, nodeWidth, depthGap, cellWidth, cellGap, padding } =
+    TREE_METRICS;
 
   const columnCount = file.columns?.length ?? 0;
+  const { labelSize, idSize, cellSize, lineHeight, boxPadX, cellPadX } =
+    TREE_METRICS;
+
+  /* THE ROW HEIGHT IS DERIVED, not a constant, now that the wrap is known: a
+     leaf whose precondition runs to four lines needs a taller row than its
+     neighbour, and the old fixed 68 either clipped the long one or padded
+     every short one. One row height for the WHOLE document rather than per
+     row, because the cell columns are a table and a table with ragged row
+     heights stops reading as one. */
+  const wrapFor = (node: TreeNode) => {
+    const labelLines = wrapText(node.label, nodeWidth - boxPadX * 2, labelSize);
+    const cellLines = Array.from({ length: columnCount }, (_u, index) =>
+      wrapText(node.cells?.[index] ?? "", cellWidth - cellPadX * 2, cellSize),
+    );
+    return { labelLines, cellLines };
+  };
   const placements: TreePlacement[] = [];
   const connectors: TreeConnector[] = [];
+
+  /* One pass to find the tallest row, before anything is placed: a leaf's box
+     carries an id line above its label, a branch's does not, and a cell may be
+     taller than both. */
+  let tallestLines = 1;
+  let tallestIsLeaf = false;
+  const measure = (node: TreeNode): void => {
+    const kids = childrenOf(node);
+    const { labelLines, cellLines } = wrapFor(node);
+    const cellMax = cellLines.reduce(
+      (most, lines) => Math.max(most, lines.length),
+      0,
+    );
+    const lines = Math.max(labelLines.length, cellMax, 1);
+    if (lines > tallestLines || (lines === tallestLines && kids.length === 0)) {
+      tallestLines = Math.max(tallestLines, lines);
+      if (kids.length === 0) tallestIsLeaf = true;
+    }
+    for (const kid of kids) measure(kid);
+  };
+  measure(file.root);
+
+  const idBand = tallestIsLeaf ? idSize * lineHeight + 3 : 0;
+  const rowHeight = Math.max(
+    44,
+    Math.round(tallestLines * labelSize * lineHeight + idBand + 14),
+  );
 
   let nextRow = 0;
   let maxDepth = 0;
@@ -230,9 +288,12 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
       (_unused, index) => node.cells?.[index] ?? "",
     );
 
+    const wrapped = wrapFor(node);
     placements.push({
       id: node.id,
       label: node.label,
+      labelLines: wrapped.labelLines,
+      cellLines: wrapped.cellLines,
       description: node.description,
       depth,
       x: xForDepth(depth),
