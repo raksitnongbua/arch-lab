@@ -41,6 +41,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem={false}
       disableTransitionOnChange
       storageKey={THEME_STORAGE_KEY}
+      /* NEXT-THEMES' OWN BLOCKING SCRIPT IS MADE INERT HERE, and the work it
+         did now happens in `THEME_DEFAULT_SCRIPT`, which already runs before
+         it and already reads the same key.
+
+         WHY: `ThemeProvider` renders a script ELEMENT and offers no prop to
+         suppress it, and React logs "Encountered a script tag while rendering
+         React component" for every script it renders on the client — which the
+         root layout does on each Fast Refresh. The two scripts this repo owns
+         dodge that by being injected as raw HTML; a dependency's cannot.
+
+         A `type` React does not recognise as JavaScript is the escape react-dom
+         documents (`isScriptDataBlock`): it skips the warning precisely because
+         the browser will not execute the tag. That is the whole point here —
+         the tag must not run, because the stamping already happened.
+
+         `scriptProps` is spread FIRST inside next-themes, so this survives
+         while its own `dangerouslySetInnerHTML` and `nonce` still win. The
+         provider's React runtime is untouched and keeps managing theme changes
+         after hydration. */
+      scriptProps={{ type: "text/x-arch-lab-inert" }}
     >
       <FollowSystemTheme />
       {children}
