@@ -175,21 +175,43 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           On this page
         </p>
-        <ul className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+        {/* TWO LEVELS, because one was the problem. A flat list of six links
+            told a reader the page had a tools section and nothing about what
+            was in it — and the tools section is most of the page, twelve
+            groups of it. The second level is derived from the catalogue, so a
+            group added there appears here without an edit, and the counts are
+            the real ones rather than a number somebody typed. */}
+        <ul className="mt-3 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
           {SECTIONS.map((section) => (
-            <li
-              key={section.id}
-              className="flex flex-wrap items-baseline gap-x-2"
-            >
-              <a
-                href={`#${section.id}`}
-                className="font-medium text-primary hover:underline"
-              >
-                {section.label}
-              </a>
-              <span className="text-xs text-muted-foreground">
-                {section.hint}
-              </span>
+            <li key={section.id}>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <a
+                  href={`#${section.id}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {section.label}
+                </a>
+                <span className="text-xs text-muted-foreground">
+                  {section.hint}
+                </span>
+              </div>
+              {section.id !== "tools" ? null : (
+                <ul className="mt-2 ml-3 space-y-1 border-l border-border pl-3">
+                  {MCP_TOOL_GROUPS.map((group) => (
+                    <li key={group.id} className="flex items-baseline gap-x-2">
+                      <a
+                        href={`#tools-${group.id}`}
+                        className="text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        {group.title}
+                      </a>
+                      <span className="font-mono text-xs text-muted-foreground/70">
+                        {group.tools.length}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
@@ -302,7 +324,11 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
          */}
         <div className="mt-6 space-y-10">
           {MCP_TOOL_GROUPS.map((group) => (
-            <div key={group.id}>
+            <div
+              key={group.id}
+              id={`tools-${group.id}`}
+              className="scroll-mt-24"
+            >
               <h3 className="text-base font-semibold tracking-tight text-foreground">
                 {group.title}
               </h3>
@@ -495,7 +521,13 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
 function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
   const { lead, rest } = splitLead(tool.description);
   return (
-    <div className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4">
+    /* AN ANCHOR PER TOOL, so `/mcp#validate_tree` opens on the card rather
+       than at the top of a page of twenty-eight. The id is the tool name,
+       which is the thing a reader arrives holding. */
+    <div
+      id={tool.name}
+      className="af-mcp-card scroll-mt-24 rounded-lg border border-border bg-card px-5 py-4"
+    >
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h4 className="font-mono text-sm font-semibold text-foreground">
           {tool.name}
