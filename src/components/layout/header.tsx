@@ -72,7 +72,7 @@ import { cn } from "@/lib/utils";
  * ever removed again: an empty <nav> would expose a navigation landmark with
  * nothing in it, which is worse for a screen reader than no landmark at all.
  */
-const NAV_LINKS: ReadonlyArray<{
+export const NAV_LINKS: ReadonlyArray<{
   href: string;
   label: string;
   /**

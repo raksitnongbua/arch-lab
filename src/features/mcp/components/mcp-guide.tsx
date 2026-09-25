@@ -22,6 +22,8 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
+import { NAV_LINKS } from "@/components/layout/header";
+
 import { Badge } from "@/components/ui/badge";
 
 import {
@@ -91,14 +93,20 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
      * do". Constraining the container instead makes every section share the
      * same centred measure and makes that class of drift impossible.
      */
-    <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-20 lg:grid lg:grid-cols-[15rem_minmax(0,44rem)] lg:justify-center lg:gap-x-12">
-      {/* THE RAIL. Sticky, so it is still there when the question "what else is
-          on this page" arrives — which on a page this long is three screens
-          down, where a list in the flow has already gone. Hidden below `lg`
-          because at that width it would be a column of links above the content
-          rather than beside it, which is what the in-flow card is for. */}
+    <div className="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:grid lg:grid-cols-[13rem_minmax(0,44rem)] lg:justify-center lg:gap-x-10 xl:grid-cols-[13rem_minmax(0,44rem)_14rem]">
+      {/* THE TWO RAILS DO DIFFERENT JOBS, which is the whole reason there are
+          two. The left one is WHERE ELSE YOU CAN GO — the other reference
+          pages — and the right one is WHAT IS ON THIS PAGE. Putting the page's
+          own contents on the left, as this did first, left a reader with no
+          way off the page and duplicated nothing useful; every docs site
+          splits them this way for that reason.
+
+          The right rail appears only at `xl`, because below it there is no
+          room for a third column without taking it from the measure, and the
+          measure is what makes the prose readable. Below `lg` both collapse
+          into the flow. */}
       <aside className="hidden lg:block">
-        <Contents className="af-mcp-fade af-mcp-d6 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2" />
+        <SiteNav className="af-mcp-fade af-mcp-d6 sticky top-24" />
       </aside>
 
       <div className="min-w-0">
@@ -179,7 +187,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           </p>
         </div>
 
-        <Contents className="af-mcp-fade af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4 lg:hidden" />
+        <Contents className="af-mcp-fade af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4 xl:hidden" />
 
         {/* ---- connect --------------------------------------------------------- */}
         <Section id="connect" title="Connect">
@@ -471,6 +479,10 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           </P>
         </Section>
       </div>
+
+      <aside className="hidden xl:block">
+        <Contents className="af-mcp-fade af-mcp-d6 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2" />
+      </aside>
     </div>
   );
 }
@@ -615,10 +627,10 @@ function Contents({ className }: { className?: string }): React.JSX.Element {
             groups of it. The second level is derived from the catalogue, so a
             group added there appears here without an edit, and the counts are
             the real ones rather than a number somebody typed. */}
-      <ul className="mt-3 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-1">
+      <ul className="mt-3 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
         {SECTIONS.map((section) => (
           <li key={section.id}>
-            <div className="flex flex-wrap items-baseline gap-x-2 lg:block">
+            <div className="flex flex-wrap items-baseline gap-x-2 xl:block">
               <a
                 href={`#${section.id}`}
                 className="font-medium text-primary hover:underline"
@@ -648,6 +660,70 @@ function Contents({ className }: { className?: string }): React.JSX.Element {
             )}
           </li>
         ))}
+      </ul>
+    </nav>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Site navigation                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The other reference pages, as a docs rail.
+ *
+ * IT READS FROM THE HEADER'S OWN TABLE, not a second list: a rail that named a
+ * page the header had dropped, or missed one it had gained, is the drift this
+ * whole codebase keeps paying for. The header is the canonical running order
+ * and this is the same order read sideways.
+ *
+ * THE CURRENT PAGE IS MARKED AND NOT LINKED, because a link to the page you
+ * are on is a control that does nothing — and on a long page it is worse than
+ * nothing, since pressing it silently throws away your scroll position.
+ */
+function SiteNav({ className }: { className?: string }): React.JSX.Element {
+  return (
+    <nav aria-label="Reference pages" className={className}>
+      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Reference
+      </p>
+      <ul className="mt-3 space-y-1.5 text-sm">
+        {NAV_LINKS.map((page) => {
+          const current = page.href === "/mcp";
+          return (
+            <li key={page.href}>
+              {current ? (
+                <span
+                  aria-current="page"
+                  className="block border-l-2 border-primary py-0.5 pl-3 font-medium text-foreground"
+                >
+                  {page.label}
+                </span>
+              ) : (
+                <Link
+                  href={page.href}
+                  className="block border-l-2 border-transparent py-0.5 pl-3 text-muted-foreground hover:border-border hover:text-foreground"
+                >
+                  {page.label}
+                </Link>
+              )}
+              {!current ? null : (
+                <ul className="mt-1.5 space-y-1 border-l border-border pl-3">
+                  {SECTIONS.map((section) => (
+                    <li key={section.id}>
+                      <a
+                        href={`#${section.id}`}
+                        className="block text-muted-foreground hover:text-foreground"
+                      >
+                        {section.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );
