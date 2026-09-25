@@ -122,7 +122,13 @@ export function TreeViewer({ file }: { file: TreeLabFile }) {
         {/* The box that RESERVES the scaled height. `transform` does not affect
           layout, so without this the shrunk drawing would still hold its full
           height open and leave a band of dead space under it. */}
-        <div style={{ height: naturalHeight * scale }}>
+        {/* RESERVES BOTH AXES. `transform` does not affect layout, so the
+            pane learns nothing about a scaled drawing's size from the camera
+            alone: without the height it left a band of dead space under a
+            shrunk tree, and without the WIDTH it never knew the drawing was
+            wider than itself, so there was nothing to scroll sideways and a
+            zoomed-in tree simply had its right-hand columns cut off. */}
+        <div style={{ width: width * scale, height: naturalHeight * scale }}>
           <div
             className="aft-tree-camera"
             style={{ transform: `scale(${scale})`, width }}
