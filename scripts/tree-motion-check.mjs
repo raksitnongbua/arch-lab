@@ -38,7 +38,14 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
-const css = read("src/features/tree/styles/tree-motion.css");
+const cssWithComments = read("src/features/tree/styles/tree-motion.css");
+
+/* COMMENTS ARE STRIPPED BEFORE ANY RULE IS MATCHED. This file comments heavily
+   and those comments quote selectors — a prose mention of `.is-dim` was enough
+   to make the dim assertion below match a comment and then run on into the
+   next rule, failing on a stylesheet that was correct. A check that a comment
+   can break is a check that discourages comments. */
+const css = cssWithComments.replace(/\/\*[\s\S]*?\*\//g, "");
 const diagram = read("src/features/tree/components/tree-diagram.tsx");
 const viewer = read("src/features/tree/components/tree-viewer.tsx");
 const components = `${diagram}\n${viewer}`;
