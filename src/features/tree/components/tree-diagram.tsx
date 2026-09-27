@@ -186,6 +186,21 @@ export function TreeDiagram({
                     </span>
                   ))}
                 </span>
+                {/* THE `desc` NOTE, under the label in the quieter token —
+                    which is what `src/types/tree.ts` said this field was for
+                    from the first commit. The grammar parsed it and the model
+                    carried it; only the drawing was missing, so an author who
+                    wrote one saw nothing and had no way to tell whether the
+                    line had been understood. */}
+                {node.descriptionLines.length === 0 ? null : (
+                  <span className="aft-tree-note">
+                    {node.descriptionLines.map((line, index) => (
+                      <span key={index} className="aft-tree-line">
+                        {line}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </button>
 
               {node.cells.map((text, index) =>

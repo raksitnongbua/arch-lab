@@ -403,3 +403,13 @@ button.aft-tree-cell {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The `desc` note under a node's label. Quieter and smaller, so the label
+   still reads first — the note explains the name, it does not compete with
+   it. Sized from TREE_METRICS.descSize, which is what the layout wrapped it
+   at; check:tree-motion pins the pair. */
+.aft-tree-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}
