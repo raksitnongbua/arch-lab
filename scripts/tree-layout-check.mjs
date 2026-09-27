@@ -91,11 +91,23 @@ for (const { id, file } of DOCUMENTS) {
   const pitches = leaves
     .slice(1)
     .map((leaf, index) => leaf.centerY - leaves[index].centerY);
-  const expected = TREE_METRICS.rowHeight + TREE_METRICS.rowGap;
+  /* THE PITCH IS CONSTANT, BUT NO LONGER A CONSTANT. It used to be
+     `TREE_METRICS.rowHeight + rowGap`; the row height is now DERIVED from the
+     tallest wrapped cell in the document, so what matters is that every gap in
+     one document is the same — a table with ragged rows stops reading as a
+     table — and that it clears the floor. Asserting the old number would now
+     assert a metric that does not exist. */
+  const expected = (layout.placements[0]?.height ?? 0) + TREE_METRICS.rowGap;
   check(
     "every leaf row sits at one constant pitch",
     pitches.every((pitch) => Math.abs(pitch - expected) < 1e-9),
     `expected every gap to be ${expected}, got ${[...new Set(pitches)].join(", ")}`,
+  );
+  check(
+    "the derived row height clears the floor and is uniform",
+    new Set(layout.placements.map((p) => p.height)).size === 1 &&
+      (layout.placements[0]?.height ?? 0) >= 44,
+    "one document, one row height — a ragged table is not a table",
   );
 
   /* 2. Parents centred on child CENTRES --------------------------------- */
@@ -206,6 +218,19 @@ for (const { id, file } of DOCUMENTS) {
     "no two node boxes overlap",
     overlap === null,
     overlap ?? "two boxes sharing pixels is a layout that lost a row",
+  );
+
+  /* 5b. The wrap the export depends on ---------------------------------- */
+  check(
+    "every node carries the lines the export will draw",
+    layout.placements.every(
+      (p) =>
+        Array.isArray(p.labelLines) &&
+        p.labelLines.length >= 1 &&
+        p.cellLines.length === layout.columns.length,
+    ),
+    "the SVG export draws from these; a node without them would export blank " +
+      "where the screen shows text",
   );
 
   /* 6. Focus follows the lines ------------------------------------------ */

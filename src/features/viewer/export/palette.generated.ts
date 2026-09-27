@@ -31,6 +31,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#eef0f4",
     "secondaryForeground": "#242933",
     "border": "#dbdee3",
+    "chartAccents": [
+      "#1baf7a",
+      "#eb6834",
+      "#2a78d6",
+      "#e87ba4",
+      "#4a3aa7"
+    ],
     "edgeDrift": "#6675c8",
     "criticalCap": "#6963ec",
     "nodeMeta": "#4e5564",
@@ -148,6 +155,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#f1ede5",
     "secondaryForeground": "#30271f",
     "border": "#d2cbc1",
+    "chartAccents": [
+      "#1baf7a",
+      "#eb6834",
+      "#2a78d6",
+      "#e87ba4",
+      "#4a3aa7"
+    ],
     "edgeDrift": "#905029",
     "criticalCap": "#a63c0c",
     "nodeMeta": "#5d5348",
@@ -265,6 +279,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#cdcde0",
     "secondaryForeground": "#2b2b39",
     "border": "#c2c2d5",
+    "chartAccents": [
+      "#1baf7a",
+      "#eb6834",
+      "#2a78d6",
+      "#e87ba4",
+      "#4a3aa7"
+    ],
     "edgeDrift": "#6670a7",
     "criticalCap": "#4f5aac",
     "nodeMeta": "#4b4b5c",
@@ -382,6 +403,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "rgba(227, 232, 240, 0.6)",
     "secondaryForeground": "#242933",
     "border": "rgba(128, 134, 147, 0.28)",
+    "chartAccents": [
+      "#1baf7a",
+      "#eb6834",
+      "#2a78d6",
+      "#e87ba4",
+      "#4a3aa7"
+    ],
     "edgeDrift": "#6675c8",
     "criticalCap": "#6963ec",
     "nodeMeta": "#4e5564",
@@ -499,6 +527,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#34363d",
     "secondaryForeground": "#eaebef",
     "border": "#3f4147",
+    "chartAccents": [
+      "#199e70",
+      "#d95926",
+      "#3987e5",
+      "#d55181",
+      "#9085e9"
+    ],
     "edgeDrift": "#858bdb",
     "criticalCap": "#8f81ff",
     "nodeMeta": "#b7bac2",
@@ -616,6 +651,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#1a1c26",
     "secondaryForeground": "#eaebef",
     "border": "#262832",
+    "chartAccents": [
+      "#199e70",
+      "#d95926",
+      "#3987e5",
+      "#d55181",
+      "#9085e9"
+    ],
     "edgeDrift": "#8487da",
     "criticalCap": "#8f81ff",
     "nodeMeta": "#b6bac8",
@@ -733,6 +775,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#1b1b1b",
     "secondaryForeground": "#ffffff",
     "border": "#a2a4ab",
+    "chartAccents": [
+      "#199e70",
+      "#d95926",
+      "#3987e5",
+      "#d55181",
+      "#9085e9"
+    ],
     "edgeDrift": "#b3b8ff",
     "criticalCap": "#baafff",
     "nodeMeta": "#dcdee5",
@@ -850,6 +899,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#223f5c",
     "secondaryForeground": "#e9eff6",
     "border": "#2d4a68",
+    "chartAccents": [
+      "#199e70",
+      "#d95926",
+      "#3987e5",
+      "#d55181",
+      "#9085e9"
+    ],
     "edgeDrift": "#8298e8",
     "criticalCap": "#9c92ff",
     "nodeMeta": "#b2bfce",
@@ -967,6 +1023,13 @@ export const EXPORT_PALETTES: Record<Theme, ExportTheme> = {
     "secondary": "#e6e6e6",
     "secondaryForeground": "#292929",
     "border": "#d4d4d4",
+    "chartAccents": [
+      "#292929",
+      "#424242",
+      "#5d5d5d",
+      "#7a7a7a",
+      "#989898"
+    ],
     "edgeDrift": "#585858",
     "criticalCap": "#4d4d4d",
     "nodeMeta": "#3c3c3c",

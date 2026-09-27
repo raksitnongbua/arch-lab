@@ -40,6 +40,7 @@ import {
   serializeGanttText,
   serializeTimelineText,
   serializeLifecycleText,
+  serializeTreeText,
 } from "@/features/archtext";
 import { MERMAID_FLOWCHART_CAVEAT } from "@/features/flowchart/input/parse";
 import { MERMAID_USECASE_CAVEAT } from "@/features/usecase/input/parse";
@@ -48,6 +49,7 @@ import { MERMAID_SEQUENCE_CAVEAT } from "@/features/sequence/input/parse";
 import { MERMAID_GANTT_CAVEAT } from "@/features/gantt/input/parse";
 import { MERMAID_TIMELINE_CAVEAT } from "@/features/timeline/input/parse";
 import { readLifecycle } from "./lifecycle";
+import { readTree } from "./tree";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
   canEncodeShare,
@@ -589,6 +591,33 @@ export async function createShareLink(
     );
   }
   if (lifecycle.kind === "parse") return errorResult(lifecycle.message);
+
+  /* Decomposition trees, the tenth and last reader before the C4 fallback, and
+     the second entry with no `mermaidCaveat`. Mermaid does have a tree in
+     `mindmap`, unlike the lifecycle's case — but it carries no ids and no
+     columns, so no import was built and a tree can never have arrived as
+     Mermaid. The caveat stays empty for the same reason rather than for a
+     different one (`features/tree/input/parse.ts` records the decision). */
+  const tree = readTree(source);
+  if (tree.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeTreeText(tree.file),
+        title: tree.file.metadata?.title ?? "",
+        sourceFormat: tree.format,
+        noun: "a decomposition tree",
+        formatTool: "format_tree",
+        indivisibleBecause:
+          "A tree is one breakdown from one root, with no sub-diagrams to " +
+          "scope a smaller link to.",
+        opensIn: "Opens in the tree playground.",
+        mermaidCaveat: "",
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (tree.kind === "parse") return errorResult(tree.message);
 
   const read = readSource(source, format);
   if (read.status !== "ok") return readFailureResult(read);

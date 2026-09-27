@@ -290,6 +290,14 @@ function paletteFor(theme) {
     SCALARS.map(([key, token, fallback]) => [key, paint(token, fallback)]),
   );
 
+  /* THE FIVE CATEGORICAL ACCENTS, as a list rather than five scalars, because
+     the tree cycles them by index and nothing assigns a meaning to any one of
+     them. Each falls back to `--accent` so a theme that never defined one
+     exports a colour instead of an empty fill. */
+  const chartAccents = [1, 2, 3, 4, 5].map((n) =>
+    paint(`--seq-lane-${n}`, scalars.accent),
+  );
+
   const pairs = (table) =>
     Object.fromEntries(
       Object.entries(table).map(([key, [fill, border]]) => [
@@ -389,6 +397,7 @@ function paletteFor(theme) {
 
   return {
     ...scalars,
+    chartAccents,
     // Each of these three falls back to another RESOLVED token rather than a
     // literal, exactly as `resolveExportTheme` does: a palette that cannot
     // resolve the mix shows the drift in the connector's own colour, and one
