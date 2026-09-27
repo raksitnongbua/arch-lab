@@ -78,6 +78,8 @@ export const TREE_METRICS = {
   labelSize: 13,
   idSize: 10.5,
   cellSize: 11.5,
+  /** The `desc` note under a label, quieter and smaller than it. */
+  descSize: 11,
   lineHeight: 1.35,
   /** Horizontal padding inside a node box and inside a cell. */
   boxPadX: 10,
@@ -124,6 +126,8 @@ export interface TreePlacement {
    * rather than resemble it.
    */
   labelLines: string[];
+  /** The `desc` note, wrapped — empty when the node carries none. */
+  descriptionLines: string[];
   cellLines: string[][];
 }
 
@@ -205,8 +209,15 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
     TREE_METRICS;
 
   const columnCount = file.columns?.length ?? 0;
-  const { labelSize, idSize, cellSize, lineHeight, boxPadX, cellPadX } =
-    TREE_METRICS;
+  const {
+    labelSize,
+    idSize,
+    cellSize,
+    descSize,
+    lineHeight,
+    boxPadX,
+    cellPadX,
+  } = TREE_METRICS;
 
   /* THE ROW HEIGHT IS DERIVED, not a constant, now that the wrap is known: a
      leaf whose precondition runs to four lines needs a taller row than its
@@ -216,10 +227,14 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
      heights stops reading as one. */
   const wrapFor = (node: TreeNode) => {
     const labelLines = wrapText(node.label, nodeWidth - boxPadX * 2, labelSize);
+    const descriptionLines =
+      typeof node.description === "string" && node.description !== ""
+        ? wrapText(node.description, nodeWidth - boxPadX * 2, descSize)
+        : [];
     const cellLines = Array.from({ length: columnCount }, (_u, index) =>
       wrapText(node.cells?.[index] ?? "", cellWidth - cellPadX * 2, cellSize),
     );
-    return { labelLines, cellLines };
+    return { labelLines, descriptionLines, cellLines };
   };
   const placements: TreePlacement[] = [];
   const connectors: TreeConnector[] = [];
@@ -293,6 +308,7 @@ export function layoutTree(file: TreeLabFile): TreeLayout {
       id: node.id,
       label: node.label,
       labelLines: wrapped.labelLines,
+      descriptionLines: wrapped.descriptionLines,
       cellLines: wrapped.cellLines,
       description: node.description,
       depth,
