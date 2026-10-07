@@ -424,7 +424,7 @@ function ThemeRow({
       <Icon aria-hidden="true" className="size-4 shrink-0" />
       <span className="flex min-w-0 flex-col">
         <span className="text-xs font-medium">{label}</span>
-        <span className="text-[11px] leading-tight opacity-70">{hint}</span>
+        <span className="text-xs leading-tight opacity-70">{hint}</span>
       </span>
       <Check
         aria-hidden="true"

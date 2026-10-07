@@ -450,7 +450,7 @@ export function LayoutDirectionMenu({
           {note !== null ? (
             <p
               className={cn(
-                "mb-1 max-w-56 border-b border-border px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug",
+                "mb-1 max-w-56 border-b border-border px-2.5 pt-0.5 pb-1.5 text-xs leading-snug",
                 reported ? "text-foreground" : "text-muted-foreground",
               )}
             >

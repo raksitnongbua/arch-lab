@@ -102,6 +102,8 @@ import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Dialog } from "@/components/ui/dialog";
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
 import { applyFixToTextarea, FixOffer } from "@/components/ui/fix-offer";
 import {
@@ -347,10 +349,16 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
      appears and what typing in it does, which a two-word button cannot. */
   {
     title: "The text behind it",
+    /* BOTH LAYOUTS IN ONE SENTENCE, because the tour cannot tell them apart:
+       the "Edit the text" toggle is `lg:`-only (`SourceRailToggle`), and below
+       that the pane is always open, stacked under the diagram. The old body
+       named only the toggle, so on a phone it pointed at a button that was
+       not there. */
     body:
-      "This diagram is drawn from a text document. “Edit the text” at the top " +
-      "of this pane opens it alongside the diagram — type in it and the " +
-      "drawing re-renders as you go.",
+      "This diagram is drawn from a text document. On a wide screen, “Edit " +
+      "the text” at the top of this pane opens it beside the diagram; on a " +
+      "narrow one it sits below. Type in it and the drawing re-renders as " +
+      "you go.",
     icon: FileText,
   },
   /* THE LOCK GETS A STEP because it is the one control that takes every other
@@ -399,6 +407,37 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   lifecycle: "lifecycle",
   tree: "tree",
 };
+
+/** Where the editing hint's help link goes, per kind.
+ *
+ * `/syntax` documents five notations — C4 at the top, then sequence, gantt,
+ * timeline and lifecycle under their own anchors. The other five used to fall
+ * through to the top of `/syntax` too, which put a flowchart author in front
+ * of the C4 grammar. They go to their own section of `/demo` instead: real
+ * documents in that notation, parsed by the same reader, which is how those
+ * five are taught everywhere else (the MCP server's `get_example_model`). The
+ * label says which kind of help it is, so a reader is not promised a
+ * reference and handed examples. A total `Record`, so an eleventh notation
+ * fails to compile until someone decides where its help is. */
+const KIND_HELP: Record<SeedKind, { href: string; label: string }> = {
+  c4: { href: "/syntax", label: "syntax reference" },
+  sequence: { href: "/syntax#sequence", label: "syntax reference" },
+  flowchart: { href: "/demo#flowchart", label: "worked examples" },
+  usecase: { href: "/demo#usecase", label: "worked examples" },
+  er: { href: "/demo#er", label: "worked examples" },
+  dict: { href: "/demo#dict", label: "worked examples" },
+  gantt: { href: "/syntax#gantt", label: "syntax reference" },
+  timeline: { href: "/syntax#timeline", label: "syntax reference" },
+  lifecycle: { href: "/syntax#lifecycle", label: "syntax reference" },
+  tree: { href: "/demo#tree", label: "worked examples" },
+};
+
+/** The canvas strip's state word when there is no lock to report on — a
+ * notation that lays itself out from the text, or every notation while
+ * `CANVAS_EDIT_ENABLED` is off. It used to be "Diagram", which named the
+ * thing the reader was looking at rather than its state. Shared by the C4
+ * strip and the other kinds' strip so the two cannot drift. */
+const UNLOCKABLE_CANVAS_STATE = "Drawn from the text";
 
 /** The starter buttons' faces, in the order the row renders them. */
 const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
@@ -534,6 +573,18 @@ export function ViewPlayground({
      starter is a one-off, so nothing here is worth remembering across loads. */
   const [startersOpen, setStartersOpen] = useState(false);
   const startersMenuId = useId();
+  /* DISMISSED LIKE EVERY OTHER MENU ON THE PAGE. It used to close only on its
+     own toggle or on a pick, so it stayed open over the pane while the reader
+     typed or clicked elsewhere. The shared hook closes it on an outside press
+     and on Escape; focus leaving the wrapper (Tab past the last row) closes it
+     too, below, which the hook does not cover because no other menu needed it. */
+  const startersWrapperRef = useRef<HTMLDivElement>(null);
+  const closeStarters = useCallback(() => setStartersOpen(false), []);
+  useMenuDismissal(startersOpen, closeStarters, startersWrapperRef);
+  /* The canvas-and-formats explainer. A dialog rather than an inline
+     disclosure, so the reference text costs the first screen one link instead
+     of a row above a height-capped canvas. */
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   /** The left rail's fold, FOLDED unless the reader has said otherwise. The
    * toggle lives in the canvas column's own strip, because a control that
@@ -1378,10 +1429,19 @@ export function ViewPlayground({
               since a hand-written "only C4" predecessor outlived its own truth
               once already), and the privacy promise, which is a reason to use
               this page rather than a description of it. The formats moved into
-              the disclosure below, where a reader goes looking for them.
+              the "How it works" dialog, where a reader goes looking for them.
               `check:canvas-edit` keeps this sentence derived AND short — the
-              paragraph it replaced grew because nothing measured it. */}
+              paragraph it replaced grew because nothing measured it.
+
+              THE MECHANISM LEADS, and the derived clause no longer stands
+              alone. With the rail folded by default (`lib/source-fold.ts`)
+              nothing on the first screen shows that the drawing comes from
+              text, and the clause on its own — written to be a meta
+              description's tail — told a cold reader how many canvases can be
+              edited before telling them what the page does. The lead names no
+              notation and no count, so it has nothing to go stale. */}
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
+            Write a diagram as text and it renders here as you type.{" "}
             {CANVAS_EDIT_ENABLED ? <>{CANVAS_EDITABLE_SUMMARY} </> : null}
             Nothing leaves your browser.{" "}
             <Link
@@ -1390,15 +1450,29 @@ export function ViewPlayground({
             >
               Syntax reference
             </Link>
+            {" · "}
+            <button
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              aria-haspopup="dialog"
+              className="inline-flex items-baseline gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Info aria-hidden="true" className="size-3.5 self-center" />
+              How it works
+            </button>
           </p>
         </header>
 
         {/* WHERE THE GESTURES ARE NAMED, one bullet per claim, so a reader
             can scan for the one they are wondering about ("why will my ER
-            diagram not move?") instead of parsing a paragraph. A disclosure,
-            matching the format-relations one below it: a reader meets it
-            before they open the canvas, which is the surface the old intro
-            sentence existed to be.
+            diagram not move?") instead of parsing a paragraph.
+
+            A DIALOG, NOT AN INLINE DISCLOSURE. It was a `<details>` under the
+            intro, which kept a grey summary row above the canvas on every
+            visit and, opened, pushed the canvas down by the length of the
+            list. This is reference material a reader opens when a question
+            arrives, so it costs the first screen one link in the intro line
+            ("How it works") and nothing more.
 
             NOTHING HERE IS A HAND-KEPT VERB LIST. The clauses are the
             capability grid's own `onCanvas` cells (`CANVAS_GESTURE_CLAUSES`)
@@ -1407,20 +1481,25 @@ export function ViewPlayground({
             contract) — so a new gesture lands on this page by being added
             where it is built, not by someone remembering this file. The two
             exceptions are below, marked, because no table knows them. */}
-        {/* THE DISCLOSURE ITSELF IS UNCONDITIONAL, and only the gesture half
-            is gated. The formats are true whether or not the canvas ships, so
+        {/* THE DIALOG ITSELF IS UNCONDITIONAL, and only the gesture half is
+            gated. The formats are true whether or not the canvas ships, so
             hanging the whole thing off the flag would take the format
-            explanation off the page the day editing was switched off — a
-            regression the merge into one disclosure would otherwise have
-            introduced silently. */}
-        <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
-          <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
-            {CANVAS_EDIT_ENABLED
+            explanation off the page the day editing was switched off. */}
+        <Dialog
+          open={aboutOpen}
+          onClose={() => setAboutOpen(false)}
+          title={
+            CANVAS_EDIT_ENABLED
               ? "What you can do on the canvas, and how the formats relate"
-              : "How .alab, JSON and Mermaid relate"}
-          </summary>
+              : "How .alab, JSON and Mermaid relate"
+          }
+          /* Wider and scrollable: the shared panel is sized for a confirm
+             prompt (`max-w-md`), and the gesture list alone runs to about
+             twenty lines. */
+          className="max-h-[85svh] max-w-xl overflow-y-auto text-sm text-muted-foreground"
+        >
           {CANVAS_EDIT_ENABLED ? (
-            <ul className="mt-2 max-w-3xl list-disc space-y-1 pl-5 leading-relaxed">
+            <ul className="list-disc space-y-1 pl-5 leading-relaxed">
               {CANVAS_GESTURE_CLAUSES.map((clause) => (
                 <li key={clause}>{clause}</li>
               ))}
@@ -1446,16 +1525,14 @@ export function ViewPlayground({
               <li>the other kinds lay themselves out from the text</li>
             </ul>
           ) : null}
-          {/* THE FORMATS, FOLDED IN HERE rather than sitting in a disclosure
-                of their own. Two grey summary links stacked one above the
-                other are the same control twice, competing for the same glance
-                and each costing a row above a canvas that is height-capped —
-                and both are reference material a reader opens when a question
-                arrives, not before. One link, two sections. The privacy
-                sentence that used to close this paragraph is gone: the intro
-                already promises it, and saying it twice made neither saying
-                count. */}
-          <p className="mt-3 max-w-3xl leading-relaxed">
+          {/* THE FORMATS, FOLDED IN HERE rather than behind a second control.
+                Two entry points to reference material are the same control
+                twice, competing for the same glance — and both answer a
+                question a reader has only once it arrives. One link, two
+                sections. The privacy sentence that used to close this
+                paragraph is gone: the intro already promises it, and saying it
+                twice made neither saying count. */}
+          <p className="leading-relaxed">
             <span className="font-mono text-foreground">.alab</span> is the
             format to write: it is what the syntax reference documents, what
             share links carry, and what reads cleanly in a code review.{" "}
@@ -1467,7 +1544,7 @@ export function ViewPlayground({
             format toggle above the pane converts in place and states what each
             direction drops.
           </p>
-        </details>
+        </Dialog>
 
         {/* THE one polite live region on this page: parse state, sync state,
             immersive toggles AND the sequence viewer's focus announcements
@@ -1808,7 +1885,7 @@ export function ViewPlayground({
                       sync" means is not guessable from two editors alone.
                       The collapsed state used to carry a second sentence
                       explaining .archlab.json; that is the format-relations
-                      disclosure's job (it already says you never write the
+                      dialog's job (it already says you never write the
                       JSON by hand), and a paraphrase of it living down here
                       is the two-copies drift `dry.md` forbids. */}
                   {showJson ? (
@@ -1861,7 +1938,18 @@ export function ViewPlayground({
                   there was no way to start a lifecycle from this page at all,
                   and nothing failed. A hardcoded list cannot notice the thing
                   it has never heard of (`codebase.md`). */}
-              <div className="relative">
+              <div
+                ref={startersWrapperRef}
+                className="relative"
+                onBlur={(event) => {
+                  if (
+                    !event.currentTarget.contains(
+                      event.relatedTarget as Node | null,
+                    )
+                  )
+                    closeStarters();
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setStartersOpen((value) => !value)}
@@ -1940,7 +2028,7 @@ export function ViewPlayground({
                             <Glyph />
                           </span>
                           <span className="flex min-w-0 flex-col">
-                            <span className="text-xs font-medium text-foreground">
+                            <span className="text-sm font-medium text-foreground">
                               {STARTER_BUTTON_LABEL[kind]}
                             </span>
                             {/* The job each diagram does. In a MENU it costs
@@ -1948,7 +2036,7 @@ export function ViewPlayground({
                                   exactly the one asking "which of these?", so
                                   the answer belongs here rather than folded
                                   behind a second control. */}
-                            <span className="text-[11px] leading-tight text-muted-foreground">
+                            <span className="text-xs leading-tight text-muted-foreground">
                               {KIND_BLURB[kind]}
                             </span>
                           </span>
@@ -1967,23 +2055,10 @@ export function ViewPlayground({
                 <kbd className="font-mono">Esc</kbd> then{" "}
                 <kbd className="font-mono">Tab</kbd> leaves the editor ·{" "}
                 <Link
-                  /* Deep-linked for the two kinds `/syntax` documents
-                     separately; everything else lands at the top, where the
-                     C4 grammar it opens with is the one they need. */
-                  href={
-                    doc.kind === "sequence"
-                      ? "/syntax#sequence"
-                      : doc.kind === "gantt"
-                        ? "/syntax#gantt"
-                        : doc.kind === "timeline"
-                          ? "/syntax#timeline"
-                          : doc.kind === "lifecycle"
-                            ? "/syntax#lifecycle"
-                            : "/syntax"
-                  }
+                  href={KIND_HELP[doc.kind].href}
                   className="text-primary hover:underline"
                 >
-                  syntax reference
+                  {KIND_HELP[doc.kind].label}
                 </Link>
               </p>
             </div>
@@ -2032,7 +2107,7 @@ export function ViewPlayground({
                       ? editability.reason
                       : showCanvasLock
                         ? canvasStateLabel(canvasLocked)
-                        : "Diagram"}
+                        : UNLOCKABLE_CANVAS_STATE}
                   </span>
                 </div>
                 <ViewerShell
@@ -2192,7 +2267,7 @@ export function ViewPlayground({
                     <span className="ml-auto truncate text-xs text-muted-foreground">
                       {showCanvasLock
                         ? canvasStateLabel(canvasLocked)
-                        : "Diagram"}
+                        : UNLOCKABLE_CANVAS_STATE}
                     </span>
                   </div>
                 )}

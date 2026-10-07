@@ -39,6 +39,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - **The MCP handshake named nine notations after the tenth shipped.** The list
   is now derived from the same table the count already came from.
+- **The playground's help link no longer sends five notations to the C4
+  grammar.** Flowchart, use-case, ER, dictionary and tree documents now link to
+  their own worked examples, and the link says so.
+- **The playground says what it does before anything else.** Its intro opens
+  with "Write a diagram as text and it renders here as you type", the tour
+  describes where the text pane is on a phone as well as on a wide screen, and
+  the canvas strip reads "Drawn from the text" where it used to say "Diagram".
+- **Explanatory sentences in the playground's menus are easier to read.** The
+  sample, zoom, layout and theme menus no longer set full sentences in 11px
+  type.
+- **Zooming far into an ER diagram or a data dictionary no longer hides the
+  zoom controls.** Past the height of the pane, the zoom pill and the
+  Share/Export row slid below the visible canvas; the drawing now scrolls
+  inside the pane instead.
+- **The sample diagrams menu closes when you click or tab away from it**, or
+  press Escape, like the playground's other menus. It used to stay open until
+  you picked a sample or pressed its button again.
 
 - **`direction=fit` — let the diagram choose its own shape.** A third value
   beside `tb` and `lr`, on a diagram's line or in the file header. It names no
@@ -51,6 +68,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The playground's canvas and format notes moved into a dialog.** "What you
+  can do on the canvas, and how the formats relate" no longer takes a row
+  above the diagram; open it from **How it works** at the end of the intro.
 - **Letting the layout place the elements now produces a diagram at least as
   readable as a hand-arranged one.** Where a relationship has to travel past
   rows it does not belong to, those rows now leave a lane open for it, so the

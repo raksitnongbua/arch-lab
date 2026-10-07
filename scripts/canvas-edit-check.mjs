@@ -5412,8 +5412,20 @@ console.log("\nLocking never offers a link to somewhere you already are");
   check(
     "the list is somewhere a reader looking for it will open",
     /What you can do on the canvas/.test(flowed),
-    "the disclosure that replaced the intro sentence is gone, so the gestures " +
+    "the explainer that replaced the intro sentence is gone, so the gestures " +
       "are described nowhere a reader meets before opening the canvas",
+  );
+  /* AND SOMETHING OPENS IT. The list moved from an inline `<details>`, which
+     is its own trigger, into a dialog, which is not — a dialog nothing sets
+     open is section 8's founding bug again: correct in the source, absent
+     from the screen. So the pairing is pinned: the dialog reads the state, and
+     a control on the page sets it. */
+  check(
+    "and a control on the page opens that explainer",
+    /open=\{aboutOpen\}/.test(playgroundCode) &&
+      /setAboutOpen\(true\)/.test(playgroundCode),
+    "the explainer dialog is rendered but nothing opens it — the gesture " +
+      "list is unreachable",
   );
 
   /* THE TWO NO TABLE KNOWS. The marquee and the pan are canvas CONTROLS, not
@@ -5973,7 +5985,7 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
      WHAT THE STRIP HOLDS CHANGED, AND THESE ASSERTIONS FOLLOWED IT. The ten
      labelled glyphs and the caveat used to BE the strip's contents, scrolling
      sideways in the row. Three surfaces taught that same list — the page's
-     disclosure, this strip, and the tour — and this was the only one a reader
+     "How it works" dialog, this strip, and the tour — and this was the only one a reader
      could not put away, so it became one button opening a panel. Every rule
      the row bought stays (fixed height, no wrap, present either way); what is
      re-pinned is the list's REACHABILITY, since a panel with no trigger is

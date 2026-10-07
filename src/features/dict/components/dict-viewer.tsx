@@ -360,7 +360,10 @@ export function DictViewer({
   });
 
   return (
-    <div className="relative h-full w-full">
+    /* `min-h-0` for the reason written at the same element in
+       `er-viewer.tsx`: without it, zooming past the pane's height pushed the
+       zoom pill and the footer below the visible canvas. */
+    <div className="relative h-full min-h-0 w-full">
       {/* The lock, in the same corner as every other canvas's — see
           `flowchart-viewer.tsx`, and the header of `canvas-lock-button.tsx`
           for why it is mounted per branch rather than once beside them. */}

@@ -153,7 +153,7 @@ export function ZoomMenu({
           {/* Not a menu item: it is not something to choose, and a `role`
               other than the radios' would make the group's "1 of 4" counts
               wrong. A plain paragraph inside the menu, read after them. */}
-          <p className="mt-1 border-t border-border/60 px-2.5 pt-1.5 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1 border-t border-border/60 px-2.5 pt-1.5 text-xs leading-snug text-muted-foreground">
             <span className="font-medium text-foreground">{mod} + scroll</span>{" "}
             or pinch to zoom at the pointer
             {keyboardHint === undefined ? null : (
