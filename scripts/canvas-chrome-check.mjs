@@ -598,6 +598,34 @@ for (const kind of KINDS.filter((kind) => kind !== "c4")) {
       "changed shade when the reader changed notation",
   );
 
+  /* THE VIEWER SHRINKS INTO ITS PANE. The playground mounts every viewer as
+     a flex item in a column between its strip and its footer, and a flex
+     item's automatic minimum height is its content's. ER and the dictionary
+     shipped without `min-h-0` on their root while the other seven had it, so
+     zooming past the pane's height (about 240% on the dictionary starter)
+     grew the box instead of scrolling the drawing: the zoom pill pinned to
+     its bottom and the Share/Export row slid out of the clipped pane. Read off
+     the component's own top-level `return (`, so a wrapper added later is the
+     element measured. */
+  {
+    const code = readCode(viewer);
+    const fn = /export function \w*Viewer\(/.exec(code);
+    const root =
+      fn === null
+        ? null
+        : /\n {2}return \(\s*<\w+([^>]*)>/.exec(code.slice(fn.index));
+    check(
+      `${kind}: the viewer's root can shrink inside the playground's column`,
+      root !== null && /\bmin-h-0\b/.test(root[1]),
+      root === null
+        ? "the viewer's top-level element could not be found, so nothing " +
+            "proves it shrinks — the check needs updating with the component"
+        : "the root has no `min-h-0`, so a drawing zoomed taller than the " +
+            "pane grows the viewer past the clipped section and the zoom " +
+            "pill and footer disappear below it",
+    );
+  }
+
   check(
     `${kind}: its example page mounts the shared well`,
     /<DiagramWell(\s|>)/.test(readCode(example)),

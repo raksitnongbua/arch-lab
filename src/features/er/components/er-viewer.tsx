@@ -741,7 +741,15 @@ export function ErViewer({
    * visible. */
 
   return (
-    <div className="relative h-full w-full">
+    /* `min-h-0` BECAUSE THE PLAYGROUND MOUNTS THIS IN A FLEX COLUMN, between
+       its strip and its footer. A flex item's automatic minimum height is its
+       content's, so without it this box grew with the zoomed drawing instead
+       of scrolling it: past roughly 240% the drawing outgrew the pane, the box
+       outgrew the clipped section, and the zoom pill pinned to its bottom —
+       and the Share/Export row under it — slid out of sight. `h-full` stays
+       for the hosts that are not flex columns. `check:canvas-chrome` pins it
+       on every non-C4 viewer. */
+    <div className="relative h-full min-h-0 w-full">
       {/* Escape clears focus from anywhere on the canvas, matching the
           viewer's own top-level convention. A press on the ground and a press
           on Apply do too — see the three-ways-out note above. */}
